@@ -12,6 +12,7 @@ export class FileHistoryProvider implements vscode.TreeDataProvider<Commit>, vsc
 
   private readonly disposables: vscode.Disposable[] = [this.onDidChangeTreeDataEmitter];
   private commits: Commit[] = [];
+  private currentFilePath: string | undefined;
   private tracking = false;
   private treeView: vscode.TreeView<Commit> | undefined;
 
@@ -50,7 +51,12 @@ export class FileHistoryProvider implements vscode.TreeDataProvider<Commit>, vsc
       `**${commit.author}**\n\n${commit.message}\n\n${commit.date} · \`${commit.shortSha}\``,
     );
     item.iconPath = new vscode.ThemeIcon('git-commit');
-    item.command = { command: COMMANDS.copySha, title: 'Copy SHA', arguments: [commit.sha] };
+    item.contextValue = 'gitsense.commit';
+    item.command = {
+      command: COMMANDS.showCommit,
+      title: 'Show Commit Details',
+      arguments: [this.currentFilePath, commit.sha],
+    };
     return item;
   }
 
@@ -60,10 +66,12 @@ export class FileHistoryProvider implements vscode.TreeDataProvider<Commit>, vsc
 
   private async loadForEditor(editor: vscode.TextEditor | undefined): Promise<void> {
     if (!editor || editor.document.uri.scheme !== 'file') {
+      this.currentFilePath = undefined;
       this.setCommits([], 'Open a file to see its history.');
       return;
     }
 
+    this.currentFilePath = editor.document.uri.fsPath;
     const maxCount = this.getConfig<number>(CONFIG.maxHistoryItems, DEFAULT_MAX_HISTORY_ITEMS);
     try {
       const commits = await this.git.getFileHistory(editor.document.uri.fsPath, maxCount);

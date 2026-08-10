@@ -1,0 +1,124 @@
+body {
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-editor-foreground);
+  background-color: var(--vscode-editor-background);
+  padding: 1rem 1.5rem 2rem;
+  line-height: 1.5;
+}
+
+h1 {
+  font-size: 1.2rem;
+  margin: 0 0 0.5rem;
+}
+
+h2 {
+  font-size: 1rem;
+  margin-top: 1.5rem;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  padding-bottom: 0.25rem;
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0.75rem 0;
+}
+
+.meta dt {
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.meta dd {
+  margin: 0;
+}
+
+.commit-body {
+  white-space: pre-wrap;
+  font-family: var(--vscode-font-family);
+  margin: 0.75rem 0;
+  opacity: 0.9;
+}
+
+button {
+  font-family: var(--vscode-font-family);
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  padding: 0.35rem 0.9rem;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
+button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+.file-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+
+.file-list li {
+  padding: 0.15rem 0;
+}
+
+.stat-add {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+
+.stat-del {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
+.muted {
+  opacity: 0.7;
+}
+
+pre.diff {
+  overflow-x: auto;
+  padding: 0.75rem;
+  background-color: var(--vscode-textCodeBlock-background);
+  border-radius: 3px;
+}
+
+pre.diff code {
+  font-family: var(--gitsense-editor-font, var(--vscode-editor-font-family));
+  font-size: var(--vscode-editor-font-size, 13px);
+  white-space: pre;
+}
+
+.diff-add {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+
+.diff-del {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
+.diff-hunk {
+  color: var(--vscode-textLink-foreground);
+}
+
+.diff-meta {
+  opacity: 0.6;
+}
+
+.diff-ctx {
+  color: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

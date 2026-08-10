@@ -8,6 +8,11 @@ export interface Commit {
   message: string;
 }
 
+export interface CommitDetail extends Commit {
+  /** Full commit message (subject + body) — `Commit.message` is subject-only, for compact list display. */
+  body: string;
+}
+
 export interface BlameLine {
   /** 0-based line index within the file. */
   line: number;

@@ -8,12 +8,15 @@ import { BlameHoverProvider } from './providers/BlameHoverProvider';
 import { FileHistoryProvider } from './providers/FileHistoryProvider';
 import { handleToggleBlameCommand } from './commands/blameCommands';
 import { handleShowFileHistoryCommand, handleCopyShaCommand } from './commands/fileHistoryCommands';
+import { handleShowCommitCommand } from './commands/commitCommands';
+import { CommitDetailsPanel } from './views/CommitDetails/CommitDetailsPanel';
 
 /** Test-only introspection surface — accessed via `vscode.extensions.getExtension(id).exports` in integration tests. */
 export interface GitSenseTestApi {
   blameProvider: BlameDecorationProvider;
   fileHistoryProvider: FileHistoryProvider;
   git: GitService;
+  getCommitDetailsHtml: () => string | undefined;
 }
 
 export function activate(ctx: vscode.ExtensionContext): GitSenseTestApi {
@@ -40,11 +43,17 @@ export function activate(ctx: vscode.ExtensionContext): GitSenseTestApi {
     handleToggleBlameCommand(blameProvider),
     handleShowFileHistoryCommand(fileHistoryProvider),
     handleCopyShaCommand(),
+    handleShowCommitCommand(git, ctx.extensionUri),
     vscode.languages.registerHoverProvider({ scheme: 'file' }, hoverProvider),
   );
   output.appendLine('GitSense activated.');
 
-  return { blameProvider, fileHistoryProvider, git };
+  return {
+    blameProvider,
+    fileHistoryProvider,
+    git,
+    getCommitDetailsHtml: () => CommitDetailsPanel.getCurrentHtmlForTest(),
+  };
 }
 
 export function deactivate(): void {

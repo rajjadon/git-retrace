@@ -1,4 +1,4 @@
-import type { BlameLine, Commit, FileChange } from './types';
+import type { BlameLine, Commit, CommitDetail, FileChange } from './types';
 
 const UNCOMMITTED_SHA = '0000000000000000000000000000000000000000';
 const HEADER_RE = /^([0-9a-f]{40}) (\d+) (\d+)(?: \d+)?$/;
@@ -11,6 +11,14 @@ const LOG_RECORD_SEP = '\x1e';
 
 /** Pass to `git log --pretty=tformat:<this>` — `tformat` (not `format`) avoids an extra implicit newline between records. */
 export const LOG_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SEP}%ae${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%s${LOG_RECORD_SEP}`;
+
+/**
+ * Pass to `git show -s --pretty=tformat:<this>` for a single commit's full detail. `%B` (the
+ * raw, unwrapped body) is deliberately last and unterminated — it can contain newlines (and,
+ * astronomically unlikely but handled anyway, the field separator itself), so parseCommitDetail
+ * treats everything after the 5th separator as the body rather than splitting on it.
+ */
+export const COMMIT_DETAIL_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SEP}%ae${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%B`;
 
 /**
  * Parses `git blame --line-porcelain` output. Pure — no I/O.
@@ -107,15 +115,36 @@ export function parseLog(raw: string): Commit[] {
     });
 }
 
-/**
- * Parses one line of `git show/diff --numstat` output: `<insertions>\t<deletions>\t<path>`.
- * Binary files report `-` for both counts. Pure — no I/O.
- */
-export function parseNumstat(raw: string): FileChange | null {
-  const line = raw.trim().split('\n')[0];
-  if (!line) {
+/** Parses `git show -s --pretty=tformat:COMMIT_DETAIL_FORMAT <sha>` output. Pure — no I/O. */
+export function parseCommitDetail(raw: string): CommitDetail | null {
+  const fields: string[] = [];
+  let rest = raw;
+  for (let i = 0; i < 5; i++) {
+    const idx = rest.indexOf(LOG_FIELD_SEP);
+    if (idx === -1) {
+      return null;
+    }
+    fields.push(rest.slice(0, idx));
+    rest = rest.slice(idx + 1);
+  }
+  const [sha, shortSha, author, authorEmail, date] = fields;
+  if (!sha) {
     return null;
   }
+  const body = rest.replace(/\n+$/, '');
+  return {
+    sha,
+    shortSha: shortSha ?? '',
+    author: author ?? '',
+    authorEmail: authorEmail ?? '',
+    date: date ?? '',
+    message: body.split('\n')[0] ?? '',
+    body,
+  };
+}
+
+/** Parses one line of `git show/diff --numstat` output: `<insertions>\t<deletions>\t<path>`. Binary files report `-` for both counts. */
+function parseNumstatLine(line: string): FileChange | null {
   const [insertionsRaw, deletionsRaw, path] = line.split('\t');
   if (path === undefined) {
     return null;
@@ -127,4 +156,20 @@ export function parseNumstat(raw: string): FileChange | null {
     deletions: binary ? 0 : Number(deletionsRaw),
     binary,
   };
+}
+
+/** Parses `git show/diff --numstat` output for a single file's stat (the first line). Pure — no I/O. */
+export function parseNumstat(raw: string): FileChange | null {
+  const line = raw.trim().split('\n')[0];
+  return line ? parseNumstatLine(line) : null;
+}
+
+/** Parses `git show/diff --numstat` output for every changed file in a commit. Pure — no I/O. */
+export function parseNumstatAll(raw: string): FileChange[] {
+  return raw
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map(parseNumstatLine)
+    .filter((change): change is FileChange => change !== null);
 }

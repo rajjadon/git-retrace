@@ -12,9 +12,10 @@ Phase 1 (MVP) is under active development. See `CLAUDE.md` for the full architec
 
 - **Inline blame** — the current line's author and age, shown as a muted, right-aligned editor decoration. Updates when you move to a different line, not on every cursor move. Toggle with **GitSense: Toggle Inline Blame**.
 - **Blame hover card** — hover any line to see the author's Gravatar, full commit message, relative + absolute date, diff stat, and short SHA.
-- **File history** — run **GitSense: Show File History** to open a sidebar view listing every commit that touched the current file, newest first, following the active editor as you switch files. Click an entry to copy its SHA.
+- **File history** — run **GitSense: Show File History** to open a sidebar view listing every commit that touched the current file, newest first, following the active editor as you switch files. Click an entry to open its commit details; right-click for **Copy Commit SHA**.
+- **Commit details** — a webview with the full commit message, author, every changed file with insertion/deletion counts, and the full unified diff. Open it from File History, or via **GitSense: Show Commit Details**.
 
-Still to come: commit details, status bar (see `CLAUDE.md` for the roadmap).
+Still to come: status bar (see `CLAUDE.md` for the roadmap).
 
 ## Settings
 

@@ -30,6 +30,10 @@
       {
         "command": "gitsense.copySha",
         "title": "GitSense: Copy Commit SHA"
+      },
+      {
+        "command": "gitsense.showCommit",
+        "title": "GitSense: Show Commit Details"
       }
     ],
     "views": {
@@ -38,6 +42,14 @@
           "id": "gitsense.fileHistory",
           "name": "File History",
           "when": "gitsense.fileHistory.hasContent"
+        }
+      ]
+    },
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "gitsense.copySha",
+          "when": "view == gitsense.fileHistory && viewItem == gitsense.commit"
         }
       ]
     },

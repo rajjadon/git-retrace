@@ -1,0 +1,70 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { renderCommitDetailsHtml } from '../../../src/views/CommitDetails/render';
+import type { CommitDetail, FileChange } from '../../../src/core/git/types';
+
+process.env.TZ = 'UTC';
+
+const now = new Date('2024-02-04T10:00:00Z');
+
+const commit: CommitDetail = {
+  sha: '5a93a8d3e93fcc0a1f409e89d3aaca4346ced8ec',
+  shortSha: '5a93a8d',
+  author: 'Amy Dev',
+  authorEmail: 'amy@example.com',
+  date: '2024-02-01T10:00:00Z',
+  message: 'add line three',
+  body: 'add line three',
+};
+
+const files: FileChange[] = [{ path: 'tracked.txt', insertions: 1, deletions: 0, binary: false }];
+const diff = 'diff --git a/tracked.txt b/tracked.txt\n@@ -1,2 +1,3 @@\n line one\n line two\n+line three\n';
+
+const opts = { nonce: 'abc123', cspSource: 'vscode-webview://xyz', styleUri: 'vscode-webview://xyz/style.css', editorFontFamily: 'Menlo' };
+
+test('renderCommitDetailsHtml: includes commit metadata, files, and diff', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /<h1>add line three<\/h1>/);
+  assert.match(html, /Amy Dev/);
+  assert.match(html, /5a93a8d3e93fcc0a1f409e89d3aaca4346ced8ec/);
+  assert.match(html, /tracked\.txt/);
+  assert.match(html, /\+1/);
+  assert.match(html, /class="diff-add">\+line three</);
+  assert.match(html, /class="diff-hunk">@@ -1,2 \+1,3 @@</);
+});
+
+test('renderCommitDetailsHtml: CSP uses the provided nonce and cspSource, no unsafe-inline', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /script-src 'nonce-abc123'/);
+  assert.match(html, /style-src vscode-webview:\/\/xyz 'nonce-abc123'/);
+  assert.ok(!html.includes('unsafe-inline'));
+});
+
+test('renderCommitDetailsHtml: escapes HTML special characters in commit-sourced fields', () => {
+  const malicious: CommitDetail = {
+    ...commit,
+    author: '<img src=x onerror=alert(1)>',
+    message: 'fix <script>alert(1)</script> bug',
+    body: 'fix <script>alert(1)</script> bug',
+  };
+  const html = renderCommitDetailsHtml({ commit: malicious, files: [], diff: '', now }, opts);
+  assert.ok(!html.includes('<script>alert(1)</script>'));
+  assert.ok(!html.includes('<img src=x onerror=alert(1)>'));
+  assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+});
+
+test('renderCommitDetailsHtml: shows "No files changed" when the list is empty', () => {
+  const html = renderCommitDetailsHtml({ commit, files: [], diff: '', now }, opts);
+  assert.match(html, /No files changed\./);
+});
+
+test('renderCommitDetailsHtml: omits the extra body block when the message has no body beyond the subject', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.ok(!html.includes('class="commit-body"'));
+});
+
+test('renderCommitDetailsHtml: shows the body block when there is more than the subject', () => {
+  const withBody: CommitDetail = { ...commit, body: 'add line three\n\nThis closes the loop on the fixture.' };
+  const html = renderCommitDetailsHtml({ commit: withBody, files, diff, now }, opts);
+  assert.match(html, /class="commit-body">This closes the loop on the fixture\.</);
+});

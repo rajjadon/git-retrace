@@ -1,8 +1,16 @@
 import { dirname } from 'node:path';
 import { realpathSync } from 'node:fs';
 import { simpleGit, type SimpleGit } from 'simple-git';
-import { parseBlamePorcelain, parseNumstat, parseLog, LOG_FORMAT } from './parsers';
-import type { BlameLine, Commit, FileChange } from './types';
+import {
+  parseBlamePorcelain,
+  parseNumstat,
+  parseNumstatAll,
+  parseLog,
+  parseCommitDetail,
+  LOG_FORMAT,
+  COMMIT_DETAIL_FORMAT,
+} from './parsers';
+import type { BlameLine, Commit, CommitDetail, FileChange } from './types';
 import { GitCommandError, type GitLogger } from './errors';
 import { toRepoRelativePath } from '../../utils/path';
 
@@ -138,6 +146,59 @@ export class GitService {
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err);
       this.logger?.error(`git log failed for ${filePath}`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Full metadata (including the full message body) for one commit — used by the commit details view. */
+  async getCommit(filePath: string, sha: string): Promise<CommitDetail | null> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return null;
+    }
+    const git = this.gitFor(repoRoot);
+    const args = ['show', '-s', `--pretty=tformat:${COMMIT_DETAIL_FORMAT}`, sha];
+    try {
+      const raw = await git.raw(args);
+      return parseCommitDetail(raw);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git show failed for ${sha}`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** The whole commit's unified diff, across every file it touched (not scoped to `filePath`). */
+  async getCommitDiff(filePath: string, sha: string): Promise<string> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return '';
+    }
+    const git = this.gitFor(repoRoot);
+    const args = ['show', '--format=', sha];
+    try {
+      return await git.raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git show diff failed for ${sha}`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Every file the commit touched, with insertion/deletion counts — not scoped to `filePath`. */
+  async getCommitFiles(filePath: string, sha: string): Promise<FileChange[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    const git = this.gitFor(repoRoot);
+    const args = ['show', '--numstat', '--format=', sha];
+    try {
+      const raw = await git.raw(args);
+      return parseNumstatAll(raw);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git show --numstat failed for ${sha}`, err);
       throw new GitCommandError(args.join(' '), stderr);
     }
   }

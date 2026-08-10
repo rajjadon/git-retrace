@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseNumstat } from '../../../../src/core/git/parsers';
+import { parseNumstat, parseNumstatAll } from '../../../../src/core/git/parsers';
 
 test('parseNumstat: parses a normal text-file change', () => {
   assert.deepEqual(parseNumstat('3\t1\ttracked.txt\n'), {
@@ -31,4 +31,16 @@ test('parseNumstat: only reads the first line', () => {
     deletions: 0,
     binary: false,
   });
+});
+
+test('parseNumstatAll: parses every changed file in a commit', () => {
+  assert.deepEqual(parseNumstatAll('2\t0\ta.txt\n5\t5\tb.txt\n-\t-\timg.png\n'), [
+    { path: 'a.txt', insertions: 2, deletions: 0, binary: false },
+    { path: 'b.txt', insertions: 5, deletions: 5, binary: false },
+    { path: 'img.png', insertions: 0, deletions: 0, binary: true },
+  ]);
+});
+
+test('parseNumstatAll: empty output produces an empty array', () => {
+  assert.deepEqual(parseNumstatAll(''), []);
 });

@@ -26,6 +26,7 @@ export const CONFIG = {
 
 export const VIEWS = {
   fileHistory: 'gitsense.fileHistory',
+  commitDetails: 'gitsense.commitDetails',
 } as const;
 
 export const CONTEXT_KEYS = {
