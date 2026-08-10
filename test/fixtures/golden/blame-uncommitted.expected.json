@@ -1,0 +1,38 @@
+[
+  {
+    "line": 0,
+    "sha": "6c45b96233eb3c8db69454c27080b8dc7ad8c80c",
+    "author": "Raj Jadon",
+    "authorEmail": "raj@example.com",
+    "authorTime": 1704083400,
+    "summary": "first commit",
+    "isUncommitted": false
+  },
+  {
+    "line": 1,
+    "sha": "6c45b96233eb3c8db69454c27080b8dc7ad8c80c",
+    "author": "Raj Jadon",
+    "authorEmail": "raj@example.com",
+    "authorTime": 1704083400,
+    "summary": "first commit",
+    "isUncommitted": false
+  },
+  {
+    "line": 2,
+    "sha": "83f986b180bcdf316f2ea51af8744c2a6505ac19",
+    "author": "Amy Dev",
+    "authorEmail": "amy@example.com",
+    "authorTime": 1706761800,
+    "summary": "add line three",
+    "isUncommitted": false
+  },
+  {
+    "line": 3,
+    "sha": "0000000000000000000000000000000000000000",
+    "author": "Not Committed Yet",
+    "authorEmail": "not.committed.yet",
+    "authorTime": 1706848200,
+    "summary": "Version of file.txt from file.txt",
+    "isUncommitted": true
+  }
+]

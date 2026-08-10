@@ -1,0 +1,85 @@
+{
+  "name": "gitsense",
+  "displayName": "GitSense",
+  "description": "Makes sense of your repo. Free, local-first git blame, history, and insight — directly in the editor.",
+  "version": "0.1.0",
+  "publisher": "gitsense-dev",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=20"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "gitsense.toggleBlame",
+        "title": "GitSense: Toggle Inline Blame"
+      }
+    ],
+    "configuration": {
+      "title": "GitSense",
+      "properties": {
+        "gitsense.blame.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline blame decorations, hover cards, and the status bar item."
+        },
+        "gitsense.blame.format": {
+          "type": "string",
+          "default": "{author}, {age}",
+          "description": "Template for the inline blame text. Tokens: {author} {age} {date} {message} {sha}"
+        },
+        "gitsense.blame.highlightCurrentLine": {
+          "type": "boolean",
+          "default": true,
+          "description": "Highlight the current line's blame decoration."
+        },
+        "gitsense.blame.ignoreWhitespace": {
+          "type": "boolean",
+          "default": true,
+          "description": "Pass -w to git blame to ignore whitespace-only changes."
+        },
+        "gitsense.maxBlameFileSize": {
+          "type": "number",
+          "default": 1048576,
+          "description": "Skip blame for files larger than this size, in bytes."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc --noEmit -p . && node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "node scripts/run-unit-tests.mjs",
+    "test:integration": "npm run compile && tsc -p . --outDir out-test && node out-test/test/integration/runTests.js",
+    "lint": "eslint --no-error-on-unmatched-pattern src test && tsc --noEmit -p .",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "simple-git": "^3.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.24.0",
+    "eslint": "^9.15.0",
+    "mocha": "^10.7.3",
+    "@types/mocha": "^10.0.9",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
