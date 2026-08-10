@@ -68,3 +68,29 @@ test('renderCommitDetailsHtml: shows the body block when there is more than the 
   const html = renderCommitDetailsHtml({ commit: withBody, files, diff, now }, opts);
   assert.match(html, /class="commit-body">This closes the loop on the fixture\.</);
 });
+
+test('renderCommitDetailsHtml: links an issue reference in the message when issueLinking is provided', () => {
+  const withIssue: CommitDetail = { ...commit, message: 'fix #12 crash', body: 'fix #12 crash' };
+  const html = renderCommitDetailsHtml(
+    { commit: withIssue, files, diff, now },
+    { ...opts, issueLinking: { pattern: '#(\\d+)', urlTemplate: 'https://github.com/o/r/issues/{issue}' } },
+  );
+  assert.match(html, /<h1>fix <a href="https:\/\/github\.com\/o\/r\/issues\/12"[^>]*>#12<\/a> crash<\/h1>/);
+});
+
+test('renderCommitDetailsHtml: without issueLinking, "#12" is left as plain escaped text, not a link', () => {
+  const withIssue: CommitDetail = { ...commit, message: 'fix #12 crash', body: 'fix #12 crash' };
+  const html = renderCommitDetailsHtml({ commit: withIssue, files, diff, now }, opts);
+  assert.ok(!html.includes('issues/12'));
+  assert.match(html, /<h1>fix #12 crash<\/h1>/);
+});
+
+test('renderCommitDetailsHtml: issue link href is HTML-escaped and opens in a new tab safely', () => {
+  const withIssue: CommitDetail = { ...commit, message: 'fix #12', body: 'fix #12' };
+  const html = renderCommitDetailsHtml(
+    { commit: withIssue, files, diff, now },
+    { ...opts, issueLinking: { pattern: '#(\\d+)', urlTemplate: 'https://github.com/o/r/issues/{issue}' } },
+  );
+  assert.match(html, /rel="noopener noreferrer"/);
+  assert.match(html, /target="_blank"/);
+});

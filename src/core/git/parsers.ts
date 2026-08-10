@@ -1,4 +1,4 @@
-import type { BlameLine, BranchInfo, Commit, CommitDetail, FileChange, GraphCommit, Ref } from './types';
+import type { BlameLine, BranchInfo, Commit, CommitDetail, FileChange, GraphCommit, Ref, RemoteInfo } from './types';
 
 const UNCOMMITTED_SHA = '0000000000000000000000000000000000000000';
 const HEADER_RE = /^([0-9a-f]{40}) (\d+) (\d+)(?: \d+)?$/;
@@ -234,4 +234,37 @@ export function parseBranches(raw: string): BranchInfo[] {
       return { name, isRemote, isCurrent: headMarker === '*' };
     })
     .filter((branch) => branch.name !== 'HEAD' && !branch.name.endsWith('/HEAD'));
+}
+
+/**
+ * Parses a git remote URL (`https://host/owner/repo.git`, `git@host:owner/repo.git`, or
+ * `ssh://git@host[:port]/owner/repo.git`) into host/owner/repo. `owner` may contain slashes
+ * for GitLab-style nested groups. Pure — no I/O.
+ */
+export function parseRemoteUrl(url: string): RemoteInfo | null {
+  const rest = url.trim().replace(/\.git\/?$/, '');
+
+  let host: string | undefined;
+  let path: string | undefined;
+
+  const schemeMatch = /^(?:https?|ssh):\/\/(?:[^@/]+@)?([^/:]+)(?::\d+)?\/(.+)$/.exec(rest);
+  if (schemeMatch) {
+    [, host, path] = schemeMatch;
+  } else {
+    const scpMatch = /^(?:[^@]+@)?([^:/]+):(.+)$/.exec(rest);
+    if (scpMatch) {
+      [, host, path] = scpMatch;
+    }
+  }
+  if (!host || !path) {
+    return null;
+  }
+
+  const segments = path.split('/').filter((s) => s.length > 0);
+  if (segments.length < 2) {
+    return null;
+  }
+  const repo = segments[segments.length - 1] ?? '';
+  const owner = segments.slice(0, -1).join('/');
+  return { host, owner, repo };
 }

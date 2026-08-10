@@ -24,6 +24,9 @@ export const CONFIG = {
   maxBlameFileSize: 'maxBlameFileSize',
   maxGraphItems: 'maxGraphItems',
   dateFormat: 'dateFormat',
+  issueLinkingEnabled: 'issueLinking.enabled',
+  issueLinkingPattern: 'issueLinking.pattern',
+  issueLinkingUrlTemplate: 'issueLinking.urlTemplate',
 } as const;
 
 export const VIEWS = {

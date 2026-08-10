@@ -47,3 +47,10 @@ export interface BranchInfo {
   isRemote: boolean;
   isCurrent: boolean;
 }
+
+export interface RemoteInfo {
+  host: string;
+  /** May contain slashes for GitLab-style nested groups (e.g. "group/subgroup"). */
+  owner: string;
+  repo: string;
+}

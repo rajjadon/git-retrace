@@ -2,12 +2,28 @@ import type { CommitDetail, FileChange } from '../../core/git/types';
 import { formatAge, formatAbsolute } from '../../utils/date';
 import { escapeHtml } from '../escapeHtml';
 import { renderDiff, renderFileList } from '../diffRender';
+import { linkifyIssues, type IssueLinkOptions } from '../../utils/issueLinks';
 
 export interface RenderCommitDetailsOptions {
   nonce: string;
   cspSource: string;
   styleUri: string;
   editorFontFamily: string;
+  issueLinking?: IssueLinkOptions | null;
+}
+
+/** Escapes `text` as HTML, wrapping any issue references per `issueLinking` in a real `<a>` link. */
+function linkifyHtml(text: string, issueLinking: IssueLinkOptions | null | undefined): string {
+  if (!issueLinking) {
+    return escapeHtml(text);
+  }
+  return linkifyIssues(text, issueLinking.pattern, issueLinking.urlTemplate)
+    .map((segment) =>
+      segment.url
+        ? `<a href="${escapeHtml(segment.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(segment.text)}</a>`
+        : escapeHtml(segment.text),
+    )
+    .join('');
 }
 
 export interface CommitDetailsData {
@@ -36,13 +52,13 @@ export function renderCommitDetailsHtml(data: CommitDetailsData, opts: RenderCom
 <title>Commit ${escapeHtml(commit.shortSha)}</title>
 </head>
 <body>
-<h1>${escapeHtml(commit.message)}</h1>
+<h1>${linkifyHtml(commit.message, opts.issueLinking)}</h1>
 <dl class="meta">
 <dt>Author</dt><dd>${escapeHtml(commit.author)}</dd>
 <dt>Date</dt><dd>${escapeHtml(age)} &middot; ${escapeHtml(absoluteDate)}</dd>
 <dt>SHA</dt><dd><code>${escapeHtml(commit.sha)}</code></dd>
 </dl>
-${bodyRest ? `<pre class="commit-body">${escapeHtml(bodyRest)}</pre>` : ''}
+${bodyRest ? `<pre class="commit-body">${linkifyHtml(bodyRest, opts.issueLinking)}</pre>` : ''}
 <button id="copy-sha" type="button">Copy SHA</button>
 <h2>Files changed (${files.length})</h2>
 ${renderFileList(files)}

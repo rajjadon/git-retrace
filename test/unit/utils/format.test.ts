@@ -61,3 +61,21 @@ test('formatBlameHover: escapes markdown special characters from git-sourced fie
   // The escaped form (a literal backslash before every markdown special char) must appear instead.
   assert.ok(md.includes('\\[Evil\\]\\(http://evil\\.com\\)'));
 });
+
+test('formatBlameHover: links an issue reference in the message when issueLinking is provided', () => {
+  const withIssue: BlameLine = { ...entry, summary: 'fix #12 crash' };
+  const md = formatBlameHover(withIssue, null, now, {
+    pattern: '#(\\d+)',
+    urlTemplate: 'https://github.com/o/r/issues/{issue}',
+  });
+  // The link text is itself markdown-escaped (consistent with the rest of the message), so
+  // the "#" is rendered as "\#" inside the link brackets.
+  assert.ok(md.includes('[\\#12](https://github.com/o/r/issues/12)'));
+});
+
+test('formatBlameHover: without issueLinking, "#12" is left as escaped plain text, not a link', () => {
+  const withIssue: BlameLine = { ...entry, summary: 'fix #12 crash' };
+  const md = formatBlameHover(withIssue, null, now);
+  assert.ok(!md.includes('issues/12'));
+  assert.ok(md.includes('\\#12'));
+});

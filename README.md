@@ -6,7 +6,7 @@ GitSense is a free, open-source (MIT) VS Code extension that surfaces git blame,
 
 ## Status
 
-Phase 1 (MVP) is complete, plus the commit graph and branch comparison from Phase 3. AI features (Phase 2) and issue/PR linking (the rest of Phase 3) are next — see `CLAUDE.md` for the full roadmap.
+Phase 1 (MVP) and Phase 3 (commit graph, branch comparison, issue/PR linking) are complete. AI features (Phase 2) are next — see `CLAUDE.md` for the full roadmap.
 
 ## Features
 
@@ -17,6 +17,7 @@ Phase 1 (MVP) is complete, plus the commit graph and branch comparison from Phas
 - **Status bar** — the current line's author and age in the status bar, mirroring the inline decoration. Click it to open commit details.
 - **Commit graph** — run **GitSense: Open Commit Graph** for a repo-wide, branch-and-merge-aware graph of every commit across all refs, with branch/tag badges. Click a row to open its commit details.
 - **Branch comparison** — run **GitSense: Compare Branches**, pick a base and a branch to compare, and see commits ahead/behind, files changed, and the full diff (against their merge-base, like a GitHub/GitLab PR diff). Click a commit to open its details.
+- **Issue/PR linking** — references like `#123` in commit messages become clickable links (in the blame hover and commit details) to your issue tracker. Auto-detected from the repo's GitHub/GitLab remote, or fully configurable for other trackers (e.g. Jira).
 
 ## Settings
 
@@ -29,6 +30,9 @@ Phase 1 (MVP) is complete, plus the commit graph and branch comparison from Phas
 | `gitsense.maxBlameFileSize` | number | `1048576` | Skip blame for files larger than this size, in bytes. |
 | `gitsense.maxHistoryItems` | number | `200` | Max commits loaded per file history. |
 | `gitsense.maxGraphItems` | number | `200` | Max commits loaded in the commit graph. |
+| `gitsense.issueLinking.enabled` | boolean | `true` | Auto-link issue/PR references in commit messages. |
+| `gitsense.issueLinking.pattern` | string | `"#(\\d+)"` | Regex matching issue references. The first capture group (or the whole match) fills `{issue}` in the URL template. |
+| `gitsense.issueLinking.urlTemplate` | string | `""` | `{issue}`-templated issue URL. Empty = auto-detect from the repo's GitHub/GitLab remote. |
 
 ## Privacy
 

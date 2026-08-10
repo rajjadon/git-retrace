@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { GitService } from '../../core/git/GitService';
 import { renderCommitDetailsHtml } from './render';
 import { escapeHtml } from '../escapeHtml';
+import { resolveIssueLinking } from '../../providers/issueLinking';
 import { COMMANDS, VIEWS } from '../../constants';
 
 function createNonce(): string {
@@ -69,10 +70,11 @@ export class CommitDetailsPanel implements vscode.Disposable {
     this.panel.webview.html = shellPage('<p>Loading commit…</p>');
 
     try {
-      const [commit, files, diff] = await Promise.all([
+      const [commit, files, diff, issueLinking] = await Promise.all([
         git.getCommit(filePath, sha),
         git.getCommitFiles(filePath, sha),
         git.getCommitDiff(filePath, sha),
+        resolveIssueLinking(git, filePath),
       ]);
       if (!commit) {
         this.panel.webview.html = shellPage('<p>GitSense: commit not found.</p>');
@@ -93,6 +95,7 @@ export class CommitDetailsPanel implements vscode.Disposable {
           cspSource: this.panel.webview.cspSource,
           styleUri: styleUri.toString(),
           editorFontFamily,
+          issueLinking,
         },
       );
     } catch (err) {

@@ -98,6 +98,21 @@
           "type": "number",
           "default": 200,
           "description": "Max commits loaded in the commit graph."
+        },
+        "gitsense.issueLinking.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-link issue/PR references in commit messages (e.g. #123) in the blame hover and commit details."
+        },
+        "gitsense.issueLinking.pattern": {
+          "type": "string",
+          "default": "#(\\d+)",
+          "description": "Regex matching issue/PR references in commit messages. The first capture group (or the whole match, if none) fills {issue} in the URL template."
+        },
+        "gitsense.issueLinking.urlTemplate": {
+          "type": "string",
+          "default": "",
+          "description": "'{issue}'-templated URL for issue links, e.g. https://github.com/owner/repo/issues/{issue}. Leave empty to auto-detect from the repo's git remote (GitHub or GitLab)."
         }
       }
     }

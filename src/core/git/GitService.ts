@@ -9,6 +9,7 @@ import {
   parseCommitDetail,
   parseGraphLog,
   parseBranches,
+  parseRemoteUrl,
   LOG_FORMAT,
   COMMIT_DETAIL_FORMAT,
   GRAPH_LOG_FORMAT,
@@ -17,6 +18,7 @@ import {
 import type { BlameLine, BranchInfo, Commit, CommitDetail, FileChange, GraphCommit } from './types';
 import { GitCommandError, type GitLogger } from './errors';
 import { toRepoRelativePath } from '../../utils/path';
+import { buildDefaultUrlTemplate } from '../../utils/issueLinks';
 
 export interface BlameOptions {
   ignoreWhitespace?: boolean;
@@ -31,6 +33,9 @@ export class GitService {
   // A directory's repo root never changes for the lifetime of the process — safe to memoize
   // indefinitely, and worth it since decoration updates call getRepoRoot on every line move.
   private readonly repoRootByDir = new Map<string, string | null>();
+  // Remotes essentially never change mid-session — worth caching since issue linking
+  // resolves this on every hover/commit-details render.
+  private readonly remoteUrlByRoot = new Map<string, string | null>();
 
   constructor(private readonly logger?: GitLogger) {}
 
@@ -296,6 +301,45 @@ export class GitService {
       this.logger?.error(`git diff --numstat ${base}...${compare} failed`, err);
       throw new GitCommandError(args.join(' '), stderr);
     }
+  }
+
+  /** The URL of `remoteName`, e.g. for auto-detecting a GitHub/GitLab host for issue linking. Null if there is none. */
+  async getRemoteUrl(filePath: string, remoteName = 'origin'): Promise<string | null> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return null;
+    }
+    const cacheKey = `${repoRoot}:${remoteName}`;
+    if (this.remoteUrlByRoot.has(cacheKey)) {
+      return this.remoteUrlByRoot.get(cacheKey) ?? null;
+    }
+    let url: string | null;
+    try {
+      const git = this.gitFor(repoRoot);
+      url = (await git.raw(['remote', 'get-url', remoteName])).trim() || null;
+    } catch {
+      // Expected when there's no such remote — silent, not an error.
+      url = null;
+    }
+    this.remoteUrlByRoot.set(cacheKey, url);
+    return url;
+  }
+
+  /**
+   * The `{issue}`-templated URL to use for issue linking: the user's configured template if
+   * they set one, otherwise an auto-detected GitHub/GitLab template from the `origin` remote.
+   * Null when linking isn't possible (no configured template and no recognizable remote).
+   */
+  async resolveIssueUrlTemplate(filePath: string, configuredTemplate: string): Promise<string | null> {
+    if (configuredTemplate) {
+      return configuredTemplate;
+    }
+    const remoteUrl = await this.getRemoteUrl(filePath);
+    if (!remoteUrl) {
+      return null;
+    }
+    const remote = parseRemoteUrl(remoteUrl);
+    return remote ? buildDefaultUrlTemplate(remote) : null;
   }
 
   private gitFor(repoRoot: string): SimpleGit {
