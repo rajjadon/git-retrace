@@ -20,17 +20,22 @@ const commit: CommitDetail = {
 const files: FileChange[] = [{ path: 'tracked.txt', insertions: 1, deletions: 0, binary: false }];
 const diff = 'diff --git a/tracked.txt b/tracked.txt\n@@ -1,2 +1,3 @@\n line one\n line two\n+line three\n';
 
-const opts = { nonce: 'abc123', cspSource: 'vscode-webview://xyz', styleUri: 'vscode-webview://xyz/style.css', editorFontFamily: 'Menlo' };
+const opts = {
+  nonce: 'abc123',
+  cspSource: 'vscode-webview://xyz',
+  styleUris: ['vscode-webview://xyz/shared.css', 'vscode-webview://xyz/commitDetails.css'],
+  editorFontFamily: 'Menlo',
+};
 
 test('renderCommitDetailsHtml: includes commit metadata, files, and diff', () => {
   const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
-  assert.match(html, /<h1>add line three<\/h1>/);
+  assert.match(html, /<h1 title="add line three">add line three<\/h1>/);
   assert.match(html, /Amy Dev/);
   assert.match(html, /5a93a8d3e93fcc0a1f409e89d3aaca4346ced8ec/);
   assert.match(html, /tracked\.txt/);
   assert.match(html, /\+1/);
-  assert.match(html, /class="diff-add">\+line three</);
-  assert.match(html, /class="diff-hunk">@@ -1,2 \+1,3 @@</);
+  assert.match(html, /class="dc diff-add">\+line three</);
+  assert.match(html, /class="dc diff-hunk">@@ -1,2 \+1,3 @@</);
 });
 
 test('renderCommitDetailsHtml: shows the short sha, with the full sha as its tooltip', () => {
@@ -63,9 +68,11 @@ test('renderCommitDetailsHtml: offers a file filter box wired to the per-file se
   assert.match(html, /data-filter="tracked\.txt"/);
 });
 
-test('renderCommitDetailsHtml: the copy button is labelled for screen readers, with no inline handler', () => {
+test('renderCommitDetailsHtml: the copy action has a visible label, not a hidden one', () => {
   const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
-  assert.match(html, /aria-label="Copy commit SHA"/);
+  // It reads "Copy SHA" on screen, so an aria-label would only override the visible text with a
+  // second, divergent name — worse for screen-reader users, not better.
+  assert.match(html, /id="copy-sha"[^>]*>(?:(?!aria-label).)*?Copy SHA<\/button>/s);
   assert.match(html, /type: 'copySha'/);
   assert.ok(!html.includes('onclick='));
 });
@@ -112,14 +119,14 @@ test('renderCommitDetailsHtml: links an issue reference in the message when issu
     { commit: withIssue, files, diff, now },
     { ...opts, issueLinking: { pattern: '#(\\d+)', urlTemplate: 'https://github.com/o/r/issues/{issue}' } },
   );
-  assert.match(html, /<h1>fix <a href="https:\/\/github\.com\/o\/r\/issues\/12"[^>]*>#12<\/a> crash<\/h1>/);
+  assert.match(html, /<h1 title="fix #12 crash">fix <a href="https:\/\/github\.com\/o\/r\/issues\/12"[^>]*>#12<\/a> crash<\/h1>/);
 });
 
 test('renderCommitDetailsHtml: without issueLinking, "#12" is left as plain escaped text, not a link', () => {
   const withIssue: CommitDetail = { ...commit, message: 'fix #12 crash', body: 'fix #12 crash' };
   const html = renderCommitDetailsHtml({ commit: withIssue, files, diff, now }, opts);
   assert.ok(!html.includes('issues/12'));
-  assert.match(html, /<h1>fix #12 crash<\/h1>/);
+  assert.match(html, /<h1 title="fix #12 crash">fix #12 crash<\/h1>/);
 });
 
 test('renderCommitDetailsHtml: issue link href is HTML-escaped and opens in a new tab safely', () => {
@@ -130,4 +137,59 @@ test('renderCommitDetailsHtml: issue link href is HTML-escaped and opens in a ne
   );
   assert.match(html, /rel="noopener noreferrer"/);
   assert.match(html, /target="_blank"/);
+});
+
+test('renderCommitDetailsHtml: offers copy-SHA and copy-message actions', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /id="copy-sha" type="button">.*?Copy SHA<\/button>/s);
+  assert.match(html, /id="copy-message" type="button">.*?Copy message<\/button>/s);
+  assert.match(html, /type: 'copyMessage'/);
+});
+
+test('renderCommitDetailsHtml: names the host in the remote action, and links the commit', () => {
+  const remote = { label: 'GitHub', url: 'https://github.com/o/r/commit/5a93a8d3e93fcc0a1f409e89d3aaca4346ced8ec' };
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, { ...opts, remote });
+  assert.match(html, /id="open-remote"[^>]*title="https:\/\/github\.com\/o\/r\/commit\/5a93a8d3[^"]*">.*?Open on GitHub<\/button>/s);
+  assert.match(html, /type: 'openRemote'/);
+});
+
+test('renderCommitDetailsHtml: hides the remote action entirely when there is no known host', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.ok(!html.includes('id="open-remote"'));
+  assert.ok(!html.includes('Open on'));
+});
+
+test('renderCommitDetailsHtml: escapes a remote label and url', () => {
+  const remote = { label: '<script>alert(1)</script>', url: 'https://x/"><script>alert(2)</script>' };
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, { ...opts, remote });
+  assert.ok(!html.includes('<script>alert(1)</script>'));
+  assert.ok(!html.includes('<script>alert(2)</script>'));
+});
+
+test('renderCommitDetailsHtml: the wrap control is a real toggle, reporting its pressed state', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /id="wrap" type="button" aria-pressed="false"/);
+  assert.match(html, /aria-label="Wrap long lines"/);
+  assert.match(html, /classList\.toggle\('wrap'\)/);
+});
+
+test('renderCommitDetailsHtml: Open changes posts the file path without toggling its <details>', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /type: 'openFileDiff'/);
+  // stopPropagation is what keeps the button from also collapsing the section it sits in.
+  assert.match(html, /e\.stopPropagation\(\)/);
+});
+
+test('renderCommitDetailsHtml: links every stylesheet it is given, shared rules first', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  const shared = html.indexOf('shared.css');
+  const own = html.indexOf('commitDetails.css');
+  assert.ok(shared !== -1 && own !== -1, 'expected both stylesheets to be linked');
+  assert.ok(shared < own, 'shared rules must come first so the panel can override them');
+});
+
+test('renderCommitDetailsHtml: numbers the diff gutter from the hunk header', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /<span class="dn dn-old">1<\/span><span class="dn dn-new">1<\/span><span class="dc diff-ctx"> line one</);
+  assert.match(html, /<span class="dn dn-old"><\/span><span class="dn dn-new">3<\/span><span class="dc diff-add">\+line three</);
 });

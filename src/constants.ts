@@ -36,6 +36,12 @@ export const VIEWS = {
   branchComparison: 'gitsense.branchComparison',
 } as const;
 
+/** URI schemes GitSense serves content for. Read-only — a document at a ref is immutable. */
+export const SCHEMES = {
+  /** One file's contents at one git ref, backing the native diff editor. */
+  gitContent: 'gitsense-git',
+} as const;
+
 export const CONTEXT_KEYS = {
   fileHistoryHasContent: 'gitsense.fileHistory.hasContent',
 } as const;

@@ -1,10 +1,13 @@
 import * as vscode from 'vscode';
 import { GitService } from '../../core/git/GitService';
-import { renderCommitDetailsHtml } from './render';
+import { renderCommitDetailsHtml, type RemoteTarget } from './render';
 import { escapeHtml } from '../escapeHtml';
 import { resolveIssueLinking } from '../../providers/issueLinking';
+import { openFileDiff } from '../../providers/GitContentProvider';
+import { buildCommitUrl, remoteHostLabel } from '../../utils/remoteLinks';
 import { waitForWebviewView } from '../waitForWebviewView';
 import { COMMANDS, VIEWS } from '../../constants';
+import type { CommitDetail } from '../../core/git/types';
 
 function createNonce(): string {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -22,7 +25,9 @@ function shellHtml(bodyHtml: string): string {
 /** Docks commit details in the bottom panel (next to Commit Graph), matching GitLens's panel layout, instead of opening a new editor tab per commit. */
 export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
-  private currentSha: string | undefined;
+  private currentFilePath: string | undefined;
+  private currentCommit: CommitDetail | undefined;
+  private currentRemoteUrl: string | undefined;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -52,27 +57,38 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
     await this.load(filePath, sha);
   }
 
+  private mediaUri(name: string): string {
+    return this.view?.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', name)).toString() ?? '';
+  }
+
   private async load(filePath: string, sha: string): Promise<void> {
     if (!this.view) {
       return;
     }
-    this.currentSha = sha;
+    this.currentFilePath = filePath;
     this.view.title = `Commit ${sha.slice(0, 7)}`;
     this.view.webview.html = shellHtml('<p>Loading commit…</p>');
 
     try {
-      const [commit, files, diff, issueLinking] = await Promise.all([
+      const [commit, files, diff, issueLinking, remoteInfo] = await Promise.all([
         this.git.getCommit(filePath, sha),
         this.git.getCommitFiles(filePath, sha),
         this.git.getCommitDiff(filePath, sha),
         resolveIssueLinking(this.git, filePath),
+        this.git.resolveRemoteInfo(filePath),
       ]);
       if (!commit) {
         this.view.webview.html = shellHtml('<p>GitSense: commit not found.</p>');
         return;
       }
+      this.currentCommit = commit;
 
-      const styleUri = this.view.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'commitDetails.css'));
+      // Only offer "Open on <host>" when we know that host's commit-URL shape — a button that
+      // reliably 404s is worse than no button.
+      const url = remoteInfo ? buildCommitUrl(remoteInfo, commit.sha) : null;
+      const remote: RemoteTarget | null = remoteInfo && url ? { label: remoteHostLabel(remoteInfo), url } : null;
+      this.currentRemoteUrl = url ?? undefined;
+
       const editorFontFamily = vscode.workspace
         .getConfiguration('editor')
         .get<string>('fontFamily', 'Menlo, Monaco, monospace');
@@ -82,9 +98,10 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
         {
           nonce: createNonce(),
           cspSource: this.view.webview.cspSource,
-          styleUri: styleUri.toString(),
+          styleUris: [this.mediaUri('diff.css'), this.mediaUri('commitDetails.css')],
           editorFontFamily,
           issueLinking,
+          remote,
         },
       );
     } catch (err) {
@@ -94,10 +111,35 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleMessage(message: unknown): Promise<void> {
-    const isCopySha =
-      typeof message === 'object' && message !== null && (message as { type?: unknown }).type === 'copySha';
-    if (isCopySha && this.currentSha) {
-      await vscode.commands.executeCommand(COMMANDS.copySha, this.currentSha);
+    if (typeof message !== 'object' || message === null) {
+      return;
+    }
+    const { type, path } = message as { type?: unknown; path?: unknown };
+    const commit = this.currentCommit;
+
+    if (type === 'copySha' && commit) {
+      await vscode.commands.executeCommand(COMMANDS.copySha, commit.sha);
+      return;
+    }
+    if (type === 'copyMessage' && commit) {
+      await vscode.env.clipboard.writeText(commit.body);
+      void vscode.window.setStatusBarMessage('GitSense: commit message copied', 2000);
+      return;
+    }
+    if (type === 'openRemote' && this.currentRemoteUrl) {
+      await vscode.env.openExternal(vscode.Uri.parse(this.currentRemoteUrl));
+      return;
+    }
+    if (type === 'openFileDiff' && typeof path === 'string' && commit && this.currentFilePath) {
+      // `<sha>^` doesn't resolve for a root commit; GitService returns an empty left-hand side
+      // for that, which is exactly right — every line reads as added.
+      await openFileDiff({
+        repoPath: this.currentFilePath,
+        path,
+        beforeRef: `${commit.sha}^`,
+        afterRef: commit.sha,
+        label: commit.shortSha,
+      });
     }
   }
 }

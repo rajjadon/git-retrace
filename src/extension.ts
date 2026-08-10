@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { OUTPUT_CHANNEL_NAME, VIEWS } from './constants';
+import { OUTPUT_CHANNEL_NAME, SCHEMES, VIEWS } from './constants';
 import { GitService } from './core/git/GitService';
 import type { GitLogger } from './core/git/errors';
 import { BlameSource } from './providers/BlameSource';
@@ -7,6 +7,7 @@ import { BlameDecorationProvider } from './providers/BlameDecorationProvider';
 import { BlameHoverProvider } from './providers/BlameHoverProvider';
 import { FileHistoryProvider } from './providers/FileHistoryProvider';
 import { StatusBarProvider } from './providers/StatusBarProvider';
+import { GitContentProvider } from './providers/GitContentProvider';
 import { handleToggleBlameCommand } from './commands/blameCommands';
 import { handleShowFileHistoryCommand, handleCopyShaCommand } from './commands/fileHistoryCommands';
 import { handleShowCommitCommand } from './commands/commitCommands';
@@ -60,6 +61,9 @@ export function activate(ctx: vscode.ExtensionContext): GitSenseTestApi {
     handleOpenGraphCommand(commitGraphViewProvider),
     handleCompareBranchesCommand(git, branchComparisonViewProvider),
     vscode.languages.registerHoverProvider({ scheme: 'file' }, hoverProvider),
+    // Backs the "Open changes" action in the commit-details and branch-comparison panels by
+    // serving a file's contents at an arbitrary ref to the native diff editor.
+    vscode.workspace.registerTextDocumentContentProvider(SCHEMES.gitContent, new GitContentProvider(git)),
     vscode.window.registerWebviewViewProvider(VIEWS.commitGraph, commitGraphViewProvider),
     vscode.window.registerWebviewViewProvider(VIEWS.commitDetails, commitDetailsViewProvider),
     vscode.window.registerWebviewViewProvider(VIEWS.branchComparison, branchComparisonViewProvider),

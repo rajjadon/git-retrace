@@ -4,14 +4,23 @@ import { escapeHtml } from '../escapeHtml';
 import { renderFileSections } from '../diffRender';
 import { linkifyIssues, type IssueLinkOptions } from '../../utils/issueLinks';
 import { buildGravatarUrl } from '../../utils/gravatar';
-import { COPY_ICON, FILES_ICON, SEARCH_ICON } from '../icons';
+import { COPY_ICON, EXTERNAL_ICON, FILES_ICON, MESSAGE_ICON, SEARCH_ICON, WRAP_ICON } from '../icons';
+
+/** Where "Open on <host>" should send the user, when the repo has a remote we know the URL shape for. */
+export interface RemoteTarget {
+  /** Display name of the hosting service, e.g. "GitHub". */
+  label: string;
+  url: string;
+}
 
 export interface RenderCommitDetailsOptions {
   nonce: string;
   cspSource: string;
-  styleUri: string;
+  /** Stylesheets to link, in order. Shared diff rules first, then the panel's own. */
+  styleUris: string[];
   editorFontFamily: string;
   issueLinking?: IssueLinkOptions | null;
+  remote?: RemoteTarget | null;
 }
 
 /** Escapes `text` as HTML, wrapping any issue references per `issueLinking` in a real `<a>` link. */
@@ -42,7 +51,25 @@ function renderTotals(files: FileChange[]): string {
   return `<span class="totals"><span class="stat-add">+${insertions}</span><span class="stat-del">&minus;${deletions}</span></span>`;
 }
 
-/** Builds the commit details webview's full HTML document. Pure — nonce/cspSource/styleUri come from the caller, not from vscode APIs directly, so this is unit-testable without a real webview host. */
+/**
+ * The commit's action bar. Every action here is read-only: copying, or opening a view. Cherry-pick,
+ * revert and branch-from-here are deliberately absent — a single click in a panel is the wrong
+ * affordance for rewriting history, and §13's error taxonomy has no good answer for a mutation
+ * that half-succeeds.
+ */
+function renderActions(commit: CommitDetail, remote: RemoteTarget | null | undefined): string {
+  const openOnRemote = remote
+    ? `<button class="btn" id="open-remote" type="button" title="${escapeHtml(remote.url)}">${EXTERNAL_ICON}Open on ${escapeHtml(remote.label)}</button>`
+    : '';
+  return `<div class="actions">
+<code class="sha" title="${escapeHtml(commit.sha)}">${escapeHtml(commit.shortSha)}</code>
+<button class="btn" id="copy-sha" type="button">${COPY_ICON}Copy SHA</button>
+<button class="btn" id="copy-message" type="button">${MESSAGE_ICON}Copy message</button>
+${openOnRemote}
+</div>`;
+}
+
+/** Builds the commit details webview's full HTML document. Pure — nonce/cspSource/styleUris come from the caller, not from vscode APIs directly, so this is unit-testable without a real webview host. */
 export function renderCommitDetailsHtml(data: CommitDetailsData, opts: RenderCommitDetailsOptions): string {
   const { commit, files, diff } = data;
   const now = data.now ?? new Date();
@@ -50,34 +77,33 @@ export function renderCommitDetailsHtml(data: CommitDetailsData, opts: RenderCom
   const age = formatAge(date, now);
   const absoluteDate = formatAbsolute(date, 'yyyy-MM-dd HH:mm');
   const bodyRest = commit.body.slice(commit.message.length).replace(/^\n+/, '');
-  const avatarUrl = buildGravatarUrl(commit.authorEmail, { size: 56 });
+  const avatarUrl = buildGravatarUrl(commit.authorEmail, { size: 48 });
+  const styles = opts.styleUris.map((uri) => `<link rel="stylesheet" href="${uri}" />`).join('\n');
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource} 'nonce-${opts.nonce}'; img-src https: ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
-<link rel="stylesheet" href="${opts.styleUri}" />
+${styles}
 <style nonce="${opts.nonce}">:root { --gitsense-editor-font: ${escapeHtml(opts.editorFontFamily)}; }</style>
 <title>Commit ${escapeHtml(commit.shortSha)}</title>
 </head>
 <body>
 <div class="head">
-<img class="avatar" src="${avatarUrl}" alt="" width="28" height="28" />
+<img class="avatar" src="${avatarUrl}" alt="" width="24" height="24" />
 <div class="head-text">
-<h1>${linkifyHtml(commit.message, opts.issueLinking)}</h1>
+<h1 title="${escapeHtml(commit.message)}">${linkifyHtml(commit.message, opts.issueLinking)}</h1>
 <div class="head-meta"><span class="head-author">${escapeHtml(commit.author)}</span><span class="head-sep">&middot;</span><span class="head-age" title="${escapeHtml(absoluteDate)}">${escapeHtml(age)}</span></div>
 </div>
-<div class="head-actions">
-<code class="sha" title="${escapeHtml(commit.sha)}">${escapeHtml(commit.shortSha)}</code>
-<button id="copy-sha" class="icon-btn" type="button" aria-label="Copy commit SHA" title="Copy commit SHA">${COPY_ICON}</button>
 </div>
-</div>
+${renderActions(commit, opts.remote)}
 ${bodyRest ? `<pre class="commit-body">${linkifyHtml(bodyRest, opts.issueLinking)}</pre>` : ''}
 <div class="section-head">
 ${FILES_ICON}<span class="section-title">Files changed</span><span class="badge">${files.length}</span>
 ${renderTotals(files)}
 <span class="search">${SEARCH_ICON}<input id="file-filter" type="search" placeholder="Filter files…" aria-label="Filter changed files by path" autocomplete="off" spellcheck="false" /></span>
+<button class="icon-btn" id="wrap" type="button" aria-pressed="false" title="Wrap long lines" aria-label="Wrap long lines">${WRAP_ICON}</button>
 </div>
 <div class="files" id="files">
 ${renderFileSections(files, diff)}
@@ -85,8 +111,31 @@ ${renderFileSections(files, diff)}
 <p class="empty" id="no-match" hidden>No files match that filter.</p>
 <script nonce="${opts.nonce}">
 const vscode = acquireVsCodeApi();
+
 document.getElementById('copy-sha').addEventListener('click', () => {
   vscode.postMessage({ type: 'copySha' });
+});
+document.getElementById('copy-message').addEventListener('click', () => {
+  vscode.postMessage({ type: 'copyMessage' });
+});
+const remoteBtn = document.getElementById('open-remote');
+if (remoteBtn) {
+  remoteBtn.addEventListener('click', () => vscode.postMessage({ type: 'openRemote' }));
+}
+
+// Opening a file's changes must not also toggle the <details> it lives in.
+for (const btn of document.querySelectorAll('.row-btn')) {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    vscode.postMessage({ type: 'openFileDiff', path: btn.dataset.path });
+  });
+}
+
+const wrapBtn = document.getElementById('wrap');
+wrapBtn.addEventListener('click', () => {
+  const on = document.body.classList.toggle('wrap');
+  wrapBtn.setAttribute('aria-pressed', String(on));
 });
 
 const filterEl = document.getElementById('file-filter');

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderFileSections, splitDiffByFile } from '../../../src/views/diffRender';
+import { renderDiff, renderFileSections, splitDiffByFile } from '../../../src/views/diffRender';
 import type { FileChange } from '../../../src/core/git/types';
 
 function file(path: string, overrides: Partial<FileChange> = {}): FileChange {
@@ -73,8 +73,8 @@ test('renderFileSections: renders one collapsible section per file with its own 
   const html = renderFileSections([file('src/a.ts'), file('README.md', { deletions: 1, insertions: 0 })], twoFileDiff);
   assert.equal((html.match(/<details class="file"/g) ?? []).length, 2);
   assert.match(html, /class="file-dir">src\/<\/span><span class="file-name">a\.ts</);
-  assert.match(html, /class="diff-add">\+added</);
-  assert.match(html, /class="diff-del">-gone</);
+  assert.match(html, /class="dc diff-add">\+added</);
+  assert.match(html, /class="dc diff-del">-gone</);
 });
 
 test('renderFileSections: a sole changed file opens by default; several stay collapsed', () => {
@@ -108,4 +108,55 @@ test('renderFileSections: escapes path and diff content', () => {
   assert.ok(!html.includes('<img src=x onerror=alert(1)>'));
   assert.ok(!html.includes('<script>alert(1)</script>'));
   assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+});
+
+test('renderDiff: numbers each line from the hunk header, on the side it exists', () => {
+  const html = renderDiff('@@ -10,3 +20,4 @@\n ctx\n-removed\n+added\n');
+  // Hunk header itself sits on neither side.
+  assert.match(html, /<span class="dn dn-old"><\/span><span class="dn dn-new"><\/span><span class="dc diff-hunk">@@ -10,3 \+20,4 @@/);
+  // Context advances both counters.
+  assert.match(html, /<span class="dn dn-old">10<\/span><span class="dn dn-new">20<\/span><span class="dc diff-ctx"> ctx</);
+  // A removed line exists only in the old file.
+  assert.match(html, /<span class="dn dn-old">11<\/span><span class="dn dn-new"><\/span><span class="dc diff-del">-removed</);
+  // An added line exists only in the new file — and does not consume an old-side number.
+  assert.match(html, /<span class="dn dn-old"><\/span><span class="dn dn-new">21<\/span><span class="dc diff-add">\+added</);
+});
+
+test('renderDiff: a second hunk restarts numbering from its own header', () => {
+  const html = renderDiff('@@ -1,1 +1,1 @@\n a\n@@ -50,1 +60,1 @@\n b\n');
+  assert.match(html, /<span class="dn dn-old">1<\/span><span class="dn dn-new">1<\/span><span class="dc diff-ctx"> a</);
+  assert.match(html, /<span class="dn dn-old">50<\/span><span class="dn dn-new">60<\/span><span class="dc diff-ctx"> b</);
+});
+
+test('renderDiff: a fragment with no hunk header renders empty gutters rather than guessing', () => {
+  const html = renderDiff('+orphan line\n');
+  assert.match(html, /<span class="dn dn-old"><\/span><span class="dn dn-new"><\/span><span class="dc diff-add">\+orphan line</);
+});
+
+test('renderDiff: "\\ No newline at end of file" is a note, not a numbered line', () => {
+  const html = renderDiff('@@ -1,1 +1,1 @@\n a\n\\ No newline at end of file\n b\n');
+  // It gets no number of its own...
+  assert.match(html, /<span class="dn dn-old"><\/span><span class="dn dn-new"><\/span><span class="dc diff-ctx">\\ No newline/);
+  // ...and does not consume one, so the next real line is 2, not 3.
+  assert.match(html, /<span class="dn dn-old">2<\/span><span class="dn dn-new">2<\/span><span class="dc diff-ctx"> b</);
+});
+
+test('renderDiff: rows are concatenated with no newline, so the <pre> gets no phantom blank lines', () => {
+  const html = renderDiff('@@ -1,1 +1,1 @@\n a\n b\n');
+  assert.ok(!html.includes('</span>\n<span class="dl">'));
+  assert.equal((html.match(/class="dl"/g) ?? []).length, 3);
+});
+
+test('renderDiff: drops the trailing empty line left by splitting on the final newline', () => {
+  assert.equal((renderDiff('@@ -1,1 +1,1 @@\n a\n').match(/class="dl"/g) ?? []).length, 2);
+});
+
+test('renderDiff: escapes diff content', () => {
+  assert.ok(!renderDiff('+<script>alert(1)</script>\n').includes('<script>alert(1)</script>'));
+});
+
+test('renderFileSections: each file row offers an Open changes button carrying its path', () => {
+  const html = renderFileSections([file('src/a.ts')], twoFileDiff);
+  assert.match(html, /class="row-btn" type="button" data-path="src\/a\.ts" title="Open changes"/);
+  assert.match(html, /aria-label="Open changes in src\/a\.ts"/);
 });

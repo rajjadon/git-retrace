@@ -1,0 +1,349 @@
+/*
+ * Shared by Commit Details and Branch Comparison: the section header, the changed-file list, and
+ * the inline diff. Both panels answer the same question ("what changed in this file?") and so must
+ * look identical doing it — this file exists so the two can't drift apart.
+ *
+ * Type rule used throughout GitSense: anything git would accept as an argument — a path, a SHA,
+ * a diff body, a line number — is set in the editor's font. UI chrome is set in the UI font.
+ */
+
+/* ---------- Section header ---------- */
+
+.section-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.5rem 0.3rem 0.75rem;
+  border-top: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  font-size: 0.92em;
+}
+
+.section-icon {
+  flex: 0 0 auto;
+  opacity: 0.7;
+}
+
+.section-title {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.badge {
+  flex: 0 0 auto;
+  padding: 0 0.4rem;
+  border-radius: 8px;
+  font-size: 0.9em;
+  font-variant-numeric: tabular-nums;
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+.totals {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 1 1 auto;
+  min-width: 80px;
+  padding: 0.05rem 0.35rem;
+  color: var(--vscode-input-foreground);
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 2px;
+}
+
+.search:focus-within {
+  border-color: var(--vscode-focusBorder);
+}
+
+.toolbar-icon {
+  flex: 0 0 auto;
+  opacity: 0.7;
+}
+
+#file-filter {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+  padding: 0.1rem 0;
+}
+
+#file-filter::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+/* ---------- Icon-only controls ---------- */
+
+.icon-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 0.25rem;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.icon-btn:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+/* A toggle that looks identical on and off is a broken toggle. */
+.icon-btn[aria-pressed='true'] {
+  background-color: var(--vscode-inputOption-activeBackground);
+  color: var(--vscode-inputOption-activeForeground);
+  box-shadow: inset 0 0 0 1px var(--vscode-inputOption-activeBorder, transparent);
+}
+
+.empty {
+  margin: 0.75rem;
+  opacity: 0.65;
+  text-align: center;
+}
+
+/* ---------- Changed-file rows ---------- */
+
+.files {
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.file[hidden] {
+  display: none;
+}
+
+.file > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.75rem 0.2rem 0.5rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+/* Chevron drawn from borders — no icon asset, and it inherits the theme foreground for free. */
+.file > summary::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border-left: 4.5px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  opacity: 0.7;
+  transition: transform 100ms ease;
+}
+
+.file[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.file > summary::-webkit-details-marker {
+  display: none;
+}
+
+.file > summary:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.file > summary:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+/* The filename identifies the row; the directory is context. So the directory is the part
+   allowed to shrink and ellipsize, and the filename never truncates. */
+.file-path {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.95em;
+}
+
+.file-dir {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.6;
+}
+
+.file-name {
+  flex: 0 0 auto;
+}
+
+.file-stat {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92em;
+}
+
+/* Row-level action, revealed on hover/focus so a list of 40 files isn't a wall of buttons. */
+.row-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 0.15rem;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.file > summary:hover .row-btn,
+.row-btn:focus-visible {
+  opacity: 1;
+}
+
+.row-btn:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.row-btn:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.action-icon {
+  flex: 0 0 auto;
+}
+
+.stat-add,
+.stat-del {
+  margin-left: 0.35rem;
+}
+
+.stat-add {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+
+.stat-del {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
+.muted {
+  opacity: 0.65;
+}
+
+.no-diff {
+  margin: 0.2rem 0.75rem 0.5rem 2.1rem;
+  font-size: 0.92em;
+}
+
+/* ---------- Inline diff ---------- */
+
+pre.diff {
+  --dn-width: 3.5ch;
+  overflow-x: auto;
+  margin: 0 0.75rem 0.5rem 1.4rem;
+  padding: 0.4rem 0;
+  background-color: var(--vscode-textCodeBlock-background);
+  border-radius: 3px;
+  font-family: var(--gitsense-editor-font, var(--vscode-editor-font-family));
+  font-size: var(--vscode-editor-font-size, 13px);
+  line-height: 1.5;
+}
+
+/* One grid row per diff line: old number, new number, content. */
+.dl {
+  display: grid;
+  grid-template-columns: var(--dn-width) var(--dn-width) minmax(0, 1fr);
+  column-gap: 0.5rem;
+}
+
+.dl:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.dn {
+  text-align: right;
+  opacity: 0.45;
+  font-variant-numeric: tabular-nums;
+  /* Excluded from selection so copying a diff yields code, not code interleaved with numbers. */
+  user-select: none;
+}
+
+.dn-new {
+  border-right: 1px solid var(--vscode-panel-border);
+  padding-right: 0.4rem;
+}
+
+.dc {
+  white-space: pre;
+  padding-right: 0.6rem;
+}
+
+/* Soft wrap, toggled from the panel's own control rather than a setting — it's a per-reading
+   choice, not a preference worth persisting. */
+body.wrap pre.diff {
+  overflow-x: hidden;
+}
+
+body.wrap .dc {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Full-row tint, not just colored glyphs: a changed line should be findable by shape when
+   scrolling past, before you've read a single character of it. */
+.dl:has(.diff-add) {
+  background-color: var(--vscode-diffEditor-insertedTextBackground, transparent);
+}
+
+.dl:has(.diff-del) {
+  background-color: var(--vscode-diffEditor-removedTextBackground, transparent);
+}
+
+.diff-add {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+
+.diff-del {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
+.diff-hunk {
+  color: var(--vscode-textLink-foreground);
+  opacity: 0.9;
+}
+
+.diff-meta {
+  opacity: 0.6;
+}
+
+.diff-ctx {
+  color: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

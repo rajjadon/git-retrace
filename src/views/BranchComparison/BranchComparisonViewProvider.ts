@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { GitService } from '../../core/git/GitService';
 import { renderBranchComparisonHtml } from './render';
 import { escapeHtml } from '../escapeHtml';
+import { openFileDiff } from '../../providers/GitContentProvider';
 import { waitForWebviewView } from '../waitForWebviewView';
 import { COMMANDS, VIEWS } from '../../constants';
 
@@ -22,6 +23,8 @@ function shellHtml(bodyHtml: string): string {
 export class BranchComparisonViewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
   private currentFilePath: string | undefined;
+  private currentBase: string | undefined;
+  private currentCompare: string | undefined;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -51,28 +54,41 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
     await this.load(filePath, base, compare);
   }
 
+  private mediaUri(name: string): string {
+    return this.view?.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', name)).toString() ?? '';
+  }
+
   private async load(filePath: string, base: string, compare: string): Promise<void> {
     if (!this.view) {
       return;
     }
     this.currentFilePath = filePath;
+    this.currentBase = base;
+    this.currentCompare = compare;
     this.view.title = `${base}...${compare}`;
     this.view.webview.html = shellHtml('<p>Loading comparison…</p>');
 
     try {
-      const [aheadCommits, behindCommits, files, diff] = await Promise.all([
+      const [aheadCommits, behindCommits, files, diff, branches] = await Promise.all([
         this.git.getCommitsBetween(filePath, base, compare),
         this.git.getCommitsBetween(filePath, compare, base),
         this.git.getFilesBetweenRefs(filePath, base, compare),
         this.git.getDiffBetweenRefs(filePath, base, compare),
+        this.git.getBranches(filePath),
       ]);
 
-      const styleUri = this.view.webview.asWebviewUri(
-        vscode.Uri.joinPath(this.extensionUri, 'media', 'branchComparison.css'),
-      );
+      const editorFontFamily = vscode.workspace
+        .getConfiguration('editor')
+        .get<string>('fontFamily', 'Menlo, Monaco, monospace');
+
       this.view.webview.html = renderBranchComparisonHtml(
-        { base, compare, aheadCommits, behindCommits, files, diff },
-        { nonce: createNonce(), cspSource: this.view.webview.cspSource, styleUri: styleUri.toString() },
+        { base, compare, aheadCommits, behindCommits, files, diff, branches },
+        {
+          nonce: createNonce(),
+          cspSource: this.view.webview.cspSource,
+          styleUris: [this.mediaUri('shared.css'), this.mediaUri('branchComparison.css')],
+          editorFontFamily,
+        },
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -81,11 +97,41 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
   }
 
   private async handleMessage(message: unknown): Promise<void> {
-    const isOpenCommit =
-      typeof message === 'object' && message !== null && (message as { type?: unknown }).type === 'openCommit';
-    const sha = isOpenCommit ? (message as { sha?: unknown }).sha : undefined;
-    if (typeof sha === 'string' && this.currentFilePath) {
-      await vscode.commands.executeCommand(COMMANDS.showCommit, this.currentFilePath, sha);
+    if (typeof message !== 'object' || message === null) {
+      return;
+    }
+    const { type, sha, base, compare, path } = message as {
+      type?: unknown;
+      sha?: unknown;
+      base?: unknown;
+      compare?: unknown;
+      path?: unknown;
+    };
+    const filePath = this.currentFilePath;
+
+    if (type === 'openCommit' && typeof sha === 'string' && filePath) {
+      await vscode.commands.executeCommand(COMMANDS.showCommit, filePath, sha);
+      return;
+    }
+    if (type === 'setRefs' && typeof base === 'string' && typeof compare === 'string' && filePath) {
+      await this.load(filePath, base, compare);
+      return;
+    }
+    if (type === 'refresh' && filePath && this.currentBase && this.currentCompare) {
+      await this.load(filePath, this.currentBase, this.currentCompare);
+      return;
+    }
+    if (type === 'openFileDiff' && typeof path === 'string' && filePath && this.currentBase && this.currentCompare) {
+      // Diff against the merge base, not against `base` itself, so the editor agrees with the
+      // `base...compare` diff rendered inline — on diverged branches those differ.
+      const mergeBase = await this.git.getMergeBase(filePath, this.currentBase, this.currentCompare);
+      await openFileDiff({
+        repoPath: filePath,
+        path,
+        beforeRef: mergeBase ?? this.currentBase,
+        afterRef: this.currentCompare,
+        label: `${this.currentBase}...${this.currentCompare}`,
+      });
     }
   }
 }

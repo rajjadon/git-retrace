@@ -16,7 +16,16 @@ import {
   GRAPH_LOG_FORMAT,
   BRANCH_FORMAT,
 } from './parsers';
-import type { BlameLine, BranchInfo, Commit, CommitDetail, FileChange, GraphCommit, WorkingChanges } from './types';
+import type {
+  BlameLine,
+  BranchInfo,
+  Commit,
+  CommitDetail,
+  FileChange,
+  GraphCommit,
+  RemoteInfo,
+  WorkingChanges,
+} from './types';
 import { GitCommandError, type GitLogger } from './errors';
 import { toRepoRelativePath } from '../../utils/path';
 import { buildDefaultUrlTemplate } from '../../utils/issueLinks';
@@ -269,6 +278,30 @@ export class GitService {
     }
   }
 
+  /**
+   * One file's full contents at a given ref, for the "before"/"after" sides of a diff editor.
+   * Returns '' when the path doesn't exist at that ref — which is the correct left-hand side for
+   * a file the commit added, and also what `<sha>^` resolves to for a root commit.
+   */
+  async getFileAtRef(filePath: string, ref: string, repoRelativePath: string): Promise<string> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return '';
+    }
+    try {
+      return await this.gitFor(repoRoot).raw(['show', `${ref}:${repoRelativePath}`]);
+    } catch {
+      // Expected whenever the file is absent at that ref — an empty side, not an error.
+      return '';
+    }
+  }
+
+  /** The `origin` remote parsed into host/owner/repo, or null when there's no recognizable remote. */
+  async resolveRemoteInfo(filePath: string): Promise<RemoteInfo | null> {
+    const remoteUrl = await this.getRemoteUrl(filePath);
+    return remoteUrl ? parseRemoteUrl(remoteUrl) : null;
+  }
+
   /** The name of the currently checked-out branch, or null on a detached HEAD / empty repo. */
   async getCurrentBranch(filePath: string): Promise<string | null> {
     const repoRoot = await this.getRepoRoot(filePath);
@@ -317,6 +350,25 @@ export class GitService {
       const stderr = err instanceof Error ? err.message : String(err);
       this.logger?.error(`git log ${from}..${to} failed`, err);
       throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /**
+   * The common ancestor of two refs, or null when they share no history. Needed to open a
+   * per-file diff editor that agrees with the `base...compare` diff shown inline: on diverged
+   * branches, diffing against `base` itself would also surface base's own commits as differences.
+   */
+  async getMergeBase(filePath: string, a: string, b: string): Promise<string | null> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return null;
+    }
+    try {
+      const sha = (await this.gitFor(repoRoot).raw(['merge-base', a, b])).trim();
+      return sha.length > 0 ? sha : null;
+    } catch {
+      // Unrelated histories have no merge base — expected, not an error.
+      return null;
     }
   }
 

@@ -1,64 +1,175 @@
+/*
+ * Panel-docked branch comparison. Section chrome, the changed-file list and the diff live in
+ * shared.css; this file owns the ref bar, the tab strip, and the commit panes.
+ *
+ * The one deliberate color decision here: the two ref pickers are tinted by *diff polarity*, not
+ * by decoration. Base is the deleted/removed hue, compare is the added hue — the same two colors
+ * the `-` and `+` lines below will be painted in. The ref bar therefore previews the diff it
+ * produces, and the Ahead/Behind badges inherit the same mapping.
+ */
+
+html,
 body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
-  color: var(--vscode-editor-foreground);
-  background-color: var(--vscode-editor-background);
-  padding: 1rem 1.5rem 2rem;
-  line-height: 1.5;
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-panel-background, var(--vscode-editor-background));
+  line-height: 1.45;
 }
 
-h1 {
-  font-size: 1.2rem;
-  margin: 0 0 0.5rem;
-}
+/* ---------- Ref bar ---------- */
 
-h2 {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 1rem;
-  margin-top: 1.5rem;
-  border-bottom: 1px solid var(--vscode-panel-border);
-  padding-bottom: 0.25rem;
-}
-
-.section-icon {
-  opacity: 0.75;
+.refbar {
   flex: 0 0 auto;
-}
-
-.branch-name {
-  font-family: var(--vscode-editor-font-family);
-}
-
-.compare-arrow {
-  opacity: 0.6;
-  margin: 0 0.1rem;
-}
-
-.summary {
-  opacity: 0.85;
-}
-
-.commit-list,
-.file-list {
-  list-style: none;
-  padding: 0;
-  margin: 0.5rem 0;
-}
-
-.commit-row {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.2rem 0.4rem;
+  gap: 0.35rem;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.refbar-spacer {
+  flex: 1 1 auto;
+}
+
+.ref-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0 0.3rem 0 0.35rem;
   border-radius: 3px;
+  border-left: 2px solid currentColor;
+}
+
+.ref-pick > svg {
+  flex: 0 0 auto;
+  opacity: 0.9;
+}
+
+.ref-pick select {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.92em;
+  font-weight: 600;
+  min-width: 0;
+  max-width: 170px;
+  padding: 0.1rem 0.15rem;
+  color: inherit;
+  background-color: var(--vscode-dropdown-background);
+  border: 1px solid transparent;
+  border-radius: 2px;
   cursor: pointer;
 }
 
-.commit-avatar {
-  border-radius: 50%;
+.ref-pick select:hover {
+  border-color: var(--vscode-dropdown-border, var(--vscode-panel-border));
+}
+
+.ref-pick select:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+/* Base = what changes are measured *from* = the removed side. */
+.ref-base {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
+/* Compare = what changes are measured *to* = the added side. */
+.ref-compare {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+
+/* ---------- Tab strip ---------- */
+
+.tabs {
   flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  flex: 1 1 0;
+  padding: 0.4rem 0.5rem;
+  font-family: inherit;
+  font-size: 0.92em;
+  color: var(--vscode-panelTitle-inactiveForeground);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--vscode-panelTitle-activeForeground);
+}
+
+.tab.active {
+  color: var(--vscode-panelTitle-activeForeground);
+  border-bottom-color: var(--vscode-panelTitle-activeBorder);
+}
+
+.tab:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -2px;
+}
+
+/* Counts inherit the ref bar's polarity mapping: what compare adds is the added hue, what it's
+   missing is the removed hue, and the neutral file total stays neutral. */
+.badge-ahead {
+  background-color: var(--vscode-gitDecoration-addedResourceForeground);
+  color: var(--vscode-editor-background);
+}
+
+.badge-behind {
+  background-color: var(--vscode-gitDecoration-deletedResourceForeground);
+  color: var(--vscode-editor-background);
+}
+
+/* ---------- Panes ---------- */
+
+.pane {
+  flex: 1 1 auto;
+  overflow: auto;
+  min-height: 0;
+}
+
+.pane[hidden] {
+  display: none;
+}
+
+/* The files pane is itself a stack of fixed header over scrolling list. */
+.pane-files {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ---------- Commit rows ---------- */
+
+.commit-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  column-gap: 0.5rem;
+  height: 24px;
+  padding: 0 0.75rem;
+  cursor: pointer;
 }
 
 .commit-row:hover {
@@ -70,62 +181,46 @@ h2 {
   outline-offset: -1px;
 }
 
-.commit-message {
-  margin: 0 0.4rem;
+.commit-avatar {
+  border-radius: 50%;
 }
 
-.file-list li {
-  padding: 0.15rem 0;
+.commit-message,
+.commit-author {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.stat-add {
-  color: var(--vscode-gitDecoration-addedResourceForeground);
+.commit-author {
+  max-width: 110px;
+  opacity: 0.85;
 }
 
-.stat-del {
-  color: var(--vscode-gitDecoration-deletedResourceForeground);
+.commit-age {
+  opacity: 0.6;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
-.muted {
-  opacity: 0.7;
-}
-
-pre.diff {
-  overflow-x: auto;
-  padding: 0.75rem;
-  background-color: var(--vscode-textCodeBlock-background);
-  border-radius: 3px;
-}
-
-pre.diff code {
+.commit-sha {
   font-family: var(--vscode-editor-font-family);
-  font-size: var(--vscode-editor-font-size, 13px);
-  white-space: pre;
-}
-
-.diff-add {
-  color: var(--vscode-gitDecoration-addedResourceForeground);
-}
-
-.diff-del {
-  color: var(--vscode-gitDecoration-deletedResourceForeground);
-}
-
-.diff-hunk {
-  color: var(--vscode-textLink-foreground);
-}
-
-.diff-meta {
+  font-size: 0.95em;
   opacity: 0.6;
 }
 
-.diff-ctx {
-  color: inherit;
+/* ---------- Empty states ---------- */
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  margin: 1.75rem 0.75rem;
+  opacity: 0.75;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
-    animation: none !important;
-  }
+.empty-icon {
+  flex: 0 0 auto;
+  color: var(--vscode-gitDecoration-addedResourceForeground);
 }

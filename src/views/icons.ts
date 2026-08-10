@@ -46,3 +46,29 @@ export const COPY_ICON = icon(
 
 /** Pending-changes row marker — a dashed node, mirroring how GitLens draws the uncommitted row. */
 export const PENDING_ICON = icon('<circle cx="8" cy="8" r="5.2" stroke-dasharray="2.4 2" />', 'ref-icon', 12);
+
+/** Open this file's before/after in a real diff editor. */
+export const OPEN_CHANGES_ICON = icon(
+  '<path d="M5 2v9a2 2 0 0 0 2 2h4M5 2 2.5 4.5M5 2l2.5 2.5M11 14V5a2 2 0 0 0-2-2H5m6 11 2.5-2.5M11 14l-2.5-2.5" />',
+  'action-icon',
+  12,
+);
+
+/** Copy the commit message. */
+export const MESSAGE_ICON = icon(
+  '<path d="M2.5 3.5h11v7h-6L4.5 13.5V10.5h-2z" /><path d="M5 6.5h6M5 8.5h3.5" />',
+  'action-icon',
+  12,
+);
+
+/** Leave the editor for the commit's page on the hosting service. */
+export const EXTERNAL_ICON = icon('<path d="M9.5 2.5H13.5v4" /><path d="M13.5 2.5 7.5 8.5" /><path d="M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3" />', 'action-icon', 12);
+
+/** Soft-wrap long diff lines instead of scrolling them. */
+export const WRAP_ICON = icon('<path d="M2.5 3.5h11M2.5 8h8.5a2.5 2.5 0 0 1 0 5H8.5" /><path d="M10 11 8.5 13l1.5 2" /><path d="M2.5 12.5h3" />', 'action-icon', 12);
+
+/** Swap which ref is the base and which is the compare. */
+export const SWAP_ICON = icon('<path d="M2.5 5.5h11L10.5 2.5" /><path d="M13.5 10.5h-11l3 3" />', 'toolbar-icon', 13);
+
+/** Nothing to show, and that's the good outcome — used by the "up to date" empty state. */
+export const CHECK_ICON = icon('<path d="M3 8.5 6.5 12 13 4.5" />', 'empty-icon', 15);
