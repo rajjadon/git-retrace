@@ -1,0 +1,9 @@
+node_modules/
+out/
+out-test/
+.vscode-test/
+media/*.js
+media/*.js.map
+*.vsix
+.DS_Store
+test/fixtures/tmp/
