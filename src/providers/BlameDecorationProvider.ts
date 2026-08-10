@@ -1,15 +1,23 @@
 import * as vscode from 'vscode';
 import type { BlameLine } from '../core/git/types';
-import { formatBlameLabel } from '../utils/blameFormat';
-import { formatAge, formatAbsolute } from '../utils/date';
+import { formatBlameEntry } from '../utils/blameFormat';
 import { CONFIG } from '../constants';
 import type { BlameSource } from './BlameSource';
 
 const DEFAULT_MAX_BLAME_FILE_SIZE = 1_048_576;
 
+/** `undefined` = no active file editor at all; `entry: null` = there's an editor but no blame for its current line. */
+export interface ActiveLineBlame {
+  editor: vscode.TextEditor;
+  entry: BlameLine | null;
+}
+
 export class BlameDecorationProvider implements vscode.Disposable {
   private readonly decorationType: vscode.TextEditorDecorationType;
   private readonly disposables: vscode.Disposable[] = [];
+  private readonly onDidUpdateEmitter = new vscode.EventEmitter<ActiveLineBlame | undefined>();
+  /** Lets other UI (the status bar) reuse this provider's active-line tracking instead of re-subscribing to the same events. */
+  readonly onDidUpdate = this.onDidUpdateEmitter.event;
   private lastLineByUri = new Map<string, number>();
   private lastLabelByUri = new Map<string, string | undefined>();
   private currentWatchedFile: string | undefined;
@@ -26,6 +34,7 @@ export class BlameDecorationProvider implements vscode.Disposable {
 
     this.disposables.push(
       this.decorationType,
+      this.onDidUpdateEmitter,
       vscode.window.onDidChangeActiveTextEditor((editor) => {
         void this.onActiveEditorChanged(editor);
       }),
@@ -61,10 +70,12 @@ export class BlameDecorationProvider implements vscode.Disposable {
     this.enabled = !this.enabled;
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
+      this.onDidUpdateEmitter.fire(undefined);
       return;
     }
     if (!this.enabled) {
       this.clearDecoration(editor);
+      this.onDidUpdateEmitter.fire({ editor, entry: null });
     } else {
       void this.updateForEditor(editor);
     }
@@ -74,6 +85,8 @@ export class BlameDecorationProvider implements vscode.Disposable {
     this.watchCurrentFile(editor);
     if (editor) {
       await this.updateForEditor(editor);
+    } else {
+      this.onDidUpdateEmitter.fire(undefined);
     }
   }
 
@@ -94,10 +107,12 @@ export class BlameDecorationProvider implements vscode.Disposable {
     this.enabled = this.getConfig<boolean>(CONFIG.blameEnabled, true);
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
+      this.onDidUpdateEmitter.fire(undefined);
       return;
     }
     if (!this.enabled) {
       this.clearDecoration(editor);
+      this.onDidUpdateEmitter.fire({ editor, entry: null });
     } else {
       void this.updateForEditor(editor);
     }
@@ -105,6 +120,7 @@ export class BlameDecorationProvider implements vscode.Disposable {
 
   private async updateForEditor(editor: vscode.TextEditor): Promise<void> {
     if (!this.enabled || editor.document.uri.scheme !== 'file') {
+      this.onDidUpdateEmitter.fire({ editor, entry: null });
       return;
     }
 
@@ -113,20 +129,23 @@ export class BlameDecorationProvider implements vscode.Disposable {
     const maxSize = this.getConfig<number>(CONFIG.maxBlameFileSize, DEFAULT_MAX_BLAME_FILE_SIZE);
     if (Buffer.byteLength(editor.document.getText(), 'utf8') > maxSize) {
       this.clearDecoration(editor);
+      this.onDidUpdateEmitter.fire({ editor, entry: null });
       return;
     }
 
     const ignoreWhitespace = this.getConfig<boolean>(CONFIG.blameIgnoreWhitespace, true);
     const blameLines = await this.source.getBlameLines(filePath, { ignoreWhitespace });
-    const entry = blameLines?.find((l: BlameLine) => l.line === line);
+    const entry = blameLines?.find((l: BlameLine) => l.line === line) ?? null;
     if (!entry) {
       this.clearDecoration(editor);
+      this.onDidUpdateEmitter.fire({ editor, entry: null });
       return;
     }
 
     const range = new vscode.Range(line, Number.MAX_SAFE_INTEGER, line, Number.MAX_SAFE_INTEGER);
     const highlight = this.getConfig<boolean>(CONFIG.blameHighlightCurrentLine, true);
-    const label = this.formatEntry(entry);
+    const format = this.getConfig<string>(CONFIG.blameFormat, '{author}, {age}');
+    const label = formatBlameEntry(entry, format);
     editor.setDecorations(this.decorationType, [
       {
         range,
@@ -141,6 +160,7 @@ export class BlameDecorationProvider implements vscode.Disposable {
       },
     ]);
     this.lastLabelByUri.set(editor.document.uri.toString(), label);
+    this.onDidUpdateEmitter.fire({ editor, entry });
   }
 
   /** Test-only introspection seam — VS Code's public API doesn't expose applied decorations. */
@@ -151,18 +171,6 @@ export class BlameDecorationProvider implements vscode.Disposable {
   private clearDecoration(editor: vscode.TextEditor): void {
     editor.setDecorations(this.decorationType, []);
     this.lastLabelByUri.set(editor.document.uri.toString(), undefined);
-  }
-
-  private formatEntry(entry: BlameLine): string {
-    const format = this.getConfig<string>(CONFIG.blameFormat, '{author}, {age}');
-    const date = new Date(entry.authorTime * 1000);
-    return formatBlameLabel(format, {
-      author: entry.isUncommitted ? 'You' : entry.author,
-      age: entry.isUncommitted ? 'uncommitted' : formatAge(date),
-      date: formatAbsolute(date, 'yyyy-MM-dd'),
-      message: entry.summary,
-      sha: entry.sha.slice(0, 7),
-    });
   }
 
   /** Only the active editor's file needs a watcher — replaced whenever the active editor changes. */

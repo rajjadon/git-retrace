@@ -6,7 +6,7 @@ GitSense is a free, open-source (MIT) VS Code extension that surfaces git blame,
 
 ## Status
 
-Phase 1 (MVP) is under active development. See `CLAUDE.md` for the full architecture and roadmap.
+Phase 1 (MVP) is complete. Phase 2 (AI features) and Phase 3 (commit graph, branch comparison, issue linking) are next — see `CLAUDE.md` for the full roadmap.
 
 ## Features
 
@@ -14,8 +14,7 @@ Phase 1 (MVP) is under active development. See `CLAUDE.md` for the full architec
 - **Blame hover card** — hover any line to see the author's Gravatar, full commit message, relative + absolute date, diff stat, and short SHA.
 - **File history** — run **GitSense: Show File History** to open a sidebar view listing every commit that touched the current file, newest first, following the active editor as you switch files. Click an entry to open its commit details; right-click for **Copy Commit SHA**.
 - **Commit details** — a webview with the full commit message, author, every changed file with insertion/deletion counts, and the full unified diff. Open it from File History, or via **GitSense: Show Commit Details**.
-
-Still to come: status bar (see `CLAUDE.md` for the roadmap).
+- **Status bar** — the current line's author and age in the status bar, mirroring the inline decoration. Click it to open commit details.
 
 ## Settings
 

@@ -6,6 +6,7 @@ import { BlameSource } from './providers/BlameSource';
 import { BlameDecorationProvider } from './providers/BlameDecorationProvider';
 import { BlameHoverProvider } from './providers/BlameHoverProvider';
 import { FileHistoryProvider } from './providers/FileHistoryProvider';
+import { StatusBarProvider } from './providers/StatusBarProvider';
 import { handleToggleBlameCommand } from './commands/blameCommands';
 import { handleShowFileHistoryCommand, handleCopyShaCommand } from './commands/fileHistoryCommands';
 import { handleShowCommitCommand } from './commands/commitCommands';
@@ -15,6 +16,7 @@ import { CommitDetailsPanel } from './views/CommitDetails/CommitDetailsPanel';
 export interface GitSenseTestApi {
   blameProvider: BlameDecorationProvider;
   fileHistoryProvider: FileHistoryProvider;
+  statusBarProvider: StatusBarProvider;
   git: GitService;
   getCommitDetailsHtml: () => string | undefined;
 }
@@ -35,11 +37,13 @@ export function activate(ctx: vscode.ExtensionContext): GitSenseTestApi {
   const blameProvider = new BlameDecorationProvider(blameSource);
   const hoverProvider = new BlameHoverProvider(blameSource, git);
   const fileHistoryProvider = new FileHistoryProvider(git);
+  const statusBarProvider = new StatusBarProvider(blameProvider);
 
   ctx.subscriptions.push(
     blameSource,
     blameProvider,
     fileHistoryProvider,
+    statusBarProvider,
     handleToggleBlameCommand(blameProvider),
     handleShowFileHistoryCommand(fileHistoryProvider),
     handleCopyShaCommand(),
@@ -51,6 +55,7 @@ export function activate(ctx: vscode.ExtensionContext): GitSenseTestApi {
   return {
     blameProvider,
     fileHistoryProvider,
+    statusBarProvider,
     git,
     getCommitDetailsHtml: () => CommitDetailsPanel.getCurrentHtmlForTest(),
   };
