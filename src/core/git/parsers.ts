@@ -1,4 +1,14 @@
-import type { BlameLine, BranchInfo, Commit, CommitDetail, FileChange, GraphCommit, Ref, RemoteInfo } from './types';
+import type {
+  BlameLine,
+  BranchInfo,
+  Commit,
+  CommitDetail,
+  FileChange,
+  GraphCommit,
+  Ref,
+  RemoteInfo,
+  WorkingChanges,
+} from './types';
 
 const UNCOMMITTED_SHA = '0000000000000000000000000000000000000000';
 const HEADER_RE = /^([0-9a-f]{40}) (\d+) (\d+)(?: \d+)?$/;
@@ -8,6 +18,11 @@ const HEADER_RE = /^([0-9a-f]{40}) (\d+) (\d+)(?: \d+)?$/;
 // tabs, pipes, or other "normal" punctuation.
 const LOG_FIELD_SEP = '\x1f';
 const LOG_RECORD_SEP = '\x1e';
+
+// `--numstat` splits a commit's output across several lines, so the graph parser tokenizes on
+// newlines as well as record separators and then classifies each token by whether it carries
+// field separators. Splitting on both means it doesn't matter which terminator git emitted.
+const RECORD_OR_NEWLINE_RE = /[\n\x1e]/;
 
 /** Pass to `git log --pretty=tformat:<this>` — `tformat` (not `format`) avoids an extra implicit newline between records. */
 export const LOG_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SEP}%ae${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%s${LOG_RECORD_SEP}`;
@@ -20,7 +35,7 @@ export const LOG_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SE
  */
 export const COMMIT_DETAIL_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SEP}%ae${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%B`;
 
-/** Pass to `git log --all --topo-order --pretty=tformat:<this>` for the commit graph. `%P` = parent shas (space-separated), `%D` = ref decorations. */
+/** Pass to `git log --all --topo-order --numstat --decorate=full --pretty=tformat:<this>` for the commit graph. `%P` = parent shas (space-separated), `%D` = ref decorations. */
 export const GRAPH_LOG_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SEP}%ae${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%P${LOG_FIELD_SEP}%D${LOG_FIELD_SEP}%s${LOG_RECORD_SEP}`;
 
 /** Pass to `git for-each-ref refs/heads refs/remotes --format=<this>`. Uses the full refname (not `:short`) so local vs remote can be told apart reliably by prefix. */
@@ -121,45 +136,117 @@ export function parseLog(raw: string): Commit[] {
     });
 }
 
-/** Parses a `%D` ref-decoration string, e.g. "HEAD -> main, origin/main, tag: v1.0.0". Pure — no I/O. */
+/** Classifies one decoration segment. Handles both `--decorate=full` refnames (`refs/heads/main`) and the short `%D` form (`main`), so callers that omit `--decorate=full` still get usable refs — just without local/remote separation. */
+function parseRefSegment(segment: string, isHead: boolean): Ref {
+  // The `tag: ` marker is git's own, present in both decoration forms — it must be checked before
+  // the refname prefixes, because the short form's payload (`tag: v1.0.0`) carries no `refs/tags/`
+  // prefix to fall back on and would otherwise be misfiled as a branch.
+  if (segment.startsWith('tag: ')) {
+    return { name: segment.slice('tag: '.length).replace(/^refs\/tags\//, ''), type: 'tag', isHead };
+  }
+  if (segment.startsWith('refs/heads/')) {
+    return { name: segment.slice('refs/heads/'.length), type: 'branch', isHead };
+  }
+  if (segment.startsWith('refs/remotes/')) {
+    return { name: segment.slice('refs/remotes/'.length), type: 'remoteBranch', isHead };
+  }
+  if (segment.startsWith('refs/tags/')) {
+    return { name: segment.slice('refs/tags/'.length), type: 'tag', isHead };
+  }
+  return { name: segment, type: 'branch', isHead };
+}
+
+/** Parses a `%D` ref-decoration string, e.g. "HEAD -> refs/heads/main, refs/remotes/origin/main, tag: refs/tags/v1.0.0". Pure — no I/O. */
 function parseRefs(raw: string): Ref[] {
   if (!raw) {
     return [];
   }
   return raw.split(', ').map((segment): Ref => {
     if (segment === 'HEAD') {
-      return { name: 'HEAD', type: 'detached' };
+      return { name: 'HEAD', type: 'detached', isHead: true };
     }
     if (segment.startsWith('HEAD -> ')) {
-      return { name: segment.slice('HEAD -> '.length), type: 'branch' };
+      return parseRefSegment(segment.slice('HEAD -> '.length), true);
     }
-    if (segment.startsWith('tag: ')) {
-      return { name: segment.slice('tag: '.length), type: 'tag' };
-    }
-    return { name: segment, type: 'branch' };
+    return parseRefSegment(segment, false);
   });
 }
 
-/** Parses `git log --all --pretty=tformat:GRAPH_LOG_FORMAT` output into commits with parent shas and refs. Pure — no I/O. */
+function parseGraphRecord(fieldsLine: string): GraphCommit {
+  const [sha, shortSha, author, authorEmail, date, parentsRaw, refsRaw, message] = fieldsLine.split(LOG_FIELD_SEP);
+  return {
+    sha: sha ?? '',
+    shortSha: shortSha ?? '',
+    author: author ?? '',
+    authorEmail: authorEmail ?? '',
+    date: date ?? '',
+    message: message ?? '',
+    parents: (parentsRaw ?? '').split(' ').filter((p) => p.length > 0),
+    refs: parseRefs(refsRaw ?? ''),
+    filesChanged: 0,
+    insertions: 0,
+    deletions: 0,
+  };
+}
+
+/**
+ * Parses `git log --all --numstat --decorate=full --pretty=tformat:GRAPH_LOG_FORMAT` output.
+ * Pure — no I/O.
+ *
+ * With `--numstat`, git interleaves each commit's stat block *after* its formatted record, so a
+ * naive split on the record separator would attach every block to the wrong commit. Instead this
+ * walks the output line by line: a line containing the field separator starts a new commit, and
+ * any other non-empty line is a numstat row folded into the commit most recently started. That
+ * also makes the parser indifferent to whether `--numstat` was passed at all.
+ */
 export function parseGraphLog(raw: string): GraphCommit[] {
-  return raw
-    .split(LOG_RECORD_SEP)
-    .map((record) => record.trim())
-    .filter((record) => record.length > 0)
-    .map((record) => {
-      const [sha, shortSha, author, authorEmail, date, parentsRaw, refsRaw, message] = record.split(LOG_FIELD_SEP);
-      const parents = (parentsRaw ?? '').split(' ').filter((p) => p.length > 0);
-      return {
-        sha: sha ?? '',
-        shortSha: shortSha ?? '',
-        author: author ?? '',
-        authorEmail: authorEmail ?? '',
-        date: date ?? '',
-        message: message ?? '',
-        parents,
-        refs: parseRefs(refsRaw ?? ''),
-      };
-    });
+  const commits: GraphCommit[] = [];
+  for (const segment of raw.split(RECORD_OR_NEWLINE_RE)) {
+    const line = segment.trim();
+    if (line.length === 0) {
+      continue;
+    }
+    if (line.includes(LOG_FIELD_SEP)) {
+      commits.push(parseGraphRecord(line));
+      continue;
+    }
+    const stat = parseNumstatLine(line);
+    const current = commits[commits.length - 1];
+    if (stat && current) {
+      current.filesChanged += 1;
+      current.insertions += stat.insertions;
+      current.deletions += stat.deletions;
+    }
+  }
+  return commits;
+}
+
+/**
+ * Parses `git status --porcelain` output into per-status *file* counts. Pure — no I/O.
+ *
+ * Counts each path once by its most significant status across the index (X) and worktree (Y)
+ * columns: deleted wins over added wins over modified, so a file that is staged-added and then
+ * worktree-modified is still counted once, as added.
+ */
+export function parseStatusPorcelain(raw: string): WorkingChanges {
+  let added = 0;
+  let modified = 0;
+  let deleted = 0;
+  for (const line of raw.split('\n')) {
+    // Status codes live in columns 0-1; anything shorter than `XY path` isn't a status line.
+    if (line.length < 4) {
+      continue;
+    }
+    const codes = line.slice(0, 2);
+    if (codes.includes('D')) {
+      deleted += 1;
+    } else if (codes === '??' || codes.includes('A')) {
+      added += 1;
+    } else {
+      modified += 1;
+    }
+  }
+  return { added, modified, deleted, total: added + modified + deleted };
 }
 
 /** Parses `git show -s --pretty=tformat:COMMIT_DETAIL_FORMAT <sha>` output. Pure — no I/O. */

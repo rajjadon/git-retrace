@@ -1,36 +1,34 @@
+/*
+ * Panel-docked commit details. Laid out as three fixed bands (header, message body, section
+ * header) over one scrolling band (the file list), so the commit's identity and the changed-file
+ * count stay on screen no matter how far down a 200-file diff you are.
+ */
+
+html,
 body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
-  color: var(--vscode-editor-foreground);
-  background-color: var(--vscode-editor-background);
-  padding: 1rem 1.5rem 2rem;
-  line-height: 1.5;
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-panel-background, var(--vscode-editor-background));
+  line-height: 1.45;
 }
 
-h1 {
-  font-size: 1.2rem;
-  margin: 0 0 0.3rem;
-}
+/* ---------- Commit header ---------- */
 
-h2 {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 1rem;
-  margin-top: 1.5rem;
-  border-bottom: 1px solid var(--vscode-panel-border);
-  padding-bottom: 0.25rem;
-}
-
-.section-icon {
-  opacity: 0.75;
+.head {
   flex: 0 0 auto;
-}
-
-.header {
   display: flex;
   align-items: flex-start;
-  gap: 0.9rem;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
 }
 
 .avatar {
@@ -39,65 +37,237 @@ h2 {
   margin-top: 0.1rem;
 }
 
-.header-text {
+.head-text {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
-.header-meta {
-  opacity: 0.75;
-  font-size: 0.9em;
+/* The subject is the panel's h1 for screen-reader outline purposes, but it is body-sized —
+   a 1.2rem heading in a 250px-tall panel is a banner, not information. */
+h1 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
-.header-sep {
+.head-meta {
+  opacity: 0.7;
+  font-size: 0.92em;
+}
+
+.head-sep {
   margin: 0 0.35rem;
 }
 
-.commit-body {
-  white-space: pre-wrap;
-  font-family: var(--vscode-font-family);
-  margin: 0.75rem 0;
-  opacity: 0.9;
-}
-
-.toolbar {
+.head-actions {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  margin: 0.75rem 0;
+  gap: 0.3rem;
 }
 
-.toolbar .sha {
+.sha {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.9em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  background-color: var(--vscode-textCodeBlock-background);
+  opacity: 0.85;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  padding: 0.25rem;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.icon-btn:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.commit-body {
+  flex: 0 1 auto;
+  max-height: 35%;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--vscode-font-family);
+  font-size: 0.95em;
+  margin: 0;
+  padding: 0 0.75rem 0.6rem 3.05rem;
+  opacity: 0.85;
+}
+
+/* ---------- Files-changed section header ---------- */
+
+.section-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  border-top: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  font-size: 0.92em;
+}
+
+.section-icon {
+  flex: 0 0 auto;
   opacity: 0.7;
 }
 
-button {
-  font-family: var(--vscode-font-family);
-  background-color: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-  border: none;
-  padding: 0.3rem 0.8rem;
-  border-radius: 2px;
-  cursor: pointer;
+.section-title {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.badge {
+  flex: 0 0 auto;
+  padding: 0 0.4rem;
+  border-radius: 8px;
   font-size: 0.9em;
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
 }
 
-button:hover {
-  background-color: var(--vscode-button-secondaryHoverBackground);
+.totals {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
 }
 
-button:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: 2px;
+.search {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 1 1 auto;
+  min-width: 90px;
+  padding: 0.05rem 0.35rem;
+  color: var(--vscode-input-foreground);
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 2px;
 }
 
-.file-list {
+.search:focus-within {
+  border-color: var(--vscode-focusBorder);
+}
+
+.toolbar-icon {
+  flex: 0 0 auto;
+  opacity: 0.7;
+}
+
+#file-filter {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+  padding: 0.1rem 0;
+}
+
+#file-filter::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+/* ---------- Per-file collapsible diffs ---------- */
+
+.files {
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.file[hidden] {
+  display: none;
+}
+
+.file > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.75rem;
+  cursor: pointer;
   list-style: none;
-  padding: 0;
-  margin: 0.5rem 0;
+  user-select: none;
 }
 
-.file-list li {
-  padding: 0.15rem 0;
+/* Chevron drawn from borders — no icon asset, and it inherits the theme foreground for free. */
+.file > summary::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border-left: 4.5px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  opacity: 0.7;
+  transition: transform 100ms ease;
+}
+
+.file[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.file > summary::-webkit-details-marker {
+  display: none;
+}
+
+.file > summary:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.file > summary:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+/* The filename identifies the row; the directory is context. So the directory is the part
+   allowed to shrink and ellipsize, and the filename never truncates. */
+.file-path {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.file-dir {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.6;
+}
+
+.file-name {
+  flex: 0 0 auto;
+}
+
+.file-stat {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92em;
+}
+
+.stat-add,
+.stat-del {
+  margin-left: 0.35rem;
 }
 
 .stat-add {
@@ -109,12 +279,23 @@ button:focus-visible {
 }
 
 .muted {
-  opacity: 0.7;
+  opacity: 0.65;
+}
+
+.no-diff {
+  margin: 0.2rem 0.75rem 0.5rem 2.1rem;
+  font-size: 0.92em;
+}
+
+.empty {
+  margin: 0.75rem;
+  opacity: 0.65;
 }
 
 pre.diff {
   overflow-x: auto;
-  padding: 0.75rem;
+  margin: 0 0.75rem 0.5rem 2.1rem;
+  padding: 0.5rem 0.6rem;
   background-color: var(--vscode-textCodeBlock-background);
   border-radius: 3px;
 }

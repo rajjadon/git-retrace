@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { OUTPUT_CHANNEL_NAME } from './constants';
+import { OUTPUT_CHANNEL_NAME, VIEWS } from './constants';
 import { GitService } from './core/git/GitService';
 import type { GitLogger } from './core/git/errors';
 import { BlameSource } from './providers/BlameSource';
@@ -12,9 +12,9 @@ import { handleShowFileHistoryCommand, handleCopyShaCommand } from './commands/f
 import { handleShowCommitCommand } from './commands/commitCommands';
 import { handleOpenGraphCommand } from './commands/graphCommands';
 import { handleCompareBranchesCommand } from './commands/branchCommands';
-import { CommitDetailsPanel } from './views/CommitDetails/CommitDetailsPanel';
-import { CommitGraphPanel } from './views/CommitGraph/CommitGraphPanel';
-import { BranchComparisonPanel } from './views/BranchComparison/BranchComparisonPanel';
+import { CommitDetailsViewProvider } from './views/CommitDetails/CommitDetailsViewProvider';
+import { CommitGraphViewProvider } from './views/CommitGraph/CommitGraphViewProvider';
+import { BranchComparisonViewProvider } from './views/BranchComparison/BranchComparisonViewProvider';
 
 /** Test-only introspection surface — accessed via `vscode.extensions.getExtension(id).exports` in integration tests. */
 export interface GitSenseTestApi {
@@ -44,6 +44,9 @@ export function activate(ctx: vscode.ExtensionContext): GitSenseTestApi {
   const hoverProvider = new BlameHoverProvider(blameSource, git);
   const fileHistoryProvider = new FileHistoryProvider(git);
   const statusBarProvider = new StatusBarProvider(blameProvider);
+  const commitGraphViewProvider = new CommitGraphViewProvider(ctx.extensionUri, git);
+  const commitDetailsViewProvider = new CommitDetailsViewProvider(ctx.extensionUri, git);
+  const branchComparisonViewProvider = new BranchComparisonViewProvider(ctx.extensionUri, git);
 
   ctx.subscriptions.push(
     blameSource,
@@ -53,10 +56,13 @@ export function activate(ctx: vscode.ExtensionContext): GitSenseTestApi {
     handleToggleBlameCommand(blameProvider),
     handleShowFileHistoryCommand(fileHistoryProvider),
     handleCopyShaCommand(),
-    handleShowCommitCommand(git, ctx.extensionUri),
-    handleOpenGraphCommand(git, ctx.extensionUri),
-    handleCompareBranchesCommand(git, ctx.extensionUri),
+    handleShowCommitCommand(commitDetailsViewProvider),
+    handleOpenGraphCommand(commitGraphViewProvider),
+    handleCompareBranchesCommand(git, branchComparisonViewProvider),
     vscode.languages.registerHoverProvider({ scheme: 'file' }, hoverProvider),
+    vscode.window.registerWebviewViewProvider(VIEWS.commitGraph, commitGraphViewProvider),
+    vscode.window.registerWebviewViewProvider(VIEWS.commitDetails, commitDetailsViewProvider),
+    vscode.window.registerWebviewViewProvider(VIEWS.branchComparison, branchComparisonViewProvider),
   );
   output.appendLine('GitSense activated.');
 
@@ -65,9 +71,9 @@ export function activate(ctx: vscode.ExtensionContext): GitSenseTestApi {
     fileHistoryProvider,
     statusBarProvider,
     git,
-    getCommitDetailsHtml: () => CommitDetailsPanel.getCurrentHtmlForTest(),
-    getCommitGraphHtml: () => CommitGraphPanel.getCurrentHtmlForTest(),
-    getBranchComparisonHtml: () => BranchComparisonPanel.getCurrentHtmlForTest(),
+    getCommitDetailsHtml: () => commitDetailsViewProvider.getCurrentHtmlForTest(),
+    getCommitGraphHtml: () => commitGraphViewProvider.getCurrentHtmlForTest(),
+    getBranchComparisonHtml: () => branchComparisonViewProvider.getCurrentHtmlForTest(),
   };
 }
 

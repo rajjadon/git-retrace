@@ -1,107 +1,343 @@
+/*
+ * Panel-docked commit graph. Two hard constraints drive this layout:
+ *  - The panel is short (often ~250px), so every pixel of chrome is rationed: no page heading,
+ *    no body padding, one 28px toolbar. Vertical space belongs to commits.
+ *  - Columns must never clip. The row grid carries a min-width and `.grid` scrolls horizontally,
+ *    so a narrow panel scrolls instead of bleeding the SHA column off the edge.
+ */
+
+:root {
+  --col-refs: 132px;
+  --col-author: 96px;
+  --col-changes: 58px;
+  --col-date: 88px;
+  --col-sha: 66px;
+  --col-message-min: 160px;
+  --row-min-width: calc(
+    var(--col-refs) + var(--graph-svg-width) + var(--col-message-min) + var(--col-author) +
+      var(--col-changes) + var(--col-date) + var(--col-sha) + 5rem
+  );
+}
+
+html,
 body {
-  font-family: var(--vscode-font-family);
-  font-size: var(--vscode-font-size);
-  color: var(--vscode-editor-foreground);
-  background-color: var(--vscode-editor-background);
-  padding: 1rem 1.5rem 2rem;
-  line-height: 1.5;
+  height: 100%;
 }
 
-h1 {
-  font-size: 1.2rem;
-  margin: 0 0 0.75rem;
-}
-
-.graph {
+body {
+  margin: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  font-family: var(--vscode-font-family);
+  /* One notch below the editor's size: this is dense tabular chrome, not prose. */
+  font-size: calc(var(--vscode-font-size, 13px) - 1px);
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-panel-background, var(--vscode-editor-background));
+  line-height: 1.4;
 }
 
-.graph-row {
-  display: grid;
-  grid-template-columns: var(--graph-svg-width) 16px minmax(100px, 1fr) 100px 110px 70px 70px;
+/* ---------- Toolbar ---------- */
+
+.toolbar {
+  flex: 0 0 auto;
+  display: flex;
   align-items: center;
-  column-gap: 0.6rem;
-  height: var(--graph-row-height);
-  padding: 0 0.5rem;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.toolbar-icon {
+  flex: 0 0 auto;
+  opacity: 0.7;
+}
+
+.ref-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+}
+
+.ref-picker > svg {
+  opacity: 0.8;
+}
+
+#ref-filter {
+  font-family: inherit;
+  font-size: inherit;
+  max-width: 180px;
+  padding: 0.15rem 0.25rem;
+  color: var(--vscode-dropdown-foreground);
+  background-color: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
+  border-radius: 2px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1 1 auto;
+  min-width: 120px;
+  max-width: 420px;
+  padding: 0.1rem 0.4rem;
+  color: var(--vscode-input-foreground);
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 2px;
+}
+
+.search:focus-within {
+  border-color: var(--vscode-focusBorder);
+}
+
+#search {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+  padding: 0.15rem 0;
+}
+
+#search::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.count {
+  flex: 0 0 auto;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+.icon-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 0.25rem;
+  color: inherit;
+  background: none;
+  border: none;
   border-radius: 3px;
   cursor: pointer;
 }
 
-.graph-row:hover {
+.icon-btn:hover {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.icon-btn:focus-visible,
+#ref-filter:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+/* ---------- Grid ---------- */
+
+.grid {
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.row {
+  display: grid;
+  grid-template-columns:
+    var(--col-refs) var(--graph-svg-width) minmax(var(--col-message-min), 1fr)
+    var(--col-author) var(--col-changes) var(--col-date) var(--col-sha);
+  align-items: center;
+  column-gap: 0.6rem;
+  padding: 0 0.5rem;
+  min-width: var(--row-min-width);
+}
+
+.row.header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 22px;
+  font-size: 0.9em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+  background-color: var(--vscode-panel-background, var(--vscode-editor-background));
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.row.commit,
+.row.wip {
+  height: var(--graph-row-height);
+  cursor: pointer;
+}
+
+.row.commit:hover,
+.row.wip:hover {
   background-color: var(--vscode-list-hoverBackground);
 }
 
-.graph-row:focus-visible {
+.row.selected {
+  background-color: var(--vscode-list-inactiveSelectionBackground);
+}
+
+.row.selected:focus-within {
+  background-color: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.row:focus-visible {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: -1px;
+}
+
+.row[hidden] {
+  display: none;
+}
+
+.cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.cell-graph {
+  overflow: visible;
 }
 
 .graph-row-svg {
   display: block;
 }
 
-.graph-avatar {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  display: block;
-}
-
-.graph-message {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.graph-refs {
+.cell-refs {
   display: flex;
-  gap: 0.3rem;
-  overflow: hidden;
+  align-items: center;
+  gap: 0.25rem;
+  justify-content: flex-end;
 }
 
-.graph-author {
-  opacity: 0.8;
+.cell-author {
+  opacity: 0.85;
+}
+
+.cell-changes {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  justify-content: flex-end;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-icon {
+  flex: 0 0 auto;
+  opacity: 0.7;
+}
+
+.cell-date,
+.cell-sha {
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-sha code {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.95em;
+}
+
+.empty {
+  margin: 1rem 0.75rem;
+  opacity: 0.6;
+}
+
+/* ---------- Ref labels ---------- */
+
+.ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+.ref-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.graph-age {
-  opacity: 0.6;
-  white-space: nowrap;
-}
-
-.graph-sha {
-  opacity: 0.6;
-  white-space: nowrap;
-}
-
-.ref-badge {
+.ref-icon {
   flex: 0 0 auto;
-  border-radius: 10px;
-  padding: 0.05rem 0.5rem;
-  font-size: 0.85em;
+  opacity: 0.85;
 }
 
+/* Local branch — solid, the repo's own refs read as "here". */
 .ref-branch {
-  background-color: var(--vscode-gitDecoration-addedResourceForeground);
-  color: var(--vscode-editor-background);
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
+/* Checked-out branch — the one label a reader scans for, so it gets the accent color. */
+.ref-head {
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  font-weight: 600;
+}
+
+/* Remote-tracking — outlined, not filled: on a synced repo it only restates the local branch. */
+.ref-remoteBranch {
+  border-color: var(--vscode-panel-border);
+  opacity: 0.8;
 }
 
 .ref-tag {
-  background-color: var(--vscode-textLink-foreground);
-  color: var(--vscode-editor-background);
+  border-color: var(--vscode-charts-yellow);
+  color: var(--vscode-charts-yellow);
 }
 
 .ref-detached {
-  background-color: var(--vscode-gitDecoration-modifiedResourceForeground);
-  color: var(--vscode-editor-background);
+  border-color: var(--vscode-charts-orange);
+  color: var(--vscode-charts-orange);
+}
+
+.ref-pending {
+  border-style: dashed;
+  border-color: var(--vscode-panel-border);
+  opacity: 0.85;
 }
 
 .ref-more {
   background-color: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
+}
+
+/* ---------- Working-changes stats ---------- */
+
+.stat-add,
+.stat-mod,
+.stat-del {
+  margin-left: 0.3rem;
+}
+
+.stat-add {
+  color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+
+.stat-mod {
+  color: var(--vscode-gitDecoration-modifiedResourceForeground);
+}
+
+.stat-del {
+  color: var(--vscode-gitDecoration-deletedResourceForeground);
 }
 
 @media (prefers-reduced-motion: reduce) {

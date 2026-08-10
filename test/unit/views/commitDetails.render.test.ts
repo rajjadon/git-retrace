@@ -33,6 +33,43 @@ test('renderCommitDetailsHtml: includes commit metadata, files, and diff', () =>
   assert.match(html, /class="diff-hunk">@@ -1,2 \+1,3 @@</);
 });
 
+test('renderCommitDetailsHtml: shows the short sha, with the full sha as its tooltip', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /class="sha" title="5a93a8d3e93fcc0a1f409e89d3aaca4346ced8ec">5a93a8d<\/code>/);
+});
+
+test('renderCommitDetailsHtml: heads the file section with a count and whole-commit totals', () => {
+  const twoFiles: FileChange[] = [
+    { path: 'a.ts', insertions: 10, deletions: 2, binary: false },
+    { path: 'b.ts', insertions: 5, deletions: 8, binary: false },
+  ];
+  const html = renderCommitDetailsHtml({ commit, files: twoFiles, diff, now }, opts);
+  assert.match(html, /class="section-title">Files changed<\/span><span class="badge">2</);
+  assert.match(html, /class="totals"><span class="stat-add">\+15<\/span><span class="stat-del">&minus;10</);
+});
+
+test('renderCommitDetailsHtml: renders per-file collapsible diffs, not one whole-commit dump', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /<details class="file"/);
+  // The `diff --git` / `index` / `---` / `+++` header block carries nothing the filename above
+  // it doesn't already say, so it should not survive into the rendered output.
+  assert.ok(!html.includes('diff --git'));
+});
+
+test('renderCommitDetailsHtml: offers a file filter box wired to the per-file sections', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /id="file-filter"/);
+  assert.match(html, /aria-label="Filter changed files by path"/);
+  assert.match(html, /data-filter="tracked\.txt"/);
+});
+
+test('renderCommitDetailsHtml: the copy button is labelled for screen readers, with no inline handler', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /aria-label="Copy commit SHA"/);
+  assert.match(html, /type: 'copySha'/);
+  assert.ok(!html.includes('onclick='));
+});
+
 test('renderCommitDetailsHtml: CSP uses the provided nonce and cspSource, no unsafe-inline', () => {
   const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
   assert.match(html, /script-src 'nonce-abc123'/);

@@ -10,12 +10,13 @@ import {
   parseGraphLog,
   parseBranches,
   parseRemoteUrl,
+  parseStatusPorcelain,
   LOG_FORMAT,
   COMMIT_DETAIL_FORMAT,
   GRAPH_LOG_FORMAT,
   BRANCH_FORMAT,
 } from './parsers';
-import type { BlameLine, BranchInfo, Commit, CommitDetail, FileChange, GraphCommit } from './types';
+import type { BlameLine, BranchInfo, Commit, CommitDetail, FileChange, GraphCommit, WorkingChanges } from './types';
 import { GitCommandError, type GitLogger } from './errors';
 import { toRepoRelativePath } from '../../utils/path';
 import { buildDefaultUrlTemplate } from '../../utils/issueLinks';
@@ -212,8 +213,12 @@ export class GitService {
     }
   }
 
-  /** Repo-wide commit graph across every ref (`--all`), not scoped to `filePath` — used to resolve which repo to query. */
-  async getGraphCommits(filePath: string, maxCount: number): Promise<GraphCommit[]> {
+  /**
+   * Repo-wide commit graph, not scoped to `filePath` — that's only used to resolve which repo to
+   * query. Walks every ref by default; pass `ref` to walk a single branch instead (the graph
+   * view's branch picker).
+   */
+  async getGraphCommits(filePath: string, maxCount: number, ref?: string): Promise<GraphCommit[]> {
     const repoRoot = await this.getRepoRoot(filePath);
     if (!repoRoot) {
       return [];
@@ -224,11 +229,16 @@ export class GitService {
     // `--exclude` must precede the `--all` it filters — refs/stash is a bare ref under refs/,
     // so --all walks it too, cluttering the graph with the stash's own commit + its "index"
     // parent (and a stray "refs/stash" badge). GitLens/GitHub keep stashes out of the main graph.
+    const revs = ref ? [ref] : ['--exclude=refs/stash', '--all'];
+    // --numstat rides along on this one call so the Changes column costs no extra process;
+    // ponytail: output grows with total files touched across maxCount commits, which the
+    // maxGraphItems cap bounds. Move to a lazy per-row stat fetch only if that cap has to rise.
     const args = [
       'log',
-      '--exclude=refs/stash',
-      '--all',
+      ...revs,
       '--topo-order',
+      '--numstat',
+      '--decorate=full',
       '-n',
       String(maxCount),
       `--pretty=tformat:${GRAPH_LOG_FORMAT}`,
@@ -238,8 +248,39 @@ export class GitService {
       return parseGraphLog(raw);
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err);
-      this.logger?.error('git log --all failed', err);
+      this.logger?.error(`git log ${revs.join(' ')} failed`, err);
       throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Per-status file counts for the working tree, including untracked files. Never throws — a dirty-state badge isn't worth failing the whole graph over. */
+  async getWorkingChanges(filePath: string): Promise<WorkingChanges> {
+    const empty: WorkingChanges = { added: 0, modified: 0, deleted: 0, total: 0 };
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return empty;
+    }
+    try {
+      const raw = await this.gitFor(repoRoot).raw(['status', '--porcelain']);
+      return parseStatusPorcelain(raw);
+    } catch (err) {
+      this.logger?.warn(`git status failed for ${repoRoot}: ${String(err)}`);
+      return empty;
+    }
+  }
+
+  /** The name of the currently checked-out branch, or null on a detached HEAD / empty repo. */
+  async getCurrentBranch(filePath: string): Promise<string | null> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return null;
+    }
+    try {
+      const name = (await this.gitFor(repoRoot).raw(['symbolic-ref', '--short', 'HEAD'])).trim();
+      return name.length > 0 ? name : null;
+    } catch {
+      // Detached HEAD or an empty repo with no commits — expected, not an error.
+      return null;
     }
   }
 

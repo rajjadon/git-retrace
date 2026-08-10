@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { COMMANDS } from '../constants';
 import type { GitService } from '../core/git/GitService';
 import type { BranchInfo } from '../core/git/types';
-import { BranchComparisonPanel } from '../views/BranchComparison/BranchComparisonPanel';
+import type { BranchComparisonViewProvider } from '../views/BranchComparison/BranchComparisonViewProvider';
 
 function toQuickPickItem(branch: BranchInfo): vscode.QuickPickItem {
   return {
@@ -11,7 +11,7 @@ function toQuickPickItem(branch: BranchInfo): vscode.QuickPickItem {
   };
 }
 
-export function handleCompareBranchesCommand(git: GitService, extensionUri: vscode.Uri): vscode.Disposable {
+export function handleCompareBranchesCommand(git: GitService, provider: BranchComparisonViewProvider): vscode.Disposable {
   // Accepts optional (base, compare) so it's directly scriptable — e.g. from a future
   // status-bar/tree item, or a test — bypassing the interactive QuickPick flow below.
   return vscode.commands.registerCommand(COMMANDS.compareBranches, async (base?: string, compare?: string) => {
@@ -22,7 +22,7 @@ export function handleCompareBranchesCommand(git: GitService, extensionUri: vsco
     }
 
     if (base && compare) {
-      await BranchComparisonPanel.show(extensionUri, git, filePath, base, compare);
+      await provider.show(filePath, base, compare);
       return;
     }
 
@@ -45,6 +45,6 @@ export function handleCompareBranchesCommand(git: GitService, extensionUri: vsco
       return;
     }
 
-    await BranchComparisonPanel.show(extensionUri, git, filePath, basePick.label, comparePick.label);
+    await provider.show(filePath, basePick.label, comparePick.label);
   });
 }

@@ -44,12 +44,38 @@
         "title": "GitSense: Compare Branches"
       }
     ],
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "gitsense",
+          "title": "GitSense",
+          "icon": "media/panel-icon.svg"
+        }
+      ]
+    },
     "views": {
       "explorer": [
         {
           "id": "gitsense.fileHistory",
           "name": "File History",
           "when": "gitsense.fileHistory.hasContent"
+        }
+      ],
+      "gitsense": [
+        {
+          "type": "webview",
+          "id": "gitsense.commitGraph",
+          "name": "Commit Graph"
+        },
+        {
+          "type": "webview",
+          "id": "gitsense.commitDetails",
+          "name": "Commit Details"
+        },
+        {
+          "type": "webview",
+          "id": "gitsense.branchComparison",
+          "name": "Branch Comparison"
         }
       ]
     },

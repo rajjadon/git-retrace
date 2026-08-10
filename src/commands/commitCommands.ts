@@ -1,14 +1,13 @@
 import * as vscode from 'vscode';
 import { COMMANDS } from '../constants';
-import type { GitService } from '../core/git/GitService';
-import { CommitDetailsPanel } from '../views/CommitDetails/CommitDetailsPanel';
+import type { CommitDetailsViewProvider } from '../views/CommitDetails/CommitDetailsViewProvider';
 
-export function handleShowCommitCommand(git: GitService, extensionUri: vscode.Uri): vscode.Disposable {
+export function handleShowCommitCommand(provider: CommitDetailsViewProvider): vscode.Disposable {
   return vscode.commands.registerCommand(COMMANDS.showCommit, async (filePath?: string, sha?: string) => {
     if (!filePath || !sha) {
       void vscode.window.showInformationMessage('GitSense: pick a commit from File History to see its details.');
       return;
     }
-    await CommitDetailsPanel.show(extensionUri, git, filePath, sha);
+    await provider.show(filePath, sha);
   });
 }

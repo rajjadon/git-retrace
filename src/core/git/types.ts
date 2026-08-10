@@ -34,12 +34,34 @@ export interface FileChange {
 
 export interface Ref {
   name: string;
-  type: 'branch' | 'tag' | 'detached';
+  /**
+   * `remoteBranch` is distinguishable from `branch` only when git is asked for
+   * `--decorate=full` — the short `%D` form renders both as e.g. `origin/main`.
+   */
+  type: 'branch' | 'remoteBranch' | 'tag' | 'detached';
+  /** True when HEAD currently points at this ref, i.e. the checked-out branch. */
+  isHead?: boolean;
 }
 
 export interface GraphCommit extends Commit {
   parents: string[];
   refs: Ref[];
+  /**
+   * Diff stat against the first parent, from the `--numstat` block of the same `git log`
+   * call — no extra process per commit. Merge commits report 0 (git emits no numstat for
+   * them without `-m`), which is also what GitLens's Changes column shows.
+   */
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
+}
+
+/** Uncommitted work in the repo, counted by file (not by line) — matches GitLens's `+A ~M -D` badge. */
+export interface WorkingChanges {
+  added: number;
+  modified: number;
+  deleted: number;
+  total: number;
 }
 
 export interface BranchInfo {

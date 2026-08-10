@@ -13,6 +13,9 @@ function commit(sha: string, parents: string[]): GraphCommit {
     message: sha,
     parents,
     refs: [],
+    filesChanged: 1,
+    insertions: 1,
+    deletions: 0,
   };
 }
 

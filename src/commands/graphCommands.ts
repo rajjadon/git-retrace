@@ -1,20 +1,21 @@
 import * as vscode from 'vscode';
-import { COMMANDS, CONFIG } from '../constants';
-import type { GitService } from '../core/git/GitService';
-import { CommitGraphPanel } from '../views/CommitGraph/CommitGraphPanel';
+import { COMMANDS } from '../constants';
+import {
+  readMaxGraphItems,
+  resolveRepoContextPath,
+  type CommitGraphViewProvider,
+} from '../views/CommitGraph/CommitGraphViewProvider';
 
-const DEFAULT_MAX_GRAPH_ITEMS = 200;
-
-export function handleOpenGraphCommand(git: GitService, extensionUri: vscode.Uri): vscode.Disposable {
+export function handleOpenGraphCommand(provider: CommitGraphViewProvider): vscode.Disposable {
   return vscode.commands.registerCommand(COMMANDS.openGraph, async () => {
-    const filePath = vscode.window.activeTextEditor?.document.uri.fsPath;
+    // The graph is repo-wide, so any path inside the repo works — an open editor is only a hint
+    // about *which* repo in a multi-root workspace. Without one, fall back to the workspace root
+    // rather than refusing to open.
+    const filePath = resolveRepoContextPath();
     if (!filePath) {
-      void vscode.window.showInformationMessage('GitSense: open a file in a git repo to see its commit graph.');
+      void vscode.window.showInformationMessage('GitSense: open a folder or file in a git repo to see its commit graph.');
       return;
     }
-    const maxCount = vscode.workspace
-      .getConfiguration(CONFIG.section)
-      .get<number>(CONFIG.maxGraphItems, DEFAULT_MAX_GRAPH_ITEMS);
-    await CommitGraphPanel.show(extensionUri, git, filePath, maxCount);
+    await provider.show(filePath, readMaxGraphItems());
   });
 }
