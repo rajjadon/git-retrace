@@ -51,3 +51,29 @@ suite('File history', () => {
     assert.equal(api.fileHistoryProvider.getChildren().length, 0);
   });
 });
+
+suite('Copy SHA command', () => {
+  suiteSetup(async () => {
+    const ext = vscode.extensions.getExtension<GitSenseTestApi>(EXTENSION_ID);
+    assert.ok(ext, 'extension not found');
+    await ext.activate();
+  });
+
+  test('copies the sha when given a string', async () => {
+    await vscode.commands.executeCommand(COMMANDS.copySha, 'deadbeefcafe1234');
+    assert.equal(await vscode.env.clipboard.readText(), 'deadbeefcafe1234');
+  });
+
+  test('copies the sha when given a tree element', async () => {
+    await vscode.commands.executeCommand(COMMANDS.copySha, { sha: 'feedface99887766' });
+    assert.equal(await vscode.env.clipboard.readText(), 'feedface99887766');
+  });
+
+  test('invoked with no argument, says so instead of throwing', async () => {
+    // Regression: reading `.sha` off undefined raised an unhandled rejection. The command is hidden
+    // from the palette now, but a keybinding or another extension can still invoke it bare.
+    await vscode.env.clipboard.writeText('untouched');
+    await vscode.commands.executeCommand(COMMANDS.copySha);
+    assert.equal(await vscode.env.clipboard.readText(), 'untouched');
+  });
+});

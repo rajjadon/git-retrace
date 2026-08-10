@@ -47,6 +47,17 @@ All notable changes to GitSense are documented here. Format follows [Keep a Chan
 - Fixed `pickDefaultRefs` picking an arbitrary remote branch as the base when the current branch has no upstream — a remote ref that isn't this branch's upstream is a worse default than any local branch the user works in, so local branches are now preferred in the fallback.
 - Narrowed GitHub host detection to an exact `github.com` match. The previous `.github.com` suffix check implied GitHub Enterprise was detectable from its hostname; it isn't (GHE runs on arbitrary domains), so those correctly fall through to the hostname label and get no commit URL.
 
+- Every user-facing command is now reachable from the bottom panel, not just the command palette. `contributes.menus.view/title` puts codicon buttons in each panel view's title bar: Commit Graph carries **Compare Branches**, **Show File History**, **Toggle Inline Blame** and **Open Commit Graph**; Branch Comparison and Commit Details carry the ones they don't already expose in-webview (Commit Details keeps using its own Copy SHA / Copy message buttons rather than duplicating them in the title bar).
+- Panel views no longer show a blank rectangle before they have content. A webview view resolves the moment its tab is revealed, so Commit Details now renders "Select a commit in the Commit Graph to see its details." and Branch Comparison auto-loads a default comparison (current branch vs its upstream) exactly like Commit Graph already auto-loads — falling back to "This repo has only one ref — nothing to compare yet." New `views/placeholder.ts`.
+- `gitsense.copySha` is hidden from the command palette, where there is no selected commit to copy.
+
+### Fixed
+- **Commit Details rendered completely unstyled.** `media/diff.css` was renamed to `media/shared.css` in the previous change, but `CommitDetailsViewProvider` kept requesting the old name. A missing webview stylesheet fails silently — the `<link>` 404s and nothing throws — so the panel lost every shared rule: the diff gutter's line numbers ran inline into the code (`node:20-alpine2020`, `/app2121`), file rows lost their layout, and the message body overlapped the section header. Neither `tsc` nor the render unit tests could catch it, because the render functions take stylesheet URIs as arguments and the tests pass their own.
+  - Asset filenames now live in a single `MEDIA` constant in `constants.ts`, with `test/unit/media.test.ts` asserting both directions: every referenced file exists in `media/`, and every stylesheet in `media/` is referenced by something.
+  - `test/unit/contributions.test.ts` closes the same class of silent failure in `package.json`: every `view/title` menu entry must name a declared command and a declared view, and any command shown as a title-bar button must have a codicon icon (without one it renders as blank space).
+- `gitsense.copySha` invoked with no argument threw an unhandled rejection (`arg.sha` on `undefined`). It now reports "pick a commit first to copy its SHA" and leaves the clipboard alone. Registered commands are reachable from keybindings and other extensions, so hiding it from the palette wasn't sufficient on its own.
+- Fixed a race in Branch Comparison's new auto-load: an explicit `Compare Branches` invocation landing while the default-ref git calls were in flight would be overwritten by the defaults a moment later.
+
 ### Known gaps vs GitLens
 - No staging UI (checkboxes / Stash / commit message box / "Commit to master"). That is VS Code's built-in Source Control view; the Working Changes row links to it instead.
 - No natural-language commit search, no activity-graph minimap, and no fetch/pull/push buttons in the graph toolbar.
@@ -54,4 +65,6 @@ All notable changes to GitSense are documented here. Format follows [Keep a Chan
 - No AI "Explain" box in the comparison view. That's Phase 2 (`vscode.lm`), and `gitsense.ai.enabled` defaults to `false`.
 - The changed-file list is flat, with no list/tree layout toggle — the filter box already narrows it, and a path tree is real work for marginal gain in a short panel.
 - The commit-details action bar is read-only by design (see above). No cherry-pick, revert, or branch-from-here.
+- File History is still a TreeView in the Explorer container, not in the GitSense panel — that placement is what §8 specifies. Its command is a panel title-bar button, so it's reachable from the panel, but clicking it reveals the Explorer.
+- The Toggle Inline Blame title-bar button doesn't show on/off state; it would need a context key and a paired command. The effect is visible in the editor immediately.
 - Commit Details still fetches the whole commit diff up front rather than lazily per expanded file. Collapsed `<details>` content is still parsed, so a very large commit pays for hunks nobody opened.

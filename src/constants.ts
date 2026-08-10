@@ -36,6 +36,20 @@ export const VIEWS = {
   branchComparison: 'gitsense.branchComparison',
 } as const;
 
+/**
+ * Webview asset filenames under `media/`. Single source of truth: a stylesheet referenced by a
+ * name that no longer exists fails silently — the webview renders unstyled rather than erroring —
+ * so these are constants with an existence test behind them (`test/unit/media.test.ts`).
+ */
+export const MEDIA = {
+  /** Section header, changed-file rows and inline diff, shared by Commit Details and Branch Comparison. */
+  shared: 'shared.css',
+  commitGraph: 'commitGraph.css',
+  commitDetails: 'commitDetails.css',
+  branchComparison: 'branchComparison.css',
+  panelIcon: 'panel-icon.svg',
+} as const;
+
 /** URI schemes GitSense serves content for. Read-only — a document at a ref is immutable. */
 export const SCHEMES = {
   /** One file's contents at one git ref, backing the native diff editor. */

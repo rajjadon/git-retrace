@@ -5,8 +5,9 @@ import { escapeHtml } from '../escapeHtml';
 import { resolveIssueLinking } from '../../providers/issueLinking';
 import { openFileDiff } from '../../providers/GitContentProvider';
 import { buildCommitUrl, remoteHostLabel } from '../../utils/remoteLinks';
+import { renderPlaceholderHtml } from '../placeholder';
 import { waitForWebviewView } from '../waitForWebviewView';
-import { COMMANDS, VIEWS } from '../../constants';
+import { COMMANDS, MEDIA, VIEWS } from '../../constants';
 import type { CommitDetail } from '../../core/git/types';
 
 function createNonce(): string {
@@ -48,6 +49,15 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage((message: unknown) => {
       void this.handleMessage(message);
     });
+    // The view resolves the moment its tab is revealed, which is usually before any commit has
+    // been picked. Say what to do instead of showing an empty rectangle.
+    if (!this.currentCommit) {
+      webviewView.webview.html = renderPlaceholderHtml('Select a commit in the Commit Graph to see its details.', {
+        nonce: createNonce(),
+        cspSource: webviewView.webview.cspSource,
+        styleUris: [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.commitDetails)],
+      });
+    }
   }
 
   /** Called by the "Show Commit Details" command — reveals the panel tab and loads the given commit. */
@@ -98,7 +108,7 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
         {
           nonce: createNonce(),
           cspSource: this.view.webview.cspSource,
-          styleUris: [this.mediaUri('diff.css'), this.mediaUri('commitDetails.css')],
+          styleUris: [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.commitDetails)],
           editorFontFamily,
           issueLinking,
           remote,

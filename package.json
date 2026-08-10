@@ -1,7 +1,7 @@
 {
   "name": "gitsense",
   "displayName": "GitSense",
-  "description": "Makes sense of your repo. Free, local-first git blame, history, and insight — directly in the editor.",
+  "description": "Makes sense of your repo. Free, local-first git blame, history, and insight \u2014 directly in the editor.",
   "version": "0.1.0",
   "publisher": "gitsense-dev",
   "license": "MIT",
@@ -21,27 +21,33 @@
     "commands": [
       {
         "command": "gitsense.toggleBlame",
-        "title": "GitSense: Toggle Inline Blame"
+        "title": "GitSense: Toggle Inline Blame",
+        "icon": "$(eye)"
       },
       {
         "command": "gitsense.showFileHistory",
-        "title": "GitSense: Show File History"
+        "title": "GitSense: Show File History",
+        "icon": "$(history)"
       },
       {
         "command": "gitsense.copySha",
-        "title": "GitSense: Copy Commit SHA"
+        "title": "GitSense: Copy Commit SHA",
+        "icon": "$(copy)"
       },
       {
         "command": "gitsense.showCommit",
-        "title": "GitSense: Show Commit Details"
+        "title": "GitSense: Show Commit Details",
+        "icon": "$(git-commit)"
       },
       {
         "command": "gitsense.openGraph",
-        "title": "GitSense: Open Commit Graph"
+        "title": "GitSense: Open Commit Graph",
+        "icon": "$(type-hierarchy)"
       },
       {
         "command": "gitsense.compareBranches",
-        "title": "GitSense: Compare Branches"
+        "title": "GitSense: Compare Branches",
+        "icon": "$(git-compare)"
       }
     ],
     "viewsContainers": {
@@ -84,6 +90,54 @@
         {
           "command": "gitsense.copySha",
           "when": "view == gitsense.fileHistory && viewItem == gitsense.commit"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "gitsense.compareBranches",
+          "when": "view == gitsense.commitGraph",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitsense.showFileHistory",
+          "when": "view == gitsense.commitGraph",
+          "group": "navigation@2"
+        },
+        {
+          "command": "gitsense.toggleBlame",
+          "when": "view == gitsense.commitGraph",
+          "group": "navigation@3"
+        },
+        {
+          "command": "gitsense.openGraph",
+          "when": "view == gitsense.commitGraph",
+          "group": "navigation@4"
+        },
+        {
+          "command": "gitsense.compareBranches",
+          "when": "view == gitsense.branchComparison",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitsense.toggleBlame",
+          "when": "view == gitsense.branchComparison",
+          "group": "navigation@2"
+        },
+        {
+          "command": "gitsense.showFileHistory",
+          "when": "view == gitsense.commitDetails",
+          "group": "navigation@1"
+        },
+        {
+          "command": "gitsense.toggleBlame",
+          "when": "view == gitsense.commitDetails",
+          "group": "navigation@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "gitsense.copySha",
+          "when": "false"
         }
       ]
     },

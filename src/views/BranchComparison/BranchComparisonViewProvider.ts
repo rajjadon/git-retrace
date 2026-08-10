@@ -3,8 +3,11 @@ import { GitService } from '../../core/git/GitService';
 import { renderBranchComparisonHtml } from './render';
 import { escapeHtml } from '../escapeHtml';
 import { openFileDiff } from '../../providers/GitContentProvider';
+import { pickDefaultRefs } from '../../utils/branchDefaults';
+import { resolveRepoContextPath } from '../CommitGraph/CommitGraphViewProvider';
+import { renderPlaceholderHtml } from '../placeholder';
 import { waitForWebviewView } from '../waitForWebviewView';
-import { COMMANDS, VIEWS } from '../../constants';
+import { COMMANDS, MEDIA, VIEWS } from '../../constants';
 
 function createNonce(): string {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -45,6 +48,41 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
     webviewView.webview.onDidReceiveMessage((message: unknown) => {
       void this.handleMessage(message);
     });
+    void this.loadDefault();
+  }
+
+  /**
+   * Loads a sensible comparison as soon as the tab is revealed — the checked-out branch against its
+   * upstream — so the panel is useful without running a command first, matching how Commit Graph
+   * already behaves. The user can retarget both refs in the view's own ref bar.
+   */
+  private async loadDefault(): Promise<void> {
+    if (!this.view || this.currentBase) {
+      return;
+    }
+    const filePath = resolveRepoContextPath();
+    if (!filePath) {
+      return;
+    }
+    const [branches, currentBranch] = await Promise.all([
+      this.git.getBranches(filePath),
+      this.git.getCurrentBranch(filePath),
+    ]);
+    // An explicit `show(base, compare)` can land while those git calls are in flight; it wins, and
+    // this must not overwrite it with the default pair afterwards.
+    if (this.currentBase) {
+      return;
+    }
+    const refs = pickDefaultRefs(branches, currentBranch);
+    if (!refs) {
+      this.view.webview.html = renderPlaceholderHtml('This repo has only one ref — nothing to compare yet.', {
+        nonce: createNonce(),
+        cspSource: this.view.webview.cspSource,
+        styleUris: [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.branchComparison)],
+      });
+      return;
+    }
+    await this.load(filePath, refs.base, refs.compare);
   }
 
   /** Called by the "Compare Branches" command — reveals the panel tab and loads the given comparison. */
@@ -86,7 +124,7 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
         {
           nonce: createNonce(),
           cspSource: this.view.webview.cspSource,
-          styleUris: [this.mediaUri('shared.css'), this.mediaUri('branchComparison.css')],
+          styleUris: [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.branchComparison)],
           editorFontFamily,
         },
       );

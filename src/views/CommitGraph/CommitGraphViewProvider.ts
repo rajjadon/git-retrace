@@ -4,7 +4,7 @@ import { layoutGraph } from '../../core/graph/layout';
 import { renderGraphHtml } from './render';
 import { escapeHtml } from '../escapeHtml';
 import { waitForWebviewView } from '../waitForWebviewView';
-import { COMMANDS, CONFIG, VIEWS } from '../../constants';
+import { COMMANDS, CONFIG, MEDIA, VIEWS } from '../../constants';
 
 const DEFAULT_MAX_GRAPH_ITEMS = 200;
 
@@ -97,7 +97,7 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider {
         this.git.getWorkingChanges(filePath),
       ]);
       const nodes = layoutGraph(commits);
-      const styleUri = this.view.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'commitGraph.css'));
+      const styleUri = this.view.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', MEDIA.commitGraph));
       this.view.webview.html = renderGraphHtml(
         {
           nodes,
