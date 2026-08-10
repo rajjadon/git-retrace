@@ -10,7 +10,9 @@ Nothing yet.
 
 ## [0.1.0] - 2026-08-11
 
-First release. Blame, history, the commit graph, commit details and branch comparison are all here. AI features are not — see Known limitations.
+First release — an **alpha**, published to the Marketplace's pre-release channel. Blame, history, the commit graph, commit details and branch comparison are all here and covered by tests, but expect rough edges and breaking changes before `1.0`. AI features are not in this release — see Known limitations.
+
+Install it by clicking **Switch to Pre-Release Version** on the extension page. The first stable release will be `0.2.0`; `0.1.x` stays the pre-release line.
 
 ### Added
 

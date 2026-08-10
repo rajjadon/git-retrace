@@ -1,11 +1,35 @@
+# Everything the published extension does not need. esbuild bundles `src/` and every runtime
+# dependency into `out/extension.js`, so the shipped package is that one file plus `media/`.
+#
+# Verify with `npx vsce ls` before publishing: the file list should be ~15 entries, not thousands.
+
+# Bundled into out/extension.js already — shipping these too added 5298 files and 4 MB.
+node_modules/**
+
+# Sources and build tooling
 src/**
 test/**
-.vscode/**
-.claude/**
 out-test/**
+scripts/**
 esbuild.js
 eslint.config.js
 tsconfig.json
-.gitignore
 **/*.map
+
+# Repo-internal, not for users. CLAUDE.md is the project's own working instructions.
+CLAUDE.md
+.github/**
+.vscode/**
+.claude/**
+.gitignore
+.vscodeignore
+
+# The icon source; package.json points at the rendered PNG.
+media/icon.svg
+
+# README screenshots are served to the Marketplace over HTTPS from GitHub (relative paths don't
+# resolve on the extension page), so shipping copies in the package is pure weight.
+media/screenshots/**
+
 **/.git/**
+.DS_Store

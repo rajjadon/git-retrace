@@ -1,0 +1,47 @@
+<!--
+  GitSense Marketplace icon. Source of truth; `media/icon.png` is rendered from this with
+  `npm run icon` and is what package.json references (the Marketplace requires a raster icon).
+
+  WHAT IT SAYS
+  A commit spine with one commit lit, and the lines that commit touched running out of it. That is
+  the product: given a line, who wrote it — and given a commit, what it explains. It is deliberately
+  NOT a branch/fork glyph. Every other git extension uses one, so in the Extensions list that glyph
+  is camouflage rather than identity.
+
+  COLOUR
+  Every colour inside the extension comes from the user's theme, so this is the only place GitSense
+  has a palette of its own.
+    ink    #171B26  cool and deep, so one warm accent carries
+    slate  #4A5568  the commits you are not asking about; recedes
+    honey  #F2A93B  the one you are. The single accent — nothing else gets it.
+  Amber because editors already render blame as a dimmed warm aside; this is that convention at
+  brand strength. It also stays clear of the blue/purple half the git-extension sidebar occupies.
+
+  REJECTED ALONG THE WAY, so the next pass doesn't retread it:
+    - Teal trunk + amber branch: a fork glyph. Generic, and the green was disliked.
+    - Horizontal code lines with one lit: reads as a to-do list.
+    - Code lines + a user/avatar glyph: splits into two unrelated halves; reads as a contact card.
+    - Layered strata with a vertical line: reads as a thermometer.
+    - Warm-paper background: stood out in the list, but read as a contact card with a notification
+      badge, and lands near the cream/terracotta cliché.
+    - One single line out of the node: a ring on a straight shaft reads as a key. Two lines fixed it.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="GitSense">
+  <rect width="128" height="128" rx="27" fill="#171B26" />
+
+  <!-- The commits either side of the one in question. -->
+  <path d="M33 26V102" stroke="#4A5568" stroke-width="7" stroke-linecap="round" />
+  <g fill="#171B26" stroke="#4A5568" stroke-width="6">
+    <circle cx="33" cy="30" r="7" />
+    <circle cx="33" cy="98" r="7" />
+  </g>
+
+  <!-- The lines this commit touched. Uneven lengths so they read as code, not as a chart. -->
+  <g stroke="#F2A93B" stroke-width="8" stroke-linecap="round">
+    <path d="M52 55H100" />
+    <path d="M52 73H84" />
+  </g>
+
+  <!-- Drawn last: the focal point sits on top of the spine it interrupts. -->
+  <circle cx="33" cy="64" r="12.5" fill="#171B26" stroke="#F2A93B" stroke-width="7" />
+</svg>

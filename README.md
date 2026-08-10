@@ -1,26 +1,93 @@
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/rajjadon/gitSense/master/media/icon.png" width="112" alt="" />
+
 # GitSense
 
-*Makes sense of your repo.*
+**Makes sense of your repo.**
 
-GitSense is a free, open-source (MIT) VS Code extension that surfaces git blame, history, and authorship directly in the editor — a leaner, fully local alternative to GitLens. No paywalls, no account, no telemetry by default, no backend.
+Free, local-first git insight inside VS Code — blame, history, an interactive commit graph,
+and branch comparison. No account, no paywall, no telemetry, no backend.
 
-## Status
+</div>
 
-Phase 1 (MVP) and Phase 3 (commit graph, branch comparison, issue/PR linking) are complete. AI features (Phase 2) are next — see `CLAUDE.md` for the full roadmap.
+---
+
+## What is this?
+
+Open any file in any git repo and GitSense answers the question you actually have: **who wrote this line, when, why, and what else changed with it.**
+
+It does that without leaving your editor, without signing in, and without sending your code anywhere. Everything runs against the `git` binary already on your machine.
+
+If you've used GitLens, GitSense covers the same core ground — inline blame, a commit graph, commit details, branch comparison — with every feature free and a deliberately smaller surface area. See [How it compares](#how-it-compares).
+
+> **Status: alpha.** This is a pre-release. The features below work and are covered by tests, but expect rough edges and breaking changes before `1.0`. Bug reports are very welcome.
+
+## Install
+
+**From the Marketplace** — search *GitSense* in the Extensions view (`⇧⌘X` / `Ctrl+Shift+X`). Because this is a pre-release, click **Switch to Pre-Release Version** on the extension page.
+
+**From a `.vsix`** — grab one from [Releases](https://github.com/rajjadon/gitSense/releases), then:
+
+```bash
+code --install-extension gitsense-0.1.0.vsix
+```
+
+Requires **VS Code 1.85+** and `git` on your `PATH`. Works in Cursor and other VS Code-based editors.
+
+## Getting started in 60 seconds
+
+1. **Open a file in a git repo.** The current line's author and age appear at the end of the line, and in the status bar.
+2. **Hover that line** for the full commit message, dates, and the diff stat.
+3. **Open the panel** — `⌘J` / `Ctrl+J`, then pick the **GitSense** tab (next to Terminal and Output). The commit graph loads itself.
+4. **Click any commit row.** Its details load in the pane beside the graph — every changed file, collapsible, with a real diff gutter.
+5. **Everything else is a button** in each view's title bar. You never need the command palette.
 
 ## Features
 
-- **Inline blame** — the current line's author and age, shown as a muted, right-aligned editor decoration. Updates when you move to a different line, not on every cursor move. Toggle with **GitSense: Toggle Inline Blame**.
-- **Blame hover card** — hover any line to see the author's Gravatar, full commit message, relative + absolute date, diff stat, and short SHA.
-- **File history** — run **GitSense: Show File History** to open a sidebar view listing every commit that touched the current file, newest first, following the active editor as you switch files. Click an entry to open its commit details; right-click for **Copy Commit SHA**.
-- **Commit details**, **Commit graph**, and **Branch comparison** all live in a single "GitSense" tab in the bottom panel (next to Terminal/Debug Console/Output/Ports) — never an editor tab.
-  - **GitSense: Open Commit Graph** — a repo-wide, branch-and-merge-aware graph laid out in seven columns (Branch/Tag, Graph, Commit Message, Author, Changes, Commit Date, SHA), with a toolbar for filtering: a branch picker to scope the graph to one ref, an instant text filter across message/author/SHA, a live commit count, and a refresh button. Local branches, the checked-out branch, remote-tracking branches and tags each get their own label style and icon. Uncommitted work is pinned as a **Working Changes** row above the newest commit with `+added ~modified −deleted` file counts — click it to jump to the Source Control view. Arrow keys move the selection, Enter loads the commit; the selected row survives a refresh.
-  - **GitSense: Show Commit Details** (or clicking a graph row or File History entry) — the commit's subject, author, date and SHA in a compact header, an action bar (**Copy SHA**, **Copy message**, and **Open on GitHub/GitLab/Bitbucket** when the repo has a remote we know), then every changed file as a **collapsible section holding only that file's hunks**, with a filter box, per-file insertion/deletion counts, and whole-commit totals.
-  - **GitSense: Compare Branches** — two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with count badges. The pickers are colored by diff polarity (base in the removed hue, compare in the added hue), so the ref bar previews the diff below it. Retarget the comparison in place; no modal prompts. Diffs are taken against the merge-base, like a GitHub/GitLab PR diff.
-- **Everything runs from the panel** — each GitSense view's title bar carries the commands as icon buttons, so Compare Branches, Show File History and Toggle Inline Blame are a click away without opening the command palette. The panel is never blank: Commit Details tells you to pick a commit, and Branch Comparison opens on your current branch vs its upstream.
-- **Readable inline diffs** — every diff line carries its old and new line numbers in a gutter, read from the hunk header, with changed lines tinted full-width. **Wrap long lines** toggles soft wrapping, and line numbers stay out of your selection so copying a diff yields just code. Each file row's **Open changes** button opens it in a real diff editor when you want syntax highlighting and folding.
-- **Status bar** — the current line's author and age in the status bar, mirroring the inline decoration. Click it to open commit details.
-- **Issue/PR linking** — references like `#123` in commit messages become clickable links (in the blame hover and commit details) to your issue tracker. Auto-detected from the repo's GitHub/GitLab remote, or fully configurable for other trackers (e.g. Jira).
+### Inline blame, where you're already looking
+
+<img src="https://raw.githubusercontent.com/rajjadon/gitSense/master/media/screenshots/inline-blame.png" alt="Inline blame decoration at the end of the current line, with the hover card open showing author, message and dates" />
+
+The current line's author and age, as a muted end-of-line decoration. It updates when you change lines — not on every cursor move — and the hover card adds the full message, relative *and* absolute dates, that commit's diff stat for this file, and the short SHA. Customise the text with `gitsense.blame.format`, or turn it off entirely.
+
+### An interactive commit graph, in the panel
+
+<img src="https://raw.githubusercontent.com/rajjadon/gitSense/master/media/screenshots/commit-graph.png" alt="The GitSense panel showing the commit graph with branch labels, a working-changes row, and commit details beside it" />
+
+A repo-wide, branch-and-merge-aware graph — not a flat log. Branch, tag and remote-tracking labels are each styled distinctly, uncommitted work is pinned at the top as a **Working Changes** row, and the toolbar lets you scope to one branch, filter by message/author/SHA as you type, and refresh. Arrow keys move the selection; Enter opens the commit.
+
+### Commit details you can act on
+
+<img src="https://raw.githubusercontent.com/rajjadon/gitSense/master/media/screenshots/commit-details.png" alt="Commit details showing the action bar and a per-file collapsible diff with old and new line numbers in a gutter" />
+
+Each changed file is its own collapsible section holding only that file's hunks, with a filter box for large commits. Diffs show **old and new line numbers in a gutter** and tint changed lines, so you can see *which* line moved — and line numbers stay out of your text selection, so copying a diff gives you just the code.
+
+**Copy SHA**, **Copy message**, and **Open on GitHub/GitLab/Bitbucket** sit in the action bar. **Open changes** on any file row hands off to a real diff editor when you want syntax highlighting and folding.
+
+### Branch comparison without modal prompts
+
+<img src="https://raw.githubusercontent.com/rajjadon/gitSense/master/media/screenshots/branch-comparison.png" alt="Branch comparison showing two ref pickers with a swap button and Ahead, Behind and All Files tabs with counts" />
+
+Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with counts. It opens on your current branch versus its upstream, so it's useful immediately — retarget either side in place. Diffs are taken against the merge-base, matching what a GitHub or GitLab pull request shows you.
+
+### Also
+
+- **File history** — every commit that touched the current file, following renames, in the Explorer.
+- **Issue and PR links** — `#123` in a commit message becomes a link, auto-detected from your remote or pointed at any tracker (Jira included) via a regex and URL template.
+
+## Commands
+
+Every command is also a title-bar button in the GitSense panel.
+
+| Command | What it does |
+|---|---|
+| `GitSense: Open Commit Graph` | Reveal the panel and load the repo's graph |
+| `GitSense: Show Commit Details` | Load a commit into the details pane |
+| `GitSense: Compare Branches` | Compare two refs, ahead/behind/files |
+| `GitSense: Show File History` | List commits touching the current file |
+| `GitSense: Toggle Inline Blame` | Turn the end-of-line decoration on or off |
+| `GitSense: Copy Commit SHA` | Copy a commit's full SHA (from a commit's context menu) |
 
 ## Settings
 
@@ -39,23 +106,41 @@ Phase 1 (MVP) and Phase 3 (commit graph, branch comparison, issue/PR linking) ar
 
 ## Privacy
 
-GitSense runs entirely locally. Git data never leaves your machine. The one exception: the blame hover card, Commit Graph, Commit Details, and Branch Comparison views fetch a Gravatar image from `gravatar.com` per author, keyed by an MD5 hash of their email (that's Gravatar's own lookup spec, not a security-relevant use of the hash). GitSense makes no other network calls of its own.
+GitSense runs entirely locally. Your git data never leaves your machine.
 
-Two things hand off to somewhere else, both only when you click them: **Open on GitHub/GitLab/Bitbucket** and an issue link open a URL in your browser. The URL is built locally from your `origin` remote — GitSense doesn't contact the host to construct it.
+The one network request it makes on its own: author avatars from `gravatar.com`, keyed by an MD5 hash of the commit email — that's Gravatar's own lookup spec, not a security-relevant use of the hash.
 
-## Development
+Two things open your browser, and only when you click them: **Open on GitHub/GitLab/Bitbucket**, and issue links. Both URLs are built locally from your `origin` remote; GitSense doesn't contact the host to construct them.
+
+No telemetry. No analytics. No account.
+
+## How it compares
+
+GitSense is not trying to out-feature GitLens — it's trying to be the free, fast, small part you actually use every day. Honest accounting for this alpha:
+
+**What GitSense does** — inline blame and hover, status bar, file history, commit graph, commit details with per-file diffs, branch comparison, issue linking. All free, forever.
+
+**What it deliberately doesn't** — staging, stashing or committing (that's VS Code's own Source Control view, and the graph links you there), and anything behind a sign-in.
+
+**What's missing for now** — AI commit summaries and line explanations (planned, using your own model via VS Code's Language Model API, so no key goes to us), a file-tree view of changed files, and graph auto-refresh. See the [changelog](CHANGELOG.md) for the current list.
+
+## Contributing
 
 ```bash
 npm install
-npm run compile
-npm run watch
-npm run test
-npm run lint
-npm run package
+npm run watch     # rebuild on change
+npm run lint      # eslint + tsc --noEmit
+npm run test      # unit + integration
 ```
 
-Press `F5` to launch the Extension Development Host.
+Press `F5` to launch the Extension Development Host with GitSense loaded.
+
+- `npm run test:unit` runs just the fast, VS Code-free tests over `src/core` and the renderers.
+- `npm run package` builds a `.vsix`; `npm run package:pre` builds a pre-release one.
+- `npm run icon` re-renders `media/icon.png` from `media/icon.svg` (needs `rsvg-convert`).
+
+Architecture, conventions and the roadmap live in [`CLAUDE.md`](CLAUDE.md). The short version: `src/core/` is pure logic with zero `vscode` imports and is unit-tested in isolation; everything VS Code-facing sits in `providers/`, `views/` and `commands/`.
 
 ## License
 
-MIT
+[MIT](LICENSE) — free, forever, no exceptions.
