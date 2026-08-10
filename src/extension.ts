@@ -2,7 +2,9 @@ import * as vscode from 'vscode';
 import { OUTPUT_CHANNEL_NAME } from './constants';
 import { GitService } from './core/git/GitService';
 import type { GitLogger } from './core/git/errors';
+import { BlameSource } from './providers/BlameSource';
 import { BlameDecorationProvider } from './providers/BlameDecorationProvider';
+import { BlameHoverProvider } from './providers/BlameHoverProvider';
 import { handleToggleBlameCommand } from './commands/blameCommands';
 
 /** Test-only introspection surface — accessed via `vscode.extensions.getExtension(id).exports` in integration tests. */
@@ -23,9 +25,16 @@ export function activate(ctx: vscode.ExtensionContext): GitSenseTestApi {
   // one lazily), so there's nothing "heavy" to defer here and doing so would only
   // delay command registration past when activate() resolves, racing test/startup code.
   const git = new GitService(logger);
-  const blameProvider = new BlameDecorationProvider(git, logger);
+  const blameSource = new BlameSource(git, logger);
+  const blameProvider = new BlameDecorationProvider(blameSource);
+  const hoverProvider = new BlameHoverProvider(blameSource, git);
 
-  ctx.subscriptions.push(blameProvider, handleToggleBlameCommand(blameProvider));
+  ctx.subscriptions.push(
+    blameSource,
+    blameProvider,
+    handleToggleBlameCommand(blameProvider),
+    vscode.languages.registerHoverProvider({ scheme: 'file' }, hoverProvider),
+  );
   output.appendLine('GitSense activated.');
 
   return { blameProvider, git };

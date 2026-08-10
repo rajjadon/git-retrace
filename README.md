@@ -11,8 +11,9 @@ Phase 1 (MVP) is under active development. See `CLAUDE.md` for the full architec
 ## Features
 
 - **Inline blame** — the current line's author and age, shown as a muted, right-aligned editor decoration. Updates when you move to a different line, not on every cursor move. Toggle with **GitSense: Toggle Inline Blame**.
+- **Blame hover card** — hover any line to see the author's Gravatar, full commit message, relative + absolute date, diff stat, and short SHA.
 
-Still to come: blame hover card, file history, commit details, status bar (see `CLAUDE.md` for the roadmap).
+Still to come: file history, commit details, status bar (see `CLAUDE.md` for the roadmap).
 
 ## Settings
 
@@ -26,7 +27,7 @@ Still to come: blame hover card, file history, commit details, status bar (see `
 
 ## Privacy
 
-GitSense runs entirely locally. Git data never leaves your machine. Inline blame reads directly from your local git repository — no network calls. (The upcoming blame hover card will fetch a Gravatar image from `gravatar.com` using an MD5 hash of the commit author's email; this will be the one intentional exception, documented here when it ships.)
+GitSense runs entirely locally. Git data never leaves your machine. The one exception: the blame hover card fetches a Gravatar image from `gravatar.com`, keyed by an MD5 hash of the commit author's email (that's Gravatar's own lookup spec, not a security-relevant use of the hash). No other network calls are made.
 
 ## Development
 

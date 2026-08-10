@@ -1,4 +1,4 @@
-import type { BlameLine } from './types';
+import type { BlameLine, FileChange } from './types';
 
 const UNCOMMITTED_SHA = '0000000000000000000000000000000000000000';
 const HEADER_RE = /^([0-9a-f]{40}) (\d+) (\d+)(?: \d+)?$/;
@@ -77,4 +77,26 @@ export function parseBlamePorcelain(raw: string): BlameLine[] {
   }
 
   return results;
+}
+
+/**
+ * Parses one line of `git show/diff --numstat` output: `<insertions>\t<deletions>\t<path>`.
+ * Binary files report `-` for both counts. Pure — no I/O.
+ */
+export function parseNumstat(raw: string): FileChange | null {
+  const line = raw.trim().split('\n')[0];
+  if (!line) {
+    return null;
+  }
+  const [insertionsRaw, deletionsRaw, path] = line.split('\t');
+  if (path === undefined) {
+    return null;
+  }
+  const binary = insertionsRaw === '-' || deletionsRaw === '-';
+  return {
+    path,
+    insertions: binary ? 0 : Number(insertionsRaw),
+    deletions: binary ? 0 : Number(deletionsRaw),
+    binary,
+  };
 }

@@ -1,8 +1,8 @@
 import { dirname } from 'node:path';
 import { realpathSync } from 'node:fs';
 import { simpleGit, type SimpleGit } from 'simple-git';
-import { parseBlamePorcelain } from './parsers';
-import type { BlameLine } from './types';
+import { parseBlamePorcelain, parseNumstat } from './parsers';
+import type { BlameLine, FileChange } from './types';
 import { GitCommandError, type GitLogger } from './errors';
 import { toRepoRelativePath } from '../../utils/path';
 
@@ -98,6 +98,24 @@ export class GitService {
   async blameLine(filePath: string, line: number, opts: BlameOptions = {}): Promise<BlameLine | null> {
     const lines = await this.blameFile(filePath, opts);
     return lines.find((l) => l.line === line) ?? null;
+  }
+
+  /** How much a single file changed in a specific commit — used by the blame hover's diff stat. */
+  async getFileDiffStat(filePath: string, sha: string): Promise<FileChange | null> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return null;
+    }
+    const git = this.gitFor(repoRoot);
+    const rel = toRepoRelativePath(repoRoot, this.toCanonicalPath(filePath));
+    try {
+      const raw = await git.raw(['show', '--numstat', '--format=', sha, '--', rel]);
+      return parseNumstat(raw);
+    } catch (err) {
+      // Non-critical to the hover card — log and omit the stat rather than fail the whole hover.
+      this.logger?.warn(`diff stat failed for ${filePath}@${sha}: ${String(err)}`);
+      return null;
+    }
   }
 
   private gitFor(repoRoot: string): SimpleGit {
