@@ -1,4 +1,4 @@
-import type { BlameLine, Commit, CommitDetail, FileChange, GraphCommit, Ref } from './types';
+import type { BlameLine, BranchInfo, Commit, CommitDetail, FileChange, GraphCommit, Ref } from './types';
 
 const UNCOMMITTED_SHA = '0000000000000000000000000000000000000000';
 const HEADER_RE = /^([0-9a-f]{40}) (\d+) (\d+)(?: \d+)?$/;
@@ -22,6 +22,9 @@ export const COMMIT_DETAIL_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LO
 
 /** Pass to `git log --all --topo-order --pretty=tformat:<this>` for the commit graph. `%P` = parent shas (space-separated), `%D` = ref decorations. */
 export const GRAPH_LOG_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SEP}%ae${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%P${LOG_FIELD_SEP}%D${LOG_FIELD_SEP}%s${LOG_RECORD_SEP}`;
+
+/** Pass to `git for-each-ref refs/heads refs/remotes --format=<this>`. Uses the full refname (not `:short`) so local vs remote can be told apart reliably by prefix. */
+export const BRANCH_FORMAT = `%(refname)${LOG_FIELD_SEP}%(HEAD)`;
 
 /**
  * Parses `git blame --line-porcelain` output. Pure — no I/O.
@@ -216,4 +219,19 @@ export function parseNumstatAll(raw: string): FileChange[] {
     .filter((line) => line.length > 0)
     .map(parseNumstatLine)
     .filter((change): change is FileChange => change !== null);
+}
+
+/** Parses `git for-each-ref --format=BRANCH_FORMAT` output. Filters out the `origin/HEAD` symbolic alias. Pure — no I/O. */
+export function parseBranches(raw: string): BranchInfo[] {
+  return raw
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => {
+      const [refname, headMarker] = line.split(LOG_FIELD_SEP);
+      const isRemote = (refname ?? '').startsWith('refs/remotes/');
+      const name = (refname ?? '').replace(/^refs\/(heads|remotes)\//, '');
+      return { name, isRemote, isCurrent: headMarker === '*' };
+    })
+    .filter((branch) => branch.name !== 'HEAD' && !branch.name.endsWith('/HEAD'));
 }

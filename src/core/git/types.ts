@@ -41,3 +41,9 @@ export interface GraphCommit extends Commit {
   parents: string[];
   refs: Ref[];
 }
+
+export interface BranchInfo {
+  name: string;
+  isRemote: boolean;
+  isCurrent: boolean;
+}

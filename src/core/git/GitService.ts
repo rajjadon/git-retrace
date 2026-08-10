@@ -8,11 +8,13 @@ import {
   parseLog,
   parseCommitDetail,
   parseGraphLog,
+  parseBranches,
   LOG_FORMAT,
   COMMIT_DETAIL_FORMAT,
   GRAPH_LOG_FORMAT,
+  BRANCH_FORMAT,
 } from './parsers';
-import type { BlameLine, Commit, CommitDetail, FileChange, GraphCommit } from './types';
+import type { BlameLine, BranchInfo, Commit, CommitDetail, FileChange, GraphCommit } from './types';
 import { GitCommandError, type GitLogger } from './errors';
 import { toRepoRelativePath } from '../../utils/path';
 
@@ -221,6 +223,77 @@ export class GitService {
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err);
       this.logger?.error('git log --all failed', err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Every local and remote branch, not scoped to `filePath` — used to resolve which repo to query. */
+  async getBranches(filePath: string): Promise<BranchInfo[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    const git = this.gitFor(repoRoot);
+    const args = ['for-each-ref', 'refs/heads', 'refs/remotes', `--format=${BRANCH_FORMAT}`];
+    try {
+      const raw = await git.raw(args);
+      return parseBranches(raw);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error('git for-each-ref failed', err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Commits reachable from `to` but not from `from` — e.g. what `compare` has that `base` doesn't. */
+  async getCommitsBetween(filePath: string, from: string, to: string): Promise<Commit[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    const git = this.gitFor(repoRoot);
+    const args = ['log', `${from}..${to}`, `--pretty=tformat:${LOG_FORMAT}`];
+    try {
+      const raw = await git.raw(args);
+      return parseLog(raw);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git log ${from}..${to} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Unified diff between two refs, against their merge-base (`...`) — matches GitHub/GitLab PR-diff semantics. */
+  async getDiffBetweenRefs(filePath: string, base: string, compare: string): Promise<string> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return '';
+    }
+    const git = this.gitFor(repoRoot);
+    const args = ['diff', `${base}...${compare}`];
+    try {
+      return await git.raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git diff ${base}...${compare} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Files that differ between two refs, against their merge-base (`...`) — matches GitHub/GitLab PR-diff semantics. */
+  async getFilesBetweenRefs(filePath: string, base: string, compare: string): Promise<FileChange[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    const git = this.gitFor(repoRoot);
+    const args = ['diff', '--numstat', `${base}...${compare}`];
+    try {
+      const raw = await git.raw(args);
+      return parseNumstatAll(raw);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git diff --numstat ${base}...${compare} failed`, err);
       throw new GitCommandError(args.join(' '), stderr);
     }
   }
