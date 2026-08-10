@@ -83,6 +83,17 @@ test('renderGraphHtml: rows are keyboard-navigable (tabindex + role=button)', ()
   assert.match(html, /role="button"/);
 });
 
+test('renderGraphHtml: sets --graph-svg-width via a nonce\'d <style> block, not a CSP-blocked inline style attribute', () => {
+  // Regression: an inline style="--x:...px" attribute is blocked by a style-src CSP with no
+  // 'unsafe-inline'/nonce, silently dropping the custom property. That leaves grid-template-columns
+  // referencing an unset var(), which falls back to `none` and collapses every row into its own
+  // implicit line — invisible to string-matching tests unless you specifically check for it.
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
+  assert.match(html, /style-src [^;]*'nonce-abc123'/);
+  assert.match(html, /<style nonce="abc123">:root \{ --graph-svg-width: \d+px; --graph-row-height: \d+px; \}<\/style>/);
+  assert.ok(!html.includes('style="--graph-svg-width'));
+});
+
 test('renderGraphHtml: caps visible ref badges, folding the rest into a "+N" badge', () => {
   const refs = ['main', 'develop', 'v1.0', 'v1.1'].map((name) => ({ name, type: 'branch' as const }));
   const nodes = layoutGraph([commit('A', [], { refs })]);

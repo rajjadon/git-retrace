@@ -130,13 +130,14 @@ ${renderRowGraphics(node, svgWidth)}
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource}; img-src https: ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource} 'nonce-${opts.nonce}'; img-src https: ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
 <link rel="stylesheet" href="${opts.styleUri}" />
+<style nonce="${opts.nonce}">:root { --graph-svg-width: ${svgWidth}px; --graph-row-height: ${ROW_HEIGHT}px; }</style>
 <title>Commit Graph</title>
 </head>
 <body>
 <h1>Commit Graph</h1>
-<div class="graph" style="--graph-svg-width:${svgWidth}px; --graph-row-height:${ROW_HEIGHT}px">
+<div class="graph">
 ${rows}
 </div>
 <script nonce="${opts.nonce}">
