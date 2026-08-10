@@ -221,7 +221,18 @@ export class GitService {
     const git = this.gitFor(repoRoot);
     // --topo-order guarantees a commit's parents are never listed before it — the graph
     // layout algorithm processes newest-first and needs children resolved before parents.
-    const args = ['log', '--all', '--topo-order', '-n', String(maxCount), `--pretty=tformat:${GRAPH_LOG_FORMAT}`];
+    // `--exclude` must precede the `--all` it filters — refs/stash is a bare ref under refs/,
+    // so --all walks it too, cluttering the graph with the stash's own commit + its "index"
+    // parent (and a stray "refs/stash" badge). GitLens/GitHub keep stashes out of the main graph.
+    const args = [
+      'log',
+      '--exclude=refs/stash',
+      '--all',
+      '--topo-order',
+      '-n',
+      String(maxCount),
+      `--pretty=tformat:${GRAPH_LOG_FORMAT}`,
+    ];
     try {
       const raw = await git.raw(args);
       return parseGraphLog(raw);
