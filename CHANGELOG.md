@@ -1,70 +1,68 @@
 # Changelog
 
-All notable changes to GitSense are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+All notable changes to GitSense are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+The VS Code Marketplace shows this file on GitSense's extension page, so entries describe what changed for someone *using* GitSense. Why a change was made the way it was belongs in the commit message and in code comments, next to the code it explains.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.0] - 2026-08-11
+
+First release. Blame, history, the commit graph, commit details and branch comparison are all here. AI features are not — see Known limitations.
+
 ### Added
-- Project scaffold (esbuild, TypeScript strict, eslint, unit + integration test harness).
-- Inline blame: current-line author/age shown as a muted, right-aligned editor decoration, updating on line change only. Respects `blame.enabled`, `blame.format`, `blame.highlightCurrentLine`, `blame.ignoreWhitespace`, `maxBlameFileSize`. `GitSense: Toggle Inline Blame` command.
-- Core git layer (`GitService`, `git blame --line-porcelain` parser), LRU cache, and a deterministic fixture-repo generator for tests.
-- Blame hover card: author Gravatar, full commit message, relative + absolute date, diff stat, short SHA. Shares a single blame cache (`BlameSource`) with the inline decoration so a file is never blamed twice.
-- `GitService.getFileDiffStat` + `git show --numstat` parser for the hover's diff stat.
-- File history: `GitSense: Show File History` opens a TreeView (Explorer sidebar) listing every commit touching the current file, newest first, following the active editor. Respects `maxHistoryItems`. `GitService.getFileHistory` + `git log --follow` parser.
-- Commit details: `GitSense: Show Commit Details` opens a webview with the full commit message, author, files changed (insertions/deletions), and the full unified diff. Strict CSP (no `unsafe-inline`), HTML-escaped commit-sourced content. Clicking a File History entry opens it directly; `Copy Commit SHA` moved to its right-click context menu. `GitService.getCommit`/`getCommitDiff`/`getCommitFiles`.
-- Branch comparison: `GitSense: Compare Branches` prompts for a base and a compare branch, then opens a webview with commits ahead/behind, files changed, and the full diff against their merge-base (GitHub/GitLab PR-diff semantics). `GitService.getBranches`/`getCommitsBetween`/`getDiffBetweenRefs`/`getFilesBetweenRefs`.
-- Issue/PR linking: references like `#123` in commit messages become clickable links in the blame hover (markdown) and commit details (HTML) webview. Auto-detects a GitHub/GitLab issue URL from the repo's git remote, or fully configurable (`issueLinking.enabled`/`.pattern`/`.urlTemplate`) for other trackers. Invalid regex in the pattern setting falls back to plain text rather than breaking the view. This completes Phase 3.
 
-### Changed
-- Visual redesign of all 4 views for closer parity with a native, polished look: Commit Graph now lays out each row as its own small SVG in normal flow (fixing the near-zero margin/overlap on single-lane graphs) with theme-aware lane colors (`--vscode-charts-*`), a per-row author avatar, and capped ref badges (`+N` overflow); Commit Details gained an avatar header, a dedicated SHA/copy toolbar, and small inline section icons; File History's tooltip now shows the author's avatar and full message/date, matching the hover card's richness; Branch Comparison gained per-commit avatars and matching section icons. Commit Details and Branch Comparison webviews now allow `https:` images in their CSP (for Gravatar), matching Commit Graph and the blame hover.
-- Commit Graph, second pass: lane-changing edges (merges, branch fan-outs) now render as smooth curves instead of sharp diagonal lines, matching GitLens's graph rendering and fixing the cramped look around busy merge sections. Each commit's own avatar is now embedded directly at its graph node (clipped into the lane-colored ring), replacing the separate plain dot and the earlier standalone avatar column. Added a column header row (Graph / Message / Refs / Author / Age / Commit) and increased row height and lane spacing to give the graph room to breathe. `git log` now excludes `refs/stash` (it's a bare ref under `refs/`, so `--all` was pulling stash commits — and their synthetic "index" commit — into the main graph, which GitHub/GitLens keep separate).
-- Fixed Commit Graph's row layout silently collapsing into one column per element in real usage: the row's CSS custom properties (`--graph-svg-width`/`--graph-row-height`) were set via an inline `style` attribute, which the webview's CSP (`style-src` with no `unsafe-inline`/nonce) blocked outright, leaving `grid-template-columns` referencing an unset `var()` and falling back to a single implicit column. Moved to a nonce'd `<style>` block instead, matching the pattern already used in Commit Details.
-- `.vscode/launch.json`'s "Run Extension" config now explicitly opens this repo as the Extension Development Host's workspace, so F5 always lands on a real, feature-testable repo instead of reopening whatever folder was last used in that window.
-- Commit Graph moved from an editor-tab webview to a docked panel view in a new "GitSense" tab in the bottom panel (next to Terminal/Debug Console/Output/Ports), matching GitLens's own panel placement. `GitSense: Open Commit Graph` now reveals and reloads that panel instead of opening a new editor tab. `CommitGraphPanel` (`vscode.WebviewPanel`) is replaced by `CommitGraphViewProvider` (`vscode.WebviewViewProvider`); the rendering logic (`render.ts`) is unchanged and fully reused.
-- Commit Details and Branch Comparison also moved from editor-tab webviews into the same "GitSense" bottom-panel tab (`CommitDetailsPanel`/`BranchComparisonPanel` → `CommitDetailsViewProvider`/`BranchComparisonViewProvider`), so clicking a commit anywhere (Commit Graph, Branch Comparison, File History) no longer opens a new editor tab — it loads into the panel alongside the graph. Fixed a real race in all three panel views: `<viewId>.focus` can return before `resolveWebviewView` has actually fired (reproduced as a genuine integration-test failure on the very first reveal of the new "gitsense" panel container in a fresh session — later reveals were already fine once the container was warmed up). Added `waitForWebviewView`, a small bounded poll shared by all three providers, rather than assuming the view is ready right after `.focus` resolves.
-- Commit Graph, third pass — reworked for GitLens-level density and control, because the previous layout wasted a third of a short panel on chrome and clipped its own rightmost column:
-  - Removed the `<h1>` page heading and the `1rem 1.5rem 2rem` body padding (~80px of a ~250px panel) in favour of a single 28px toolbar: a branch picker that scopes the graph to one ref, an instant client-side filter over message/author/SHA, a live commit count, and a refresh button.
-  - Columns now match GitLens's set — Branch/Tag, Graph, Commit Message, Author, Changes, Commit Date, SHA — with a sticky header and a horizontally scrolling grid. Previously the fixed-width columns overflowed the panel with no scroll container, so the SHA column visibly bled off the edge in a split panel.
-  - Ref labels moved from inline pills into a dedicated left-hand Branch/Tag column, and now distinguish the checked-out branch (accent-filled), other local branches (badge-filled), remote-tracking branches (outlined + cloud icon) and tags (outlined + tag icon). This needed `git log --decorate=full`: the short `%D` form cannot tell `refs/remotes/origin/main` from a local branch named `origin/main`. When the two-label cap is hit, the checked-out branch always survives and remote-tracking refs fold away first.
-  - New Changes column showing each commit's changed-file count, with `+insertions −deletions` as its tooltip. Rides along on the existing graph `git log` via `--numstat`, so it costs no extra git process; merge commits report 0, as GitLens's does.
-  - New Working Changes row, pinned above the newest commit whenever the tree is dirty, showing `+added ~modified −deleted` counts by file. Clicking it opens VS Code's Source Control view rather than reimplementing staging/stashing/committing inside a webview.
-  - Rows are now a proper `role="grid"` with row selection (`aria-selected`), Arrow/Home/End navigation, and a roving tabindex so 200 commits aren't 200 tab stops. The selected row is remembered across a refresh.
-  - `GitSense: Open Commit Graph` now falls back to the first workspace folder when no editor is open, instead of showing "open a file in a git repo". The graph is repo-wide, so an open editor was only ever a hint about *which* repo in a multi-root workspace.
-- Commit Details reworked to match: a compact single-line header (28px avatar, subject, author · date, short SHA + copy button) replaces the 1.2rem heading and 40px avatar, and the whole-commit `<pre>` diff dump is replaced by **one collapsible section per file** holding only that file's hunks, with a filter box, per-file stats, and whole-commit totals. Per-file header noise (`diff --git`, `index`, `---`/`+++`, mode and rename lines) is dropped — it restates the filename already shown above it. A sole changed file expands by default; filtering expands its matches. The file list scrolls under a sticky section header so the commit's identity stays on screen.
-- `GitService` additions backing the above: `getGraphCommits` takes an optional `ref` and now passes `--numstat --decorate=full`; new `getWorkingChanges` (`git status --porcelain`, never throws — a dirty-state badge isn't worth failing the graph over) and `getCurrentBranch`. New pure parsers `parseStatusPorcelain` and `splitDiffByFile`. `parseGraphLog` was rewritten to tokenize on newlines as well as record separators, because `--numstat` prints a commit's stat block *after* its formatted record — splitting on the record separator alone attaches every block to the wrong commit.
+**Inline blame**
 
-- Inline diffs gained a real gutter: each line now renders as a grid row with its old and new absolute line numbers, read from the hunk's own `@@ -a,b +c,d @@` header, plus a full-row tint on changed lines and a **Wrap long lines** toggle. Previously a long line simply clipped off the right edge of the panel with no way to tell which line had changed. Line numbers are excluded from text selection, so copying a diff yields code rather than code interleaved with numbers. A fragment with no hunk header renders empty gutters instead of guessing.
-- Commit Details gained an action bar — **Copy SHA**, **Copy message**, and **Open on GitHub/GitLab/Bitbucket** (which names the actual host and is hidden entirely when the remote's commit-URL shape isn't known, rather than offering a link that 404s). Every action is read-only; cherry-pick/revert/branch-from-here are deliberately absent, since a single click in a panel is the wrong affordance for rewriting history and §13 has no good answer for a half-applied mutation. New pure `utils/remoteLinks.ts` (`buildCommitUrl`, `remoteHostLabel`).
-- Each changed-file row in Commit Details and Branch Comparison now has an **Open changes** button that opens the file in a real diff editor — syntax highlighting, folding and go-to-definition, none of which a webview `<pre>` will ever have. Backed by a new `GitContentProvider` (a `TextDocumentContentProvider` on the `gitsense-git` scheme) plus `GitService.getFileAtRef`. This deliberately does not reuse the built-in Git extension's `git:` scheme, whose query shape is another extension's internal detail. Branch Comparison diffs against the **merge base**, not against `base` itself, so the editor agrees with the `base...compare` diff shown inline — on diverged branches those differ. New `GitService.getMergeBase`.
-- Commit Details' subject is clamped to two lines (full text in its tooltip) — a three-line subject was pushing the file list off-screen entirely.
-- Branch Comparison rebuilt around a ref bar and a tab strip, replacing the stacked `h1` + four `h2` sections + whole-diff dump:
-  - Two ref pickers with a **swap** button and a refresh button. The pickers are tinted by *diff polarity* — base in the removed hue, compare in the added hue, the same two colors the `-`/`+` lines below are painted in — so the ref bar previews the diff it produces. Ahead/Behind count badges inherit the same mapping. A selected ref that isn't a branch (a tag, a raw SHA) stays listed, so changing one side can't silently reset the other.
-  - **Ahead / Behind / All Files** tabs with count badges, opening on whichever pane has something to say so the panel never greets you with an empty tab when the answer is one click away. `role="tablist"` comes with the arrow-key navigation it promises, and one tab is the tab stop.
-  - Empty panes state what's true instead of "no results": "*compare* adds nothing over *base*", "*compare* is up to date with *base*". Selecting the same ref on both sides says "Pick two different refs to compare" — without a checkmark, since a green tick next to an instruction reads as "done".
-  - The files pane reuses the same per-file collapsible sections, filter box and wrap toggle as Commit Details.
-- `GitSense: Compare Branches` no longer opens with two blocking QuickPicks. It resolves sensible defaults — the checked-out branch as `compare` and its remote-tracking counterpart as `base`, falling back to another local branch — and lets the user retarget in the view's own ref bar. New pure `utils/branchDefaults.ts` (`pickDefaultRefs`); it also falls back to the workspace folder when no editor is open, matching `Open Commit Graph`.
-- Extracted `media/shared.css` (section header, changed-file rows, inline diff, icon controls) out of `commitDetails.css` and `branchComparison.css`. Both panels answer the same question and now can't drift apart; `RenderCommitDetailsOptions`/`RenderBranchComparisonOptions` take `styleUris: string[]` instead of a single `styleUri`.
-- Fixed `pickDefaultRefs` picking an arbitrary remote branch as the base when the current branch has no upstream — a remote ref that isn't this branch's upstream is a worse default than any local branch the user works in, so local branches are now preferred in the fallback.
-- Narrowed GitHub host detection to an exact `github.com` match. The previous `.github.com` suffix check implied GitHub Enterprise was detectable from its hostname; it isn't (GHE runs on arbitrary domains), so those correctly fall through to the hostname label and get no commit URL.
+- The current line's author and age, shown as a muted, right-aligned editor decoration. Updates when you move to a different line, not on every keystroke. Toggle with **GitSense: Toggle Inline Blame**.
+- Hover any line for a card with the author's avatar, the full commit message, relative and absolute dates, that commit's diff stat for the file, and the short SHA.
+- The same author and age in the status bar. Click it to open the commit.
+- Blame is skipped on files larger than `gitsense.maxBlameFileSize`, and stays silent on untracked files, unsaved files, and folders that aren't git repos.
 
-- Every user-facing command is now reachable from the bottom panel, not just the command palette. `contributes.menus.view/title` puts codicon buttons in each panel view's title bar: Commit Graph carries **Compare Branches**, **Show File History**, **Toggle Inline Blame** and **Open Commit Graph**; Branch Comparison and Commit Details carry the ones they don't already expose in-webview (Commit Details keeps using its own Copy SHA / Copy message buttons rather than duplicating them in the title bar).
-- Panel views no longer show a blank rectangle before they have content. A webview view resolves the moment its tab is revealed, so Commit Details now renders "Select a commit in the Commit Graph to see its details." and Branch Comparison auto-loads a default comparison (current branch vs its upstream) exactly like Commit Graph already auto-loads — falling back to "This repo has only one ref — nothing to compare yet." New `views/placeholder.ts`.
-- `gitsense.copySha` is hidden from the command palette, where there is no selected commit to copy.
+**File history**
 
-### Fixed
-- **Commit Details rendered completely unstyled.** `media/diff.css` was renamed to `media/shared.css` in the previous change, but `CommitDetailsViewProvider` kept requesting the old name. A missing webview stylesheet fails silently — the `<link>` 404s and nothing throws — so the panel lost every shared rule: the diff gutter's line numbers ran inline into the code (`node:20-alpine2020`, `/app2121`), file rows lost their layout, and the message body overlapped the section header. Neither `tsc` nor the render unit tests could catch it, because the render functions take stylesheet URIs as arguments and the tests pass their own.
-  - Asset filenames now live in a single `MEDIA` constant in `constants.ts`, with `test/unit/media.test.ts` asserting both directions: every referenced file exists in `media/`, and every stylesheet in `media/` is referenced by something.
-  - `test/unit/contributions.test.ts` closes the same class of silent failure in `package.json`: every `view/title` menu entry must name a declared command and a declared view, and any command shown as a title-bar button must have a codicon icon (without one it renders as blank space).
-- `gitsense.copySha` invoked with no argument threw an unhandled rejection (`arg.sha` on `undefined`). It now reports "pick a commit first to copy its SHA" and leaves the clipboard alone. Registered commands are reachable from keybindings and other extensions, so hiding it from the palette wasn't sufficient on its own.
-- Fixed a race in Branch Comparison's new auto-load: an explicit `Compare Branches` invocation landing while the default-ref git calls were in flight would be overwritten by the defaults a moment later.
+- **GitSense: Show File History** lists every commit that touched the current file, newest first, in the Explorer — following the active editor as you switch files. Click an entry to open its details; right-click to copy its SHA. Renames are followed.
 
-### Known gaps vs GitLens
-- No staging UI (checkboxes / Stash / commit message box / "Commit to master"). That is VS Code's built-in Source Control view; the Working Changes row links to it instead.
-- No natural-language commit search, no activity-graph minimap, and no fetch/pull/push buttons in the graph toolbar.
-- The graph does not auto-refresh on repo change — use the toolbar's refresh button. A `.git` watcher would re-render the whole webview and lose scroll position, so it needs incremental row updates first.
-- No AI "Explain" box in the comparison view. That's Phase 2 (`vscode.lm`), and `gitsense.ai.enabled` defaults to `false`.
-- The changed-file list is flat, with no list/tree layout toggle — the filter box already narrows it, and a path tree is real work for marginal gain in a short panel.
-- The commit-details action bar is read-only by design (see above). No cherry-pick, revert, or branch-from-here.
-- File History is still a TreeView in the Explorer container, not in the GitSense panel — that placement is what §8 specifies. Its command is a panel title-bar button, so it's reachable from the panel, but clicking it reveals the Explorer.
-- The Toggle Inline Blame title-bar button doesn't show on/off state; it would need a context key and a paired command. The effect is visible in the editor immediately.
-- Commit Details still fetches the whole commit diff up front rather than lazily per expanded file. Collapsed `<details>` content is still parsed, so a very large commit pays for hunks nobody opened.
+**Commit graph** — in a "GitSense" tab in the bottom panel
+
+- A repo-wide, branch-and-merge-aware graph of every commit, with curved merge lines, per-lane colors that follow your theme, and each author's avatar at their commit.
+- Seven columns: Branch/Tag, Graph, Commit Message, Author, Changes, Commit Date, SHA. The header stays put while you scroll, and narrow panels scroll sideways instead of clipping.
+- Local branches, the checked-out branch, remote-tracking branches and tags each get their own label style and icon.
+- A toolbar to scope the graph to one branch, filter commits by message/author/SHA as you type, see a live commit count, and refresh.
+- Uncommitted work is pinned above the newest commit as a **Working Changes** row with `+added ~modified −deleted` file counts. Click it to jump to Source Control.
+- Arrow keys move the selection, Enter opens the commit, and your place survives a refresh.
+
+**Commit details** — same panel
+
+- The commit's subject, author, date and SHA in a compact header, plus **Copy SHA**, **Copy message**, and **Open on GitHub/GitLab/Bitbucket** when your remote is one of those.
+- Every changed file as a collapsible section holding only that file's hunks, with a filter box, per-file counts and whole-commit totals. A single-file commit opens expanded.
+- Diffs show old and new line numbers in a gutter, tint changed lines, and offer a **Wrap long lines** toggle. Line numbers stay out of your selection, so copying a diff gives you just the code.
+- **Open changes** on any file row opens it in a real diff editor, with syntax highlighting and folding.
+
+**Branch comparison** — same panel
+
+- Two ref pickers with a swap button, colored by diff polarity: the base in the removed hue, the compare ref in the added hue, matching the `-`/`+` lines below.
+- **Ahead**, **Behind** and **All Files** tabs with counts, opening on whichever has something to show. Diffs are taken against the merge-base, like a GitHub or GitLab pull-request diff.
+- Click any commit to open its details.
+
+**Issue and PR linking**
+
+- References like `#123` in commit messages become links, in both the blame hover and commit details. Auto-detected from your GitHub or GitLab remote, or point it at any tracker with `gitsense.issueLinking.pattern` and `.urlTemplate`.
+
+**Throughout**
+
+- Every command is a button in a GitSense panel view's title bar, so nothing requires the command palette.
+- All four views are keyboard-navigable, take their colors from your theme in both light and dark, and honour `prefers-reduced-motion`.
+- Fully local and free. No account, no telemetry, no paid tier. The only network request is fetching author avatars from Gravatar; see the README's Privacy section.
+
+### Known limitations
+
+- No AI features yet. Commit summaries and line explanations are planned, using your own model via VS Code's Language Model API — no GitSense account or API key.
+- No staging, stashing or committing. That's VS Code's Source Control view — the Working Changes row links you there.
+- The graph doesn't refresh itself when the repo changes; use the toolbar's refresh button.
+- The changed-file list is flat, with no tree view of paths.
+- Commit details loads a whole commit's diff up front, so a very large commit takes a moment to open.
+- Toggling inline blame from the panel button gives no on/off indicator; the editor shows the result immediately.
+- File History appears in the Explorer, not in the GitSense panel.
