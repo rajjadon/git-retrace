@@ -22,8 +22,25 @@
       {
         "command": "gitsense.toggleBlame",
         "title": "GitSense: Toggle Inline Blame"
+      },
+      {
+        "command": "gitsense.showFileHistory",
+        "title": "GitSense: Show File History"
+      },
+      {
+        "command": "gitsense.copySha",
+        "title": "GitSense: Copy Commit SHA"
       }
     ],
+    "views": {
+      "explorer": [
+        {
+          "id": "gitsense.fileHistory",
+          "name": "File History",
+          "when": "gitsense.fileHistory.hasContent"
+        }
+      ]
+    },
     "configuration": {
       "title": "GitSense",
       "properties": {
@@ -51,6 +68,11 @@
           "type": "number",
           "default": 1048576,
           "description": "Skip blame for files larger than this size, in bytes."
+        },
+        "gitsense.maxHistoryItems": {
+          "type": "number",
+          "default": 200,
+          "description": "Max commits loaded per file history."
         }
       }
     }

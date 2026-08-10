@@ -5,11 +5,14 @@ import type { GitLogger } from './core/git/errors';
 import { BlameSource } from './providers/BlameSource';
 import { BlameDecorationProvider } from './providers/BlameDecorationProvider';
 import { BlameHoverProvider } from './providers/BlameHoverProvider';
+import { FileHistoryProvider } from './providers/FileHistoryProvider';
 import { handleToggleBlameCommand } from './commands/blameCommands';
+import { handleShowFileHistoryCommand, handleCopyShaCommand } from './commands/fileHistoryCommands';
 
 /** Test-only introspection surface — accessed via `vscode.extensions.getExtension(id).exports` in integration tests. */
 export interface GitSenseTestApi {
   blameProvider: BlameDecorationProvider;
+  fileHistoryProvider: FileHistoryProvider;
   git: GitService;
 }
 
@@ -28,16 +31,20 @@ export function activate(ctx: vscode.ExtensionContext): GitSenseTestApi {
   const blameSource = new BlameSource(git, logger);
   const blameProvider = new BlameDecorationProvider(blameSource);
   const hoverProvider = new BlameHoverProvider(blameSource, git);
+  const fileHistoryProvider = new FileHistoryProvider(git);
 
   ctx.subscriptions.push(
     blameSource,
     blameProvider,
+    fileHistoryProvider,
     handleToggleBlameCommand(blameProvider),
+    handleShowFileHistoryCommand(fileHistoryProvider),
+    handleCopyShaCommand(),
     vscode.languages.registerHoverProvider({ scheme: 'file' }, hoverProvider),
   );
   output.appendLine('GitSense activated.');
 
-  return { blameProvider, git };
+  return { blameProvider, fileHistoryProvider, git };
 }
 
 export function deactivate(): void {

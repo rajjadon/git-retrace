@@ -1,7 +1,16 @@
-import type { BlameLine, FileChange } from './types';
+import type { BlameLine, Commit, FileChange } from './types';
 
 const UNCOMMITTED_SHA = '0000000000000000000000000000000000000000';
 const HEADER_RE = /^([0-9a-f]{40}) (\d+) (\d+)(?: \d+)?$/;
+
+// ASCII unit/record separators — control characters that essentially never appear in real
+// commit metadata, so they're safe delimiters even when author names or subjects contain
+// tabs, pipes, or other "normal" punctuation.
+const LOG_FIELD_SEP = '\x1f';
+const LOG_RECORD_SEP = '\x1e';
+
+/** Pass to `git log --pretty=tformat:<this>` — `tformat` (not `format`) avoids an extra implicit newline between records. */
+export const LOG_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SEP}%ae${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%s${LOG_RECORD_SEP}`;
 
 /**
  * Parses `git blame --line-porcelain` output. Pure — no I/O.
@@ -77,6 +86,25 @@ export function parseBlamePorcelain(raw: string): BlameLine[] {
   }
 
   return results;
+}
+
+/** Parses `git log --pretty=tformat:LOG_FORMAT` output into commits, newest first. Pure — no I/O. */
+export function parseLog(raw: string): Commit[] {
+  return raw
+    .split(LOG_RECORD_SEP)
+    .map((record) => record.trim())
+    .filter((record) => record.length > 0)
+    .map((record) => {
+      const [sha, shortSha, author, authorEmail, date, message] = record.split(LOG_FIELD_SEP);
+      return {
+        sha: sha ?? '',
+        shortSha: shortSha ?? '',
+        author: author ?? '',
+        authorEmail: authorEmail ?? '',
+        date: date ?? '',
+        message: message ?? '',
+      };
+    });
 }
 
 /**

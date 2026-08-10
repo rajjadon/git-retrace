@@ -1,8 +1,8 @@
 import { dirname } from 'node:path';
 import { realpathSync } from 'node:fs';
 import { simpleGit, type SimpleGit } from 'simple-git';
-import { parseBlamePorcelain, parseNumstat } from './parsers';
-import type { BlameLine, FileChange } from './types';
+import { parseBlamePorcelain, parseNumstat, parseLog, LOG_FORMAT } from './parsers';
+import type { BlameLine, Commit, FileChange } from './types';
 import { GitCommandError, type GitLogger } from './errors';
 import { toRepoRelativePath } from '../../utils/path';
 
@@ -115,6 +115,30 @@ export class GitService {
       // Non-critical to the hover card — log and omit the stat rather than fail the whole hover.
       this.logger?.warn(`diff stat failed for ${filePath}@${sha}: ${String(err)}`);
       return null;
+    }
+  }
+
+  /** Every commit that touched this file, newest first. `--follow` tracks the file across renames. */
+  async getFileHistory(filePath: string, maxCount: number): Promise<Commit[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    if (!(await this.isTracked(filePath))) {
+      return [];
+    }
+
+    const git = this.gitFor(repoRoot);
+    const rel = toRepoRelativePath(repoRoot, this.toCanonicalPath(filePath));
+    const args = ['log', '--follow', '-n', String(maxCount), `--pretty=tformat:${LOG_FORMAT}`, '--', rel];
+
+    try {
+      const raw = await git.raw(args);
+      return parseLog(raw);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git log failed for ${filePath}`, err);
+      throw new GitCommandError(args.join(' '), stderr);
     }
   }
 

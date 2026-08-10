@@ -12,8 +12,9 @@ Phase 1 (MVP) is under active development. See `CLAUDE.md` for the full architec
 
 - **Inline blame** — the current line's author and age, shown as a muted, right-aligned editor decoration. Updates when you move to a different line, not on every cursor move. Toggle with **GitSense: Toggle Inline Blame**.
 - **Blame hover card** — hover any line to see the author's Gravatar, full commit message, relative + absolute date, diff stat, and short SHA.
+- **File history** — run **GitSense: Show File History** to open a sidebar view listing every commit that touched the current file, newest first, following the active editor as you switch files. Click an entry to copy its SHA.
 
-Still to come: file history, commit details, status bar (see `CLAUDE.md` for the roadmap).
+Still to come: commit details, status bar (see `CLAUDE.md` for the roadmap).
 
 ## Settings
 
@@ -24,6 +25,7 @@ Still to come: file history, commit details, status bar (see `CLAUDE.md` for the
 | `gitsense.blame.highlightCurrentLine` | boolean | `true` | Highlight the current line's blame decoration. |
 | `gitsense.blame.ignoreWhitespace` | boolean | `true` | Pass `-w` to git blame to ignore whitespace-only changes. |
 | `gitsense.maxBlameFileSize` | number | `1048576` | Skip blame for files larger than this size, in bytes. |
+| `gitsense.maxHistoryItems` | number | `200` | Max commits loaded per file history. |
 
 ## Privacy
 

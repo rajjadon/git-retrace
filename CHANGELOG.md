@@ -10,3 +10,4 @@ All notable changes to GitSense are documented here. Format follows [Keep a Chan
 - Core git layer (`GitService`, `git blame --line-porcelain` parser), LRU cache, and a deterministic fixture-repo generator for tests.
 - Blame hover card: author Gravatar, full commit message, relative + absolute date, diff stat, short SHA. Shares a single blame cache (`BlameSource`) with the inline decoration so a file is never blamed twice.
 - `GitService.getFileDiffStat` + `git show --numstat` parser for the hover's diff stat.
+- File history: `GitSense: Show File History` opens a TreeView (Explorer sidebar) listing every commit touching the current file, newest first, following the active editor. Respects `maxHistoryItems`. Clicking an entry copies its SHA (`GitSense: Copy Commit SHA`). `GitService.getFileHistory` + `git log --follow` parser.
