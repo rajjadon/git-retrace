@@ -34,6 +34,10 @@
       {
         "command": "gitsense.showCommit",
         "title": "GitSense: Show Commit Details"
+      },
+      {
+        "command": "gitsense.openGraph",
+        "title": "GitSense: Open Commit Graph"
       }
     ],
     "views": {
@@ -85,6 +89,11 @@
           "type": "number",
           "default": 200,
           "description": "Max commits loaded per file history."
+        },
+        "gitsense.maxGraphItems": {
+          "type": "number",
+          "default": 200,
+          "description": "Max commits loaded in the commit graph."
         }
       }
     }

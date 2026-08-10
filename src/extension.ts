@@ -10,7 +10,9 @@ import { StatusBarProvider } from './providers/StatusBarProvider';
 import { handleToggleBlameCommand } from './commands/blameCommands';
 import { handleShowFileHistoryCommand, handleCopyShaCommand } from './commands/fileHistoryCommands';
 import { handleShowCommitCommand } from './commands/commitCommands';
+import { handleOpenGraphCommand } from './commands/graphCommands';
 import { CommitDetailsPanel } from './views/CommitDetails/CommitDetailsPanel';
+import { CommitGraphPanel } from './views/CommitGraph/CommitGraphPanel';
 
 /** Test-only introspection surface — accessed via `vscode.extensions.getExtension(id).exports` in integration tests. */
 export interface GitSenseTestApi {
@@ -19,6 +21,7 @@ export interface GitSenseTestApi {
   statusBarProvider: StatusBarProvider;
   git: GitService;
   getCommitDetailsHtml: () => string | undefined;
+  getCommitGraphHtml: () => string | undefined;
 }
 
 export function activate(ctx: vscode.ExtensionContext): GitSenseTestApi {
@@ -48,6 +51,7 @@ export function activate(ctx: vscode.ExtensionContext): GitSenseTestApi {
     handleShowFileHistoryCommand(fileHistoryProvider),
     handleCopyShaCommand(),
     handleShowCommitCommand(git, ctx.extensionUri),
+    handleOpenGraphCommand(git, ctx.extensionUri),
     vscode.languages.registerHoverProvider({ scheme: 'file' }, hoverProvider),
   );
   output.appendLine('GitSense activated.');
@@ -58,6 +62,7 @@ export function activate(ctx: vscode.ExtensionContext): GitSenseTestApi {
     statusBarProvider,
     git,
     getCommitDetailsHtml: () => CommitDetailsPanel.getCurrentHtmlForTest(),
+    getCommitGraphHtml: () => CommitGraphPanel.getCurrentHtmlForTest(),
   };
 }
 

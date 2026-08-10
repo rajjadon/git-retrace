@@ -1,4 +1,4 @@
-import type { BlameLine, Commit, CommitDetail, FileChange } from './types';
+import type { BlameLine, Commit, CommitDetail, FileChange, GraphCommit, Ref } from './types';
 
 const UNCOMMITTED_SHA = '0000000000000000000000000000000000000000';
 const HEADER_RE = /^([0-9a-f]{40}) (\d+) (\d+)(?: \d+)?$/;
@@ -19,6 +19,9 @@ export const LOG_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SE
  * treats everything after the 5th separator as the body rather than splitting on it.
  */
 export const COMMIT_DETAIL_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SEP}%ae${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%B`;
+
+/** Pass to `git log --all --topo-order --pretty=tformat:<this>` for the commit graph. `%P` = parent shas (space-separated), `%D` = ref decorations. */
+export const GRAPH_LOG_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SEP}%ae${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%P${LOG_FIELD_SEP}%D${LOG_FIELD_SEP}%s${LOG_RECORD_SEP}`;
 
 /**
  * Parses `git blame --line-porcelain` output. Pure — no I/O.
@@ -111,6 +114,47 @@ export function parseLog(raw: string): Commit[] {
         authorEmail: authorEmail ?? '',
         date: date ?? '',
         message: message ?? '',
+      };
+    });
+}
+
+/** Parses a `%D` ref-decoration string, e.g. "HEAD -> main, origin/main, tag: v1.0.0". Pure — no I/O. */
+function parseRefs(raw: string): Ref[] {
+  if (!raw) {
+    return [];
+  }
+  return raw.split(', ').map((segment): Ref => {
+    if (segment === 'HEAD') {
+      return { name: 'HEAD', type: 'detached' };
+    }
+    if (segment.startsWith('HEAD -> ')) {
+      return { name: segment.slice('HEAD -> '.length), type: 'branch' };
+    }
+    if (segment.startsWith('tag: ')) {
+      return { name: segment.slice('tag: '.length), type: 'tag' };
+    }
+    return { name: segment, type: 'branch' };
+  });
+}
+
+/** Parses `git log --all --pretty=tformat:GRAPH_LOG_FORMAT` output into commits with parent shas and refs. Pure — no I/O. */
+export function parseGraphLog(raw: string): GraphCommit[] {
+  return raw
+    .split(LOG_RECORD_SEP)
+    .map((record) => record.trim())
+    .filter((record) => record.length > 0)
+    .map((record) => {
+      const [sha, shortSha, author, authorEmail, date, parentsRaw, refsRaw, message] = record.split(LOG_FIELD_SEP);
+      const parents = (parentsRaw ?? '').split(' ').filter((p) => p.length > 0);
+      return {
+        sha: sha ?? '',
+        shortSha: shortSha ?? '',
+        author: author ?? '',
+        authorEmail: authorEmail ?? '',
+        date: date ?? '',
+        message: message ?? '',
+        parents,
+        refs: parseRefs(refsRaw ?? ''),
       };
     });
 }

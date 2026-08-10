@@ -7,10 +7,12 @@ import {
   parseNumstatAll,
   parseLog,
   parseCommitDetail,
+  parseGraphLog,
   LOG_FORMAT,
   COMMIT_DETAIL_FORMAT,
+  GRAPH_LOG_FORMAT,
 } from './parsers';
-import type { BlameLine, Commit, CommitDetail, FileChange } from './types';
+import type { BlameLine, Commit, CommitDetail, FileChange, GraphCommit } from './types';
 import { GitCommandError, type GitLogger } from './errors';
 import { toRepoRelativePath } from '../../utils/path';
 
@@ -199,6 +201,26 @@ export class GitService {
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err);
       this.logger?.error(`git show --numstat failed for ${sha}`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Repo-wide commit graph across every ref (`--all`), not scoped to `filePath` — used to resolve which repo to query. */
+  async getGraphCommits(filePath: string, maxCount: number): Promise<GraphCommit[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    const git = this.gitFor(repoRoot);
+    // --topo-order guarantees a commit's parents are never listed before it — the graph
+    // layout algorithm processes newest-first and needs children resolved before parents.
+    const args = ['log', '--all', '--topo-order', '-n', String(maxCount), `--pretty=tformat:${GRAPH_LOG_FORMAT}`];
+    try {
+      const raw = await git.raw(args);
+      return parseGraphLog(raw);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error('git log --all failed', err);
       throw new GitCommandError(args.join(' '), stderr);
     }
   }

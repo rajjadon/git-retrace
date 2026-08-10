@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { GitService } from '../../core/git/GitService';
-import { renderCommitDetailsHtml, escapeHtml } from './render';
+import { renderCommitDetailsHtml } from './render';
+import { escapeHtml } from '../escapeHtml';
 import { COMMANDS, VIEWS } from '../../constants';
 
 function createNonce(): string {

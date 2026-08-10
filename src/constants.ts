@@ -7,10 +7,10 @@ export const COMMANDS = {
   showFileHistory: 'gitsense.showFileHistory',
   showCommit: 'gitsense.showCommit',
   copySha: 'gitsense.copySha',
-  // Reserved for Phase 2/3 — not registered in package.json yet.
+  openGraph: 'gitsense.openGraph',
+  // Reserved for Phase 2 — not registered in package.json yet.
   explainCommit: 'gitsense.explainCommit',
   explainLine: 'gitsense.explainLine',
-  openGraph: 'gitsense.openGraph',
 } as const;
 
 export const CONFIG = {
@@ -21,12 +21,14 @@ export const CONFIG = {
   blameIgnoreWhitespace: 'blame.ignoreWhitespace',
   maxHistoryItems: 'maxHistoryItems',
   maxBlameFileSize: 'maxBlameFileSize',
+  maxGraphItems: 'maxGraphItems',
   dateFormat: 'dateFormat',
 } as const;
 
 export const VIEWS = {
   fileHistory: 'gitsense.fileHistory',
   commitDetails: 'gitsense.commitDetails',
+  commitGraph: 'gitsense.commitGraph',
 } as const;
 
 export const CONTEXT_KEYS = {

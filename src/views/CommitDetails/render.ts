@@ -1,5 +1,6 @@
 import type { CommitDetail, FileChange } from '../../core/git/types';
 import { formatAge, formatAbsolute } from '../../utils/date';
+import { escapeHtml } from '../escapeHtml';
 
 export interface RenderCommitDetailsOptions {
   nonce: string;
@@ -13,15 +14,6 @@ export interface CommitDetailsData {
   files: FileChange[];
   diff: string;
   now?: Date;
-}
-
-export function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function renderDiffLine(line: string): string {

@@ -36,3 +36,8 @@ export interface Ref {
   name: string;
   type: 'branch' | 'tag' | 'detached';
 }
+
+export interface GraphCommit extends Commit {
+  parents: string[];
+  refs: Ref[];
+}

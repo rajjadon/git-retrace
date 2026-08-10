@@ -6,7 +6,7 @@ GitSense is a free, open-source (MIT) VS Code extension that surfaces git blame,
 
 ## Status
 
-Phase 1 (MVP) is complete. Phase 2 (AI features) and Phase 3 (commit graph, branch comparison, issue linking) are next — see `CLAUDE.md` for the full roadmap.
+Phase 1 (MVP) is complete, plus the commit graph from Phase 3. AI features (Phase 2) and the rest of Phase 3 (branch comparison, issue linking) are next — see `CLAUDE.md` for the full roadmap.
 
 ## Features
 
@@ -15,6 +15,7 @@ Phase 1 (MVP) is complete. Phase 2 (AI features) and Phase 3 (commit graph, bran
 - **File history** — run **GitSense: Show File History** to open a sidebar view listing every commit that touched the current file, newest first, following the active editor as you switch files. Click an entry to open its commit details; right-click for **Copy Commit SHA**.
 - **Commit details** — a webview with the full commit message, author, every changed file with insertion/deletion counts, and the full unified diff. Open it from File History, or via **GitSense: Show Commit Details**.
 - **Status bar** — the current line's author and age in the status bar, mirroring the inline decoration. Click it to open commit details.
+- **Commit graph** — run **GitSense: Open Commit Graph** for a repo-wide, branch-and-merge-aware graph of every commit across all refs, with branch/tag badges. Click a row to open its commit details.
 
 ## Settings
 
@@ -26,6 +27,7 @@ Phase 1 (MVP) is complete. Phase 2 (AI features) and Phase 3 (commit graph, bran
 | `gitsense.blame.ignoreWhitespace` | boolean | `true` | Pass `-w` to git blame to ignore whitespace-only changes. |
 | `gitsense.maxBlameFileSize` | number | `1048576` | Skip blame for files larger than this size, in bytes. |
 | `gitsense.maxHistoryItems` | number | `200` | Max commits loaded per file history. |
+| `gitsense.maxGraphItems` | number | `200` | Max commits loaded in the commit graph. |
 
 ## Privacy
 
