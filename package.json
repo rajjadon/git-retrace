@@ -38,6 +38,10 @@
       {
         "command": "gitsense.openGraph",
         "title": "GitSense: Open Commit Graph"
+      },
+      {
+        "command": "gitsense.compareBranches",
+        "title": "GitSense: Compare Branches"
       }
     ],
     "views": {

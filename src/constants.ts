@@ -8,6 +8,7 @@ export const COMMANDS = {
   showCommit: 'gitsense.showCommit',
   copySha: 'gitsense.copySha',
   openGraph: 'gitsense.openGraph',
+  compareBranches: 'gitsense.compareBranches',
   // Reserved for Phase 2 — not registered in package.json yet.
   explainCommit: 'gitsense.explainCommit',
   explainLine: 'gitsense.explainLine',
@@ -29,6 +30,7 @@ export const VIEWS = {
   fileHistory: 'gitsense.fileHistory',
   commitDetails: 'gitsense.commitDetails',
   commitGraph: 'gitsense.commitGraph',
+  branchComparison: 'gitsense.branchComparison',
 } as const;
 
 export const CONTEXT_KEYS = {

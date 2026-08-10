@@ -1,6 +1,7 @@
 import type { CommitDetail, FileChange } from '../../core/git/types';
 import { formatAge, formatAbsolute } from '../../utils/date';
 import { escapeHtml } from '../escapeHtml';
+import { renderDiff, renderFileList } from '../diffRender';
 
 export interface RenderCommitDetailsOptions {
   nonce: string;
@@ -14,42 +15,6 @@ export interface CommitDetailsData {
   files: FileChange[];
   diff: string;
   now?: Date;
-}
-
-function renderDiffLine(line: string): string {
-  const escaped = escapeHtml(line);
-  if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff --git') || line.startsWith('index ')) {
-    return `<span class="diff-meta">${escaped}</span>`;
-  }
-  if (line.startsWith('+')) {
-    return `<span class="diff-add">${escaped}</span>`;
-  }
-  if (line.startsWith('-')) {
-    return `<span class="diff-del">${escaped}</span>`;
-  }
-  if (line.startsWith('@@')) {
-    return `<span class="diff-hunk">${escaped}</span>`;
-  }
-  return `<span class="diff-ctx">${escaped}</span>`;
-}
-
-function renderDiff(diff: string): string {
-  return diff.split('\n').map(renderDiffLine).join('\n');
-}
-
-function renderFileList(files: FileChange[]): string {
-  if (files.length === 0) {
-    return '<p class="muted">No files changed.</p>';
-  }
-  const items = files
-    .map((f) => {
-      const stat = f.binary
-        ? '<span class="muted">binary</span>'
-        : `<span class="stat-add">+${f.insertions}</span> <span class="stat-del">-${f.deletions}</span>`;
-      return `<li><code>${escapeHtml(f.path)}</code> ${stat}</li>`;
-    })
-    .join('\n');
-  return `<ul class="file-list">\n${items}\n</ul>`;
 }
 
 /** Builds the commit details webview's full HTML document. Pure — nonce/cspSource/styleUri come from the caller, not from vscode APIs directly, so this is unit-testable without a real webview host. */

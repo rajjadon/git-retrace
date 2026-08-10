@@ -6,7 +6,7 @@ GitSense is a free, open-source (MIT) VS Code extension that surfaces git blame,
 
 ## Status
 
-Phase 1 (MVP) is complete, plus the commit graph from Phase 3. AI features (Phase 2) and the rest of Phase 3 (branch comparison, issue linking) are next — see `CLAUDE.md` for the full roadmap.
+Phase 1 (MVP) is complete, plus the commit graph and branch comparison from Phase 3. AI features (Phase 2) and issue/PR linking (the rest of Phase 3) are next — see `CLAUDE.md` for the full roadmap.
 
 ## Features
 
@@ -16,6 +16,7 @@ Phase 1 (MVP) is complete, plus the commit graph from Phase 3. AI features (Phas
 - **Commit details** — a webview with the full commit message, author, every changed file with insertion/deletion counts, and the full unified diff. Open it from File History, or via **GitSense: Show Commit Details**.
 - **Status bar** — the current line's author and age in the status bar, mirroring the inline decoration. Click it to open commit details.
 - **Commit graph** — run **GitSense: Open Commit Graph** for a repo-wide, branch-and-merge-aware graph of every commit across all refs, with branch/tag badges. Click a row to open its commit details.
+- **Branch comparison** — run **GitSense: Compare Branches**, pick a base and a branch to compare, and see commits ahead/behind, files changed, and the full diff (against their merge-base, like a GitHub/GitLab PR diff). Click a commit to open its details.
 
 ## Settings
 

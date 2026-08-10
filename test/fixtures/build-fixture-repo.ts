@@ -24,6 +24,17 @@ function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv): void {
   execFileSync('git', args, { cwd, env: { ...process.env, ...env }, stdio: 'pipe' });
 }
 
+function commitEnv(name: string, email: string, isoDate: string): NodeJS.ProcessEnv {
+  return {
+    GIT_AUTHOR_NAME: name,
+    GIT_AUTHOR_EMAIL: email,
+    GIT_COMMITTER_NAME: name,
+    GIT_COMMITTER_EMAIL: email,
+    GIT_AUTHOR_DATE: isoDate,
+    GIT_COMMITTER_DATE: isoDate,
+  };
+}
+
 /**
  * Builds a small, deterministic git repo in a fresh temp directory by running real
  * git commands with pinned author/committer identity and dates. Avoids committing a
@@ -40,25 +51,11 @@ export function buildFixtureRepo(): FixtureManifest {
 
   writeFileSync(trackedFile, 'line one\nline two\n');
   git(repoRoot, ['add', 'tracked.txt']);
-  git(repoRoot, ['commit', '-q', '-m', 'first commit'], {
-    GIT_AUTHOR_NAME: 'Raj Jadon',
-    GIT_AUTHOR_EMAIL: 'raj@example.com',
-    GIT_COMMITTER_NAME: 'Raj Jadon',
-    GIT_COMMITTER_EMAIL: 'raj@example.com',
-    GIT_AUTHOR_DATE: '2024-01-01T10:00:00',
-    GIT_COMMITTER_DATE: '2024-01-01T10:00:00',
-  });
+  git(repoRoot, ['commit', '-q', '-m', 'first commit'], commitEnv('Raj Jadon', 'raj@example.com', '2024-01-01T10:00:00'));
 
   writeFileSync(trackedFile, 'line one\nline two\nline three\n');
   git(repoRoot, ['add', 'tracked.txt']);
-  git(repoRoot, ['commit', '-q', '-m', 'add line three'], {
-    GIT_AUTHOR_NAME: 'Amy Dev',
-    GIT_AUTHOR_EMAIL: 'amy@example.com',
-    GIT_COMMITTER_NAME: 'Amy Dev',
-    GIT_COMMITTER_EMAIL: 'amy@example.com',
-    GIT_AUTHOR_DATE: '2024-02-01T10:00:00',
-    GIT_COMMITTER_DATE: '2024-02-01T10:00:00',
-  });
+  git(repoRoot, ['commit', '-q', '-m', 'add line three'], commitEnv('Amy Dev', 'amy@example.com', '2024-02-01T10:00:00'));
 
   const untrackedFile = join(repoRoot, 'untracked.txt');
   writeFileSync(untrackedFile, 'not tracked\n');
@@ -73,4 +70,37 @@ export function buildFixtureRepo(): FixtureManifest {
     });
 
   return { repoRoot, trackedFile, untrackedFile, commits };
+}
+
+export interface BranchFixtureManifest {
+  repoRoot: string;
+  trackedFile: string;
+  baseBranch: string;
+  featureBranch: string;
+}
+
+/**
+ * A separate, isolated repo (its own temp dir, never touched by other tests) with a feature
+ * branch that diverges from `main` — used for branch comparison, where `--all`-scoped commands
+ * (like the commit graph) elsewhere must not see this extra branch/commit.
+ */
+export function buildBranchFixtureRepo(): BranchFixtureManifest {
+  const repoRoot = mkdtempSync(join(tmpdir(), 'gitsense-branch-fixture-'));
+  git(repoRoot, ['init', '-q', '-b', 'main']);
+  git(repoRoot, ['config', 'user.name', 'Raj Jadon']);
+  git(repoRoot, ['config', 'user.email', 'raj@example.com']);
+
+  const trackedFile = join(repoRoot, 'tracked.txt');
+  writeFileSync(trackedFile, 'line one\n');
+  git(repoRoot, ['add', 'tracked.txt']);
+  git(repoRoot, ['commit', '-q', '-m', 'base commit'], commitEnv('Raj Jadon', 'raj@example.com', '2024-01-01T10:00:00'));
+
+  git(repoRoot, ['checkout', '-q', '-b', 'feature-x']);
+  writeFileSync(trackedFile, 'line one\nfeature line\n');
+  git(repoRoot, ['add', 'tracked.txt']);
+  git(repoRoot, ['commit', '-q', '-m', 'add feature line'], commitEnv('Amy Dev', 'amy@example.com', '2024-01-02T10:00:00'));
+
+  git(repoRoot, ['checkout', '-q', 'main']);
+
+  return { repoRoot, trackedFile, baseBranch: 'main', featureBranch: 'feature-x' };
 }
