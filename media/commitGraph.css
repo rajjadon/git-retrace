@@ -13,29 +13,19 @@ h1 {
 }
 
 .graph {
-  position: relative;
-}
-
-.graph-svg {
-  position: absolute;
-  top: 0;
-  left: 0;
-}
-
-.graph-rows {
   display: flex;
   flex-direction: column;
 }
 
 .graph-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--graph-svg-width) 16px minmax(100px, 1fr) 100px 110px 70px 70px;
   align-items: center;
-  gap: 0.6rem;
+  column-gap: 0.6rem;
+  height: var(--graph-row-height);
   padding: 0 0.5rem;
   border-radius: 3px;
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
 }
 
 .graph-row:hover {
@@ -47,27 +37,44 @@ h1 {
   outline-offset: -1px;
 }
 
+.graph-row-svg {
+  display: block;
+}
+
+.graph-avatar {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: block;
+}
+
 .graph-message {
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: 1 1 auto;
-  min-width: 8rem;
+  white-space: nowrap;
+}
+
+.graph-refs {
+  display: flex;
+  gap: 0.3rem;
+  overflow: hidden;
 }
 
 .graph-author {
   opacity: 0.8;
-  flex: 0 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .graph-age {
   opacity: 0.6;
-  flex: 0 0 auto;
-  min-width: 6rem;
+  white-space: nowrap;
 }
 
 .graph-sha {
   opacity: 0.6;
-  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .ref-badge {
@@ -90,6 +97,11 @@ h1 {
 .ref-detached {
   background-color: var(--vscode-gitDecoration-modifiedResourceForeground);
   color: var(--vscode-editor-background);
+}
+
+.ref-more {
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
 }
 
 @media (prefers-reduced-motion: reduce) {

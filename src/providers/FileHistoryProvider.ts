@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { GitService } from '../core/git/GitService';
 import type { Commit } from '../core/git/types';
-import { formatAge } from '../utils/date';
+import { formatAge, formatAbsolute } from '../utils/date';
+import { buildGravatarUrl } from '../utils/gravatar';
+import { escapeMarkdown } from '../utils/format';
 import { CONFIG, CONTEXT_KEYS, VIEWS, COMMANDS } from '../constants';
 
 const DEFAULT_MAX_HISTORY_ITEMS = 200;
@@ -47,8 +49,10 @@ export class FileHistoryProvider implements vscode.TreeDataProvider<Commit>, vsc
   getTreeItem(commit: Commit): vscode.TreeItem {
     const item = new vscode.TreeItem(commit.message, vscode.TreeItemCollapsibleState.None);
     item.description = `${commit.author}, ${formatAge(new Date(commit.date))}`;
+    const date = new Date(commit.date);
+    const avatarUrl = buildGravatarUrl(commit.authorEmail);
     item.tooltip = new vscode.MarkdownString(
-      `**${commit.author}**\n\n${commit.message}\n\n${commit.date} · \`${commit.shortSha}\``,
+      `![](${avatarUrl}) **${escapeMarkdown(commit.author)}**\n\n${escapeMarkdown(commit.message)}\n\n${formatAge(date)} · ${formatAbsolute(date, 'yyyy-MM-dd HH:mm')} · \`${commit.shortSha}\``,
     );
     item.iconPath = new vscode.ThemeIcon('git-commit');
     item.contextValue = 'gitsense.commit';

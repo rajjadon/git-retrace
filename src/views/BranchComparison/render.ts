@@ -2,6 +2,8 @@ import type { Commit, FileChange } from '../../core/git/types';
 import { formatAge } from '../../utils/date';
 import { escapeHtml } from '../escapeHtml';
 import { renderDiff, renderFileList } from '../diffRender';
+import { buildGravatarUrl } from '../../utils/gravatar';
+import { FILES_ICON, DIFF_ICON } from '../icons';
 
 export interface RenderBranchComparisonOptions {
   nonce: string;
@@ -28,7 +30,8 @@ function renderCommitList(commits: Commit[], now: Date): string {
   const items = commits
     .map((c) => {
       const age = formatAge(new Date(c.date), now);
-      return `<li class="commit-row" data-sha="${escapeHtml(c.sha)}" tabindex="0" role="button" aria-label="Show commit details for ${escapeHtml(c.message)}"><code>${escapeHtml(c.shortSha)}</code> <span class="commit-message">${escapeHtml(c.message)}</span> <span class="muted">${escapeHtml(c.author)}, ${escapeHtml(age)}</span></li>`;
+      const avatarUrl = buildGravatarUrl(c.authorEmail, { size: 32 });
+      return `<li class="commit-row" data-sha="${escapeHtml(c.sha)}" tabindex="0" role="button" aria-label="Show commit details for ${escapeHtml(c.message)}"><img class="commit-avatar" src="${avatarUrl}" alt="" width="16" height="16" /><code>${escapeHtml(c.shortSha)}</code> <span class="commit-message">${escapeHtml(c.message)}</span> <span class="muted">${escapeHtml(c.author)}, ${escapeHtml(age)}</span></li>`;
     })
     .join('\n');
   return `<ul class="commit-list">\n${items}\n</ul>`;
@@ -43,20 +46,20 @@ export function renderBranchComparisonHtml(data: BranchComparisonData, opts: Ren
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource}; img-src ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource}; img-src https: ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
 <link rel="stylesheet" href="${opts.styleUri}" />
 <title>Compare ${escapeHtml(base)}...${escapeHtml(compare)}</title>
 </head>
 <body>
-<h1>${escapeHtml(base)} <span class="muted">...</span> ${escapeHtml(compare)}</h1>
+<h1><span class="branch-name">${escapeHtml(base)}</span> <span class="compare-arrow" aria-hidden="true">&rarr;</span> <span class="branch-name">${escapeHtml(compare)}</span></h1>
 <p class="summary">${aheadCommits.length} commit${aheadCommits.length === 1 ? '' : 's'} ahead, ${behindCommits.length} commit${behindCommits.length === 1 ? '' : 's'} behind</p>
 <h2>Commits in ${escapeHtml(compare)} not in ${escapeHtml(base)}</h2>
 ${renderCommitList(aheadCommits, now)}
 <h2>Commits in ${escapeHtml(base)} not in ${escapeHtml(compare)}</h2>
 ${renderCommitList(behindCommits, now)}
-<h2>Files changed (${files.length})</h2>
+<h2>${FILES_ICON}Files changed (${files.length})</h2>
 ${renderFileList(files)}
-<h2>Diff</h2>
+<h2>${DIFF_ICON}Diff</h2>
 <pre class="diff" aria-label="Branch comparison diff"><code>${renderDiff(diff)}</code></pre>
 <script nonce="${opts.nonce}">
 const vscode = acquireVsCodeApi();

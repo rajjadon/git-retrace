@@ -3,6 +3,8 @@ import { formatAge, formatAbsolute } from '../../utils/date';
 import { escapeHtml } from '../escapeHtml';
 import { renderDiff, renderFileList } from '../diffRender';
 import { linkifyIssues, type IssueLinkOptions } from '../../utils/issueLinks';
+import { buildGravatarUrl } from '../../utils/gravatar';
+import { FILES_ICON, DIFF_ICON } from '../icons';
 
 export interface RenderCommitDetailsOptions {
   nonce: string;
@@ -41,28 +43,37 @@ export function renderCommitDetailsHtml(data: CommitDetailsData, opts: RenderCom
   const age = formatAge(date, now);
   const absoluteDate = formatAbsolute(date, 'yyyy-MM-dd HH:mm');
   const bodyRest = commit.body.slice(commit.message.length).replace(/^\n+/, '');
+  const avatarUrl = buildGravatarUrl(commit.authorEmail, { size: 64 });
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource} 'nonce-${opts.nonce}'; img-src ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource} 'nonce-${opts.nonce}'; img-src https: ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
 <link rel="stylesheet" href="${opts.styleUri}" />
 <style nonce="${opts.nonce}">:root { --gitsense-editor-font: ${escapeHtml(opts.editorFontFamily)}; }</style>
 <title>Commit ${escapeHtml(commit.shortSha)}</title>
 </head>
 <body>
+<div class="header">
+<img class="avatar" src="${avatarUrl}" alt="" width="40" height="40" />
+<div class="header-text">
 <h1>${linkifyHtml(commit.message, opts.issueLinking)}</h1>
-<dl class="meta">
-<dt>Author</dt><dd>${escapeHtml(commit.author)}</dd>
-<dt>Date</dt><dd>${escapeHtml(age)} &middot; ${escapeHtml(absoluteDate)}</dd>
-<dt>SHA</dt><dd><code>${escapeHtml(commit.sha)}</code></dd>
-</dl>
+<div class="header-meta">
+<span class="header-author">${escapeHtml(commit.author)}</span>
+<span class="header-sep">&middot;</span>
+<span class="header-age" title="${escapeHtml(absoluteDate)}">${escapeHtml(age)}</span>
+</div>
+</div>
+</div>
 ${bodyRest ? `<pre class="commit-body">${linkifyHtml(bodyRest, opts.issueLinking)}</pre>` : ''}
-<button id="copy-sha" type="button">Copy SHA</button>
-<h2>Files changed (${files.length})</h2>
+<div class="toolbar">
+<code class="sha">${escapeHtml(commit.sha)}</code>
+<button id="copy-sha" type="button" aria-label="Copy commit SHA" title="Copy commit SHA">Copy SHA</button>
+</div>
+<h2>${FILES_ICON}Files changed (${files.length})</h2>
 ${renderFileList(files)}
-<h2>Diff</h2>
+<h2>${DIFF_ICON}Diff</h2>
 <pre class="diff" aria-label="Commit diff"><code>${renderDiff(diff)}</code></pre>
 <script nonce="${opts.nonce}">
 const vscode = acquireVsCodeApi();

@@ -10,7 +10,7 @@ const MARKDOWN_SPECIAL_RE = /([\\`*_{}[\]()#+\-.!|>~])/g;
  * is attacker-influenced content if the repo isn't trusted — without this, a commit message
  * could inject fake links/emphasis/headings into the rendered hover.
  */
-function escapeMarkdown(text: string): string {
+export function escapeMarkdown(text: string): string {
   return text.replace(MARKDOWN_SPECIAL_RE, '\\$1');
 }
 

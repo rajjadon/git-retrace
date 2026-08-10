@@ -36,7 +36,7 @@ Phase 1 (MVP) and Phase 3 (commit graph, branch comparison, issue/PR linking) ar
 
 ## Privacy
 
-GitSense runs entirely locally. Git data never leaves your machine. The one exception: the blame hover card fetches a Gravatar image from `gravatar.com`, keyed by an MD5 hash of the commit author's email (that's Gravatar's own lookup spec, not a security-relevant use of the hash). No other network calls are made.
+GitSense runs entirely locally. Git data never leaves your machine. The one exception: the blame hover card, Commit Graph, Commit Details, and Branch Comparison views fetch a Gravatar image from `gravatar.com` per author, keyed by an MD5 hash of their email (that's Gravatar's own lookup spec, not a security-relevant use of the hash). No other network calls are made.
 
 ## Development
 

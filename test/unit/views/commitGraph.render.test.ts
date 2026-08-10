@@ -82,3 +82,12 @@ test('renderGraphHtml: rows are keyboard-navigable (tabindex + role=button)', ()
   assert.match(html, /tabindex="0"/);
   assert.match(html, /role="button"/);
 });
+
+test('renderGraphHtml: caps visible ref badges, folding the rest into a "+N" badge', () => {
+  const refs = ['main', 'develop', 'v1.0', 'v1.1'].map((name) => ({ name, type: 'branch' as const }));
+  const nodes = layoutGraph([commit('A', [], { refs })]);
+  const html = renderGraphHtml({ nodes, now }, opts);
+  const badgeCount = (html.match(/class="ref-badge/g) ?? []).length;
+  assert.equal(badgeCount, 3); // 2 visible + one "+N" overflow badge
+  assert.match(html, /class="ref-badge ref-more" title="v1\.0, v1\.1">\+2</);
+});
