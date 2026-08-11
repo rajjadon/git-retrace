@@ -2,9 +2,9 @@ import * as assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as vscode from 'vscode';
 import { MANIFEST_PATH, type FixtureManifest } from '../fixtures/build-fixture-repo';
-import type { GitSenseTestApi } from '../../src/extension';
+import type { GitRetraceTestApi } from '../../src/extension';
 
-const EXTENSION_ID = 'gitsense-dev.gitsense';
+const EXTENSION_ID = 'rajjadon.git-retrace';
 
 /** Polls until `predicate` is true — a defined-but-stale value (e.g. the previous line's
  * label, still set from the initial editor-open) must not be mistaken for "updated". */
@@ -20,11 +20,11 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void
 
 suite('Inline blame decoration', () => {
   let manifest: FixtureManifest;
-  let api: GitSenseTestApi;
+  let api: GitRetraceTestApi;
 
   suiteSetup(async () => {
     manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as FixtureManifest;
-    const ext = vscode.extensions.getExtension<GitSenseTestApi>(EXTENSION_ID);
+    const ext = vscode.extensions.getExtension<GitRetraceTestApi>(EXTENSION_ID);
     assert.ok(ext, 'extension not found');
     api = await ext.activate();
   });
@@ -49,8 +49,8 @@ suite('Inline blame decoration', () => {
     assert.equal(api.blameProvider.getRenderedLabel(doc.uri), undefined);
   });
 
-  test('respects gitsense.maxBlameFileSize by skipping oversized files', async () => {
-    const config = vscode.workspace.getConfiguration('gitsense');
+  test('respects gitRetrace.maxBlameFileSize by skipping oversized files', async () => {
+    const config = vscode.workspace.getConfiguration('gitRetrace');
     await config.update('maxBlameFileSize', 1, vscode.ConfigurationTarget.Global);
     try {
       const doc = await vscode.workspace.openTextDocument(manifest.trackedFile);

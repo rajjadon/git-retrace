@@ -1,14 +1,14 @@
-# GitSense — Claude Code System Prompt
+# Git Retrace — Claude Code System Prompt
 
-> **Read this file fully at the start of every session.** It is the single source of truth for how GitSense is built. If anything here conflicts with a request, surface the conflict before proceeding.
+> **Read this file fully at the start of every session.** It is the single source of truth for how Git Retrace is built. If anything here conflicts with a request, surface the conflict before proceeding.
 
 ---
 
 ## 1. Mission
 
-You are building **GitSense**, an open-source VS Code extension that makes deep sense of any Git repository — its history, authors, blame, branches, and commit patterns — directly inside the editor. It is a leaner, faster, smarter, and fully free alternative to GitLens.
+You are building **Git Retrace**, an open-source VS Code extension that makes deep sense of any Git repository — its history, authors, blame, branches, and commit patterns — directly inside the editor. It is a leaner, faster, smarter, and fully free alternative to GitLens.
 
-**One-line pitch:** *GitSense makes sense of your repo.*
+**One-line pitch:** *Git Retrace makes sense of your repo.*
 
 The success metric is simple: a developer opens any file in any repo and instantly understands **who wrote this, when, why, and what changed** — without leaving their editor, without a paywall, and without waiting.
 
@@ -24,13 +24,13 @@ Raj — full-stack developer, based in India. Works primarily in TypeScript and 
 
 | Field         | Value                                              |
 |---------------|----------------------------------------------------|
-| Name          | GitSense                                           |
-| Tagline       | *Makes sense of your repo.*                        |
+| Name          | Git Retrace                                           |
+| Tagline       | *Retrace any line to the commit that wrote it.*                        |
 | Type          | VS Code Extension (open source)                    |
 | Language      | TypeScript (strict)                                |
 | License       | MIT                                                |
 | Target        | VS Code 1.85+ and VS Code-based editors (Cursor)   |
-| Package name  | `gitsense`                                          |
+| Package name  | `git-retrace`                                          |
 | Bundler       | esbuild (never webpack)                             |
 | Node runtime  | Node 20 LTS                                         |
 
@@ -41,7 +41,7 @@ Raj — full-stack developer, based in India. Works primarily in TypeScript and 
 1. **100% free, always.** No paywalled features, no "Pro" tier, no account, no sign-in gate. Ever.
 2. **Fast first.** `activate()` returns in < 50ms. Every heavy feature loads lazily. The extension never blocks editor startup.
 3. **Minimal surface area.** A UI element must earn its place. No sidebars full of empty sections. If a feature can be a hover instead of a panel, make it a hover.
-4. **AI-native, not AI-bolted-on.** AI is a first-class citizen via the VS Code Language Model API (`vscode.lm`), so users bring their own model (Copilot, Ollama, Claude, etc.). No GitSense backend, no proxied keys.
+4. **AI-native, not AI-bolted-on.** AI is a first-class citizen via the VS Code Language Model API (`vscode.lm`), so users bring their own model (Copilot, Ollama, Claude, etc.). No Git Retrace backend, no proxied keys.
 5. **Respect the editor.** Use native VS Code APIs — CodeLens, Decorations, TreeView, Webview, Hover — not reinvented primitives.
 6. **Local-first & private.** Zero telemetry by default. Git data never leaves the machine unless the user explicitly enables an AI feature that sends a diff to *their own* model.
 
@@ -124,7 +124,7 @@ Never let a `vscode` import leak into `core/`. If you're tempted, the logic belo
 - [ ] **Commit details** — Webview: message, author, full diff, files changed, copy-SHA button
 - [ ] **Status bar** — current line's last author + age (e.g. `Raj, 3 days ago`), click → commit details
 
-### Phase 2 — Intelligence (the "Sense" in GitSense)
+### Phase 2 — Intelligence (the "Sense" in Git Retrace)
 - [ ] **AI commit summary** — `vscode.lm` turns a commit + diff into a plain-English summary
 - [ ] **AI line explanation** — "Why does this line exist?" → LLM answers using the line's blame + diff history
 - [ ] **Stale-code detector** — flag files/functions untouched for > `staleThresholdDays`, shown as a subtle CodeLens
@@ -144,31 +144,31 @@ Do not start a phase until the previous phase is tested and merged.
 ### Commands
 | Command ID (use `constants.ts`) | Title |
 |---|---|
-| `gitsense.toggleBlame` | GitSense: Toggle Inline Blame |
-| `gitsense.showFileHistory` | GitSense: Show File History |
-| `gitsense.showCommit` | GitSense: Show Commit Details |
-| `gitsense.explainCommit` | GitSense: Explain Commit with AI |
-| `gitsense.explainLine` | GitSense: Explain This Line's History |
-| `gitsense.copySha` | GitSense: Copy Commit SHA |
-| `gitsense.openGraph` | GitSense: Open Commit Graph |
+| `gitRetrace.toggleBlame` | Git Retrace: Toggle Inline Blame |
+| `gitRetrace.showFileHistory` | Git Retrace: Show File History |
+| `gitRetrace.showCommit` | Git Retrace: Show Commit Details |
+| `gitRetrace.explainCommit` | Git Retrace: Explain Commit with AI |
+| `gitRetrace.explainLine` | Git Retrace: Explain This Line's History |
+| `gitRetrace.copySha` | Git Retrace: Copy Commit SHA |
+| `gitRetrace.openGraph` | Git Retrace: Open Commit Graph |
 
-### Settings (all under `gitsense.*`)
+### Settings (all under `gitRetrace.*`)
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `gitsense.blame.enabled` | boolean | `true` | Show inline blame decorations |
-| `gitsense.blame.format` | string | `"{author}, {age}"` | Blame text template. Tokens: `{author} {age} {date} {message} {sha}` |
-| `gitsense.blame.highlightCurrentLine` | boolean | `true` | Highlight the current line's blame |
-| `gitsense.blame.ignoreWhitespace` | boolean | `true` | Pass `-w` to git blame |
-| `gitsense.ai.enabled` | boolean | `false` | Enable AI features (uses your own model via vscode.lm) |
-| `gitsense.ai.modelFamily` | string | `"gpt-4o"` | Preferred LM family hint |
-| `gitsense.ai.maxDiffChars` | number | `8000` | Max diff size sent to the model |
-| `gitsense.staleThresholdDays` | number | `180` | Days before a file is considered stale |
-| `gitsense.maxHistoryItems` | number | `200` | Max commits loaded per file history |
-| `gitsense.maxBlameFileSize` | number | `1048576` | Skip blame for files larger than this (bytes) |
-| `gitsense.dateFormat` | string | `"relative"` | `relative` or an absolute date-fns pattern |
+| `gitRetrace.blame.enabled` | boolean | `true` | Show inline blame decorations |
+| `gitRetrace.blame.format` | string | `"{author}, {age}"` | Blame text template. Tokens: `{author} {age} {date} {message} {sha}` |
+| `gitRetrace.blame.highlightCurrentLine` | boolean | `true` | Highlight the current line's blame |
+| `gitRetrace.blame.ignoreWhitespace` | boolean | `true` | Pass `-w` to git blame |
+| `gitRetrace.ai.enabled` | boolean | `false` | Enable AI features (uses your own model via vscode.lm) |
+| `gitRetrace.ai.modelFamily` | string | `"gpt-4o"` | Preferred LM family hint |
+| `gitRetrace.ai.maxDiffChars` | number | `8000` | Max diff size sent to the model |
+| `gitRetrace.staleThresholdDays` | number | `180` | Days before a file is considered stale |
+| `gitRetrace.maxHistoryItems` | number | `200` | Max commits loaded per file history |
+| `gitRetrace.maxBlameFileSize` | number | `1048576` | Skip blame for files larger than this (bytes) |
+| `gitRetrace.dateFormat` | string | `"relative"` | `relative` or an absolute date-fns pattern |
 
 ### Views
-Register a TreeView **only when it has content**. Contributed view: `gitsense.fileHistory` in the SCM or Explorer container (decide via config, default Explorer).
+Register a TreeView **only when it has content**. Contributed view: `gitRetrace.fileHistory` in the SCM or Explorer container (decide via config, default Explorer).
 
 ### Activation events
 Prefer `onStartupFinished` over `*`. Never use `*`. Better still, activate on the specific commands and `workspaceContains:.git` where possible.
@@ -275,9 +275,9 @@ export function deactivate(): void {
 - Use `vscode.lm.selectChatModels()` — never hardcode a provider, never store an API key.
 - If no model is available, features degrade gracefully with a one-line "Enable a language model to use this" message. Do not error-spam.
 - Prompt building lives in `core/ai/prompts.ts` as pure functions (so they're testable without a model).
-- Cap the diff size sent to the model (`gitsense.ai.maxDiffChars`). Truncate with a clear marker.
+- Cap the diff size sent to the model (`gitRetrace.ai.maxDiffChars`). Truncate with a clear marker.
 - Stream responses into the hover/panel where the API supports it.
-- **Never** send a diff to any model unless `gitsense.ai.enabled` is `true`. This is a privacy contract — treat it as inviolable.
+- **Never** send a diff to any model unless `gitRetrace.ai.enabled` is `true`. This is a privacy contract — treat it as inviolable.
 
 ---
 
@@ -301,11 +301,11 @@ Rules: defer git in `activate()` via `setImmediate`; never load the full log on 
 | Not a git repo | Silent no-op; feature simply doesn't show |
 | Untracked / unsaved file | Silent no-op |
 | Git binary missing | One-time `showWarningMessage` with a link to install git |
-| Git command failed unexpectedly | `showErrorMessage`, log full error to the GitSense output channel |
+| Git command failed unexpectedly | `showErrorMessage`, log full error to the Git Retrace output channel |
 | No language model available | Inline hint in the relevant UI, not a popup |
 | Parse failure | Log to output channel, return empty result, never crash |
 
-Create a dedicated `OutputChannel` named `GitSense` for diagnostics. Never `console.log` in shipped code.
+Create a dedicated `OutputChannel` named `Git Retrace` for diagnostics. Never `console.log` in shipped code.
 
 ---
 
@@ -318,7 +318,7 @@ Create a dedicated `OutputChannel` named `GitSense` for diagnostics. Never `cons
 
 ---
 
-## 15. Commit & branch conventions (for the GitSense repo itself)
+## 15. Commit & branch conventions (for the Git Retrace repo itself)
 
 - **Conventional Commits:** `feat:`, `fix:`, `perf:`, `refactor:`, `test:`, `docs:`, `chore:`. Scope optional, e.g. `feat(blame): add hover card`.
 - One logical change per commit. No "wip" or "misc fixes" on main.
@@ -331,7 +331,7 @@ Create a dedicated `OutputChannel` named `GitSense` for diagnostics. Never `cons
 ## 16. Definition of Done (every feature)
 
 - [ ] Behaves correctly in: normal repo, empty repo, no repo, untracked file, multi-root workspace
-- [ ] Respects its relevant `gitsense.*` settings
+- [ ] Respects its relevant `gitRetrace.*` settings
 - [ ] All disposables registered in `context.subscriptions`
 - [ ] Errors handled per §13 — no unhandled rejections, no console output
 - [ ] Within the performance budget (§12)
@@ -351,7 +351,7 @@ npm run watch         # esbuild watch for development
 npm run test          # unit + integration
 npm run test:unit     # fast core-only tests
 npm run lint          # eslint + tsc --noEmit
-npm run package       # vsce package → gitsense-x.x.x.vsix
+npm run package       # vsce package → git-retrace-x.x.x.vsix
 ```
 
 Press **F5** to launch the Extension Development Host with the extension loaded.
@@ -380,7 +380,7 @@ Press **F5** to launch the Extension Development Host with the extension loaded.
 ## 20. What NOT to do (the anti-GitLens list)
 
 - ❌ No feature behind a sign-in, account, or "Pro" upsell — free means free.
-- ❌ No API key routed through any GitSense backend — the user's model, the user's key, local only.
+- ❌ No API key routed through any Git Retrace backend — the user's model, the user's key, local only.
 - ❌ No sidebar with empty/placeholder sections.
 - ❌ No webpack — esbuild only.
 - ❌ No telemetry enabled by default; if ever added, opt-in with explicit consent.
@@ -396,6 +396,6 @@ Press **F5** to launch the Extension Development Host with the extension loaded.
 
 1. Check the [VS Code Extension API docs](https://code.visualstudio.com/api) before guessing.
 2. Prefer the simplest implementation that works; profile before optimizing.
-3. Ask Raj before adding a runtime dependency or a backend requirement — GitSense runs fully locally.
+3. Ask Raj before adding a runtime dependency or a backend requirement — Git Retrace runs fully locally.
 4. If a request conflicts with §4 (philosophy) or §20 (anti-patterns), flag it and propose an alternative.
 5. When scaffolding, build the smallest vertical slice that runs end-to-end (F5 → see it work), then iterate.

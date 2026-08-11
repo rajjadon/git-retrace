@@ -2,10 +2,10 @@ import * as assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as vscode from 'vscode';
 import { MANIFEST_PATH, type FixtureManifest } from '../fixtures/build-fixture-repo';
-import type { GitSenseTestApi } from '../../src/extension';
+import type { GitRetraceTestApi } from '../../src/extension';
 import { COMMANDS } from '../../src/constants';
 
-const EXTENSION_ID = 'gitsense-dev.gitsense';
+const EXTENSION_ID = 'rajjadon.git-retrace';
 
 function hoverText(hover: vscode.Hover): string {
   return hover.contents.map((c) => (typeof c === 'string' ? c : c.value)).join('\n');
@@ -23,11 +23,11 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void
 
 suite('Issue linking', () => {
   let manifest: FixtureManifest;
-  let api: GitSenseTestApi;
+  let api: GitRetraceTestApi;
 
   suiteSetup(async () => {
     manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as FixtureManifest;
-    const ext = vscode.extensions.getExtension<GitSenseTestApi>(EXTENSION_ID);
+    const ext = vscode.extensions.getExtension<GitRetraceTestApi>(EXTENSION_ID);
     assert.ok(ext, 'extension not found');
     api = await ext.activate();
   });
@@ -36,7 +36,7 @@ suite('Issue linking', () => {
   // so these tests configure a custom pattern/template — proving the (repo-agnostic) linking
   // mechanism itself, rather than depending on fixture data shaped like a real issue reference.
   async function withIssueLinkingConfig<T>(fn: () => Promise<T>): Promise<T> {
-    const config = vscode.workspace.getConfiguration('gitsense');
+    const config = vscode.workspace.getConfiguration('gitRetrace');
     await config.update('issueLinking.pattern', '(three)', vscode.ConfigurationTarget.Global);
     await config.update('issueLinking.urlTemplate', 'https://example.com/issue/{issue}', vscode.ConfigurationTarget.Global);
     try {

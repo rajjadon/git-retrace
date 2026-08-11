@@ -130,7 +130,7 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.view.webview.html = shellHtml(`<p>GitSense: failed to load the comparison — ${escapeHtml(message)}</p>`);
+      this.view.webview.html = shellHtml(`<p>Git Retrace: failed to load the comparison — ${escapeHtml(message)}</p>`);
     }
   }
 

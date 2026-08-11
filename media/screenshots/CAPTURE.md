@@ -12,7 +12,7 @@ over HTTPS from GitHub, so shipping copies inside the package would only add wei
 | File | What must be visible |
 |---|---|
 | `inline-blame.png` | An editor with the end-of-line blame decoration on the current line, **and** the hover card open showing avatar, full message, both dates, and the diff stat. |
-| `commit-graph.png` | The GitSense panel with the commit graph: the toolbar (branch picker, filter box, commit count), branch/tag labels in the left column, the dashed **Working Changes** row at the top, and commit details loaded in the pane beside it. This is the hero image — make it the best one. |
+| `commit-graph.png` | The Git Retrace panel with the commit graph: the toolbar (branch picker, filter box, commit count), branch/tag labels in the left column, the dashed **Working Changes** row at the top, and commit details loaded in the pane beside it. This is the hero image — make it the best one. |
 | `commit-details.png` | Commit details with the action bar (Copy SHA / Copy message / Open on…) and **at least one file expanded** so the diff gutter's old/new line numbers are clearly legible. |
 | `branch-comparison.png` | The comparison view showing both ref pickers, the swap button, and the Ahead / Behind / All Files tabs with their count badges. Pick two refs that actually differ so the counts aren't all zero. |
 

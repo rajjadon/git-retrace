@@ -1,21 +1,21 @@
 /** Single source of truth for command IDs, config keys, view IDs, and context keys. No magic strings elsewhere. */
 
-export const OUTPUT_CHANNEL_NAME = 'GitSense';
+export const OUTPUT_CHANNEL_NAME = 'Git Retrace';
 
 export const COMMANDS = {
-  toggleBlame: 'gitsense.toggleBlame',
-  showFileHistory: 'gitsense.showFileHistory',
-  showCommit: 'gitsense.showCommit',
-  copySha: 'gitsense.copySha',
-  openGraph: 'gitsense.openGraph',
-  compareBranches: 'gitsense.compareBranches',
+  toggleBlame: 'gitRetrace.toggleBlame',
+  showFileHistory: 'gitRetrace.showFileHistory',
+  showCommit: 'gitRetrace.showCommit',
+  copySha: 'gitRetrace.copySha',
+  openGraph: 'gitRetrace.openGraph',
+  compareBranches: 'gitRetrace.compareBranches',
   // Reserved for Phase 2 — not registered in package.json yet.
-  explainCommit: 'gitsense.explainCommit',
-  explainLine: 'gitsense.explainLine',
+  explainCommit: 'gitRetrace.explainCommit',
+  explainLine: 'gitRetrace.explainLine',
 } as const;
 
 export const CONFIG = {
-  section: 'gitsense',
+  section: 'gitRetrace',
   blameEnabled: 'blame.enabled',
   blameFormat: 'blame.format',
   blameHighlightCurrentLine: 'blame.highlightCurrentLine',
@@ -30,10 +30,10 @@ export const CONFIG = {
 } as const;
 
 export const VIEWS = {
-  fileHistory: 'gitsense.fileHistory',
-  commitDetails: 'gitsense.commitDetails',
-  commitGraph: 'gitsense.commitGraph',
-  branchComparison: 'gitsense.branchComparison',
+  fileHistory: 'gitRetrace.fileHistory',
+  commitDetails: 'gitRetrace.commitDetails',
+  commitGraph: 'gitRetrace.commitGraph',
+  branchComparison: 'gitRetrace.branchComparison',
 } as const;
 
 /**
@@ -50,12 +50,12 @@ export const MEDIA = {
   panelIcon: 'panel-icon.svg',
 } as const;
 
-/** URI schemes GitSense serves content for. Read-only — a document at a ref is immutable. */
+/** URI schemes Git Retrace serves content for. Read-only — a document at a ref is immutable. */
 export const SCHEMES = {
   /** One file's contents at one git ref, backing the native diff editor. */
-  gitContent: 'gitsense-git',
+  gitContent: 'gitretrace-git',
 } as const;
 
 export const CONTEXT_KEYS = {
-  fileHistoryHasContent: 'gitsense.fileHistory.hasContent',
+  fileHistoryHasContent: 'gitRetrace.fileHistory.hasContent',
 } as const;

@@ -40,8 +40,8 @@ test('linkifyIssues: uses the whole match when the pattern has no capture group'
 
 test('buildDefaultUrlTemplate: GitHub-style path', () => {
   assert.equal(
-    buildDefaultUrlTemplate({ host: 'github.com', owner: 'rajjadon', repo: 'gitSense' }),
-    'https://github.com/rajjadon/gitSense/issues/{issue}',
+    buildDefaultUrlTemplate({ host: 'github.com', owner: 'rajjadon', repo: 'git-retrace' }),
+    'https://github.com/rajjadon/git-retrace/issues/{issue}',
   );
 });
 

@@ -46,7 +46,7 @@ export function buildGitFileUri(fileRef: GitFileRef): vscode.Uri {
  * Serves one file's contents at one git ref to the diff editor.
  *
  * This exists instead of reusing the built-in Git extension's `git:` scheme because that scheme's
- * query shape is an internal detail of another extension — depending on it would make GitSense
+ * query shape is an internal detail of another extension — depending on it would make Git Retrace
  * break on someone else's refactor.
  */
 export class GitContentProvider implements vscode.TextDocumentContentProvider {

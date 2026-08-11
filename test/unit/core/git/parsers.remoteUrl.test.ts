@@ -3,26 +3,26 @@ import assert from 'node:assert/strict';
 import { parseRemoteUrl } from '../../../../src/core/git/parsers';
 
 test('parseRemoteUrl: https URL with .git suffix', () => {
-  assert.deepEqual(parseRemoteUrl('https://github.com/rajjadon/gitSense.git'), {
+  assert.deepEqual(parseRemoteUrl('https://github.com/rajjadon/git-retrace.git'), {
     host: 'github.com',
     owner: 'rajjadon',
-    repo: 'gitSense',
+    repo: 'git-retrace',
   });
 });
 
 test('parseRemoteUrl: https URL without .git suffix', () => {
-  assert.deepEqual(parseRemoteUrl('https://github.com/rajjadon/gitSense'), {
+  assert.deepEqual(parseRemoteUrl('https://github.com/rajjadon/git-retrace'), {
     host: 'github.com',
     owner: 'rajjadon',
-    repo: 'gitSense',
+    repo: 'git-retrace',
   });
 });
 
 test('parseRemoteUrl: scp-style SSH shorthand', () => {
-  assert.deepEqual(parseRemoteUrl('git@github.com:rajjadon/gitSense.git'), {
+  assert.deepEqual(parseRemoteUrl('git@github.com:rajjadon/git-retrace.git'), {
     host: 'github.com',
     owner: 'rajjadon',
-    repo: 'gitSense',
+    repo: 'git-retrace',
   });
 });
 

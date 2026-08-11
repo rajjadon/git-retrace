@@ -13,7 +13,7 @@ export function handleOpenGraphCommand(provider: CommitGraphViewProvider): vscod
     // rather than refusing to open.
     const filePath = resolveRepoContextPath();
     if (!filePath) {
-      void vscode.window.showInformationMessage('GitSense: open a folder or file in a git repo to see its commit graph.');
+      void vscode.window.showInformationMessage('Git Retrace: open a folder or file in a git repo to see its commit graph.');
       return;
     }
     await provider.show(filePath, readMaxGraphItems());

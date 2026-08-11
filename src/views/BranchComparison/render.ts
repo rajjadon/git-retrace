@@ -113,7 +113,7 @@ ${renderFileSections(files, diff)}
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource} 'nonce-${opts.nonce}'; img-src https: ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
 ${styles}
-<style nonce="${opts.nonce}">:root { --gitsense-editor-font: ${escapeHtml(opts.editorFontFamily)}; }</style>
+<style nonce="${opts.nonce}">:root { --gitretrace-editor-font: ${escapeHtml(opts.editorFontFamily)}; }</style>
 <title>Compare ${escapeHtml(base)}...${escapeHtml(compare)}</title>
 </head>
 <body>

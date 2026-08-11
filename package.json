@@ -1,9 +1,9 @@
 {
-  "name": "gitsense",
-  "displayName": "GitSense",
-  "description": "Makes sense of your repo. Free, local-first git blame, history, and insight \u2014 directly in the editor.",
+  "name": "git-retrace",
+  "displayName": "Git Retrace — blame, history & graph",
+  "description": "Retrace any line to the commit that wrote it. Free, local-first git blame, history, commit graph and branch comparison — no account, no telemetry.",
   "version": "0.1.0",
-  "publisher": "gitsense-dev",
+  "publisher": "rajjadon",
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0",
@@ -20,41 +20,41 @@
   "contributes": {
     "commands": [
       {
-        "command": "gitsense.toggleBlame",
-        "title": "GitSense: Toggle Inline Blame",
+        "command": "gitRetrace.toggleBlame",
+        "title": "Git Retrace: Toggle Inline Blame",
         "icon": "$(eye)"
       },
       {
-        "command": "gitsense.showFileHistory",
-        "title": "GitSense: Show File History",
+        "command": "gitRetrace.showFileHistory",
+        "title": "Git Retrace: Show File History",
         "icon": "$(history)"
       },
       {
-        "command": "gitsense.copySha",
-        "title": "GitSense: Copy Commit SHA",
+        "command": "gitRetrace.copySha",
+        "title": "Git Retrace: Copy Commit SHA",
         "icon": "$(copy)"
       },
       {
-        "command": "gitsense.showCommit",
-        "title": "GitSense: Show Commit Details",
+        "command": "gitRetrace.showCommit",
+        "title": "Git Retrace: Show Commit Details",
         "icon": "$(git-commit)"
       },
       {
-        "command": "gitsense.openGraph",
-        "title": "GitSense: Open Commit Graph",
+        "command": "gitRetrace.openGraph",
+        "title": "Git Retrace: Open Commit Graph",
         "icon": "$(type-hierarchy)"
       },
       {
-        "command": "gitsense.compareBranches",
-        "title": "GitSense: Compare Branches",
+        "command": "gitRetrace.compareBranches",
+        "title": "Git Retrace: Compare Branches",
         "icon": "$(git-compare)"
       }
     ],
     "viewsContainers": {
       "panel": [
         {
-          "id": "gitsense",
-          "title": "GitSense",
+          "id": "gitRetrace",
+          "title": "Git Retrace",
           "icon": "media/panel-icon.svg"
         }
       ]
@@ -62,25 +62,25 @@
     "views": {
       "explorer": [
         {
-          "id": "gitsense.fileHistory",
+          "id": "gitRetrace.fileHistory",
           "name": "File History",
-          "when": "gitsense.fileHistory.hasContent"
+          "when": "gitRetrace.fileHistory.hasContent"
         }
       ],
-      "gitsense": [
+      "gitRetrace": [
         {
           "type": "webview",
-          "id": "gitsense.commitGraph",
+          "id": "gitRetrace.commitGraph",
           "name": "Commit Graph"
         },
         {
           "type": "webview",
-          "id": "gitsense.commitDetails",
+          "id": "gitRetrace.commitDetails",
           "name": "Commit Details"
         },
         {
           "type": "webview",
-          "id": "gitsense.branchComparison",
+          "id": "gitRetrace.branchComparison",
           "name": "Branch Comparison"
         }
       ]
@@ -88,108 +88,108 @@
     "menus": {
       "view/item/context": [
         {
-          "command": "gitsense.copySha",
-          "when": "view == gitsense.fileHistory && viewItem == gitsense.commit"
+          "command": "gitRetrace.copySha",
+          "when": "view == gitRetrace.fileHistory && viewItem == gitRetrace.commit"
         }
       ],
       "view/title": [
         {
-          "command": "gitsense.compareBranches",
-          "when": "view == gitsense.commitGraph",
+          "command": "gitRetrace.compareBranches",
+          "when": "view == gitRetrace.commitGraph",
           "group": "navigation@1"
         },
         {
-          "command": "gitsense.showFileHistory",
-          "when": "view == gitsense.commitGraph",
+          "command": "gitRetrace.showFileHistory",
+          "when": "view == gitRetrace.commitGraph",
           "group": "navigation@2"
         },
         {
-          "command": "gitsense.toggleBlame",
-          "when": "view == gitsense.commitGraph",
+          "command": "gitRetrace.toggleBlame",
+          "when": "view == gitRetrace.commitGraph",
           "group": "navigation@3"
         },
         {
-          "command": "gitsense.openGraph",
-          "when": "view == gitsense.commitGraph",
+          "command": "gitRetrace.openGraph",
+          "when": "view == gitRetrace.commitGraph",
           "group": "navigation@4"
         },
         {
-          "command": "gitsense.compareBranches",
-          "when": "view == gitsense.branchComparison",
+          "command": "gitRetrace.compareBranches",
+          "when": "view == gitRetrace.branchComparison",
           "group": "navigation@1"
         },
         {
-          "command": "gitsense.toggleBlame",
-          "when": "view == gitsense.branchComparison",
+          "command": "gitRetrace.toggleBlame",
+          "when": "view == gitRetrace.branchComparison",
           "group": "navigation@2"
         },
         {
-          "command": "gitsense.showFileHistory",
-          "when": "view == gitsense.commitDetails",
+          "command": "gitRetrace.showFileHistory",
+          "when": "view == gitRetrace.commitDetails",
           "group": "navigation@1"
         },
         {
-          "command": "gitsense.toggleBlame",
-          "when": "view == gitsense.commitDetails",
+          "command": "gitRetrace.toggleBlame",
+          "when": "view == gitRetrace.commitDetails",
           "group": "navigation@2"
         }
       ],
       "commandPalette": [
         {
-          "command": "gitsense.copySha",
+          "command": "gitRetrace.copySha",
           "when": "false"
         }
       ]
     },
     "configuration": {
-      "title": "GitSense",
+      "title": "Git Retrace",
       "properties": {
-        "gitsense.blame.enabled": {
+        "gitRetrace.blame.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Show inline blame decorations, hover cards, and the status bar item."
         },
-        "gitsense.blame.format": {
+        "gitRetrace.blame.format": {
           "type": "string",
           "default": "{author}, {age}",
           "description": "Template for the inline blame text. Tokens: {author} {age} {date} {message} {sha}"
         },
-        "gitsense.blame.highlightCurrentLine": {
+        "gitRetrace.blame.highlightCurrentLine": {
           "type": "boolean",
           "default": true,
           "description": "Highlight the current line's blame decoration."
         },
-        "gitsense.blame.ignoreWhitespace": {
+        "gitRetrace.blame.ignoreWhitespace": {
           "type": "boolean",
           "default": true,
           "description": "Pass -w to git blame to ignore whitespace-only changes."
         },
-        "gitsense.maxBlameFileSize": {
+        "gitRetrace.maxBlameFileSize": {
           "type": "number",
           "default": 1048576,
           "description": "Skip blame for files larger than this size, in bytes."
         },
-        "gitsense.maxHistoryItems": {
+        "gitRetrace.maxHistoryItems": {
           "type": "number",
           "default": 200,
           "description": "Max commits loaded per file history."
         },
-        "gitsense.maxGraphItems": {
+        "gitRetrace.maxGraphItems": {
           "type": "number",
           "default": 200,
           "description": "Max commits loaded in the commit graph."
         },
-        "gitsense.issueLinking.enabled": {
+        "gitRetrace.issueLinking.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Auto-link issue/PR references in commit messages (e.g. #123) in the blame hover and commit details."
         },
-        "gitsense.issueLinking.pattern": {
+        "gitRetrace.issueLinking.pattern": {
           "type": "string",
           "default": "#(\\d+)",
           "description": "Regex matching issue/PR references in commit messages. The first capture group (or the whole match, if none) fills {issue} in the URL template."
         },
-        "gitsense.issueLinking.urlTemplate": {
+        "gitRetrace.issueLinking.urlTemplate": {
           "type": "string",
           "default": "",
           "description": "'{issue}'-templated URL for issue links, e.g. https://github.com/owner/repo/issues/{issue}. Leave empty to auto-detect from the repo's git remote (GitHub or GitLab)."
@@ -236,17 +236,17 @@
   "preview": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/rajjadon/gitSense.git"
+    "url": "https://github.com/rajjadon/git-retrace.git"
   },
   "bugs": {
-    "url": "https://github.com/rajjadon/gitSense/issues"
+    "url": "https://github.com/rajjadon/git-retrace/issues"
   },
-  "homepage": "https://github.com/rajjadon/gitSense#readme",
+  "homepage": "https://github.com/rajjadon/git-retrace#readme",
   "keywords": [
     "git",
     "blame",
-    "commit graph",
     "git history",
+    "commit graph",
     "gitlens alternative"
   ]
 }
