@@ -7,10 +7,10 @@
  */
 
 :root {
-  --col-refs: 132px;
+  --col-refs: 150px;
   --col-author: 96px;
   --col-changes: 58px;
-  --col-date: 88px;
+  --col-date: 100px;
   --col-sha: 66px;
   --col-message-min: 160px;
   --row-min-width: calc(

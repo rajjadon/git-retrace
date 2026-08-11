@@ -56,20 +56,20 @@ test('renderGraphHtml: a zero-file (merge) commit explains the empty stat instea
   assert.match(html, /title="No per-file stat \(merge commit\)"/);
 });
 
-test('renderGraphHtml: distinguishes the current branch, a local branch, a remote branch, and a tag', () => {
+test('renderGraphHtml: gives the current branch, a local branch, a remote branch and a tag distinct styling', () => {
+  // One ref per commit: the visible-label cap is 1, so stacking them on a single commit would hide
+  // every type but the highest-ranked and prove nothing about the others.
   const commits = [
-    commit('A', [], {
-      refs: [
-        { name: 'master', type: 'branch', isHead: true },
-        { name: 'origin/master', type: 'remoteBranch' },
-      ],
-    }),
-    commit('B', [], { refs: [{ name: 'v1.0.0', type: 'tag' }] }),
+    commit('A', [], { refs: [{ name: 'master', type: 'branch', isHead: true }] }),
+    commit('B', [], { refs: [{ name: 'feature/x', type: 'branch' }] }),
+    commit('C', [], { refs: [{ name: 'origin/master', type: 'remoteBranch' }] }),
+    commit('D', [], { refs: [{ name: 'v1.0.0', type: 'tag' }] }),
   ];
   const html = renderGraphHtml({ nodes: layoutGraph(commits), now }, opts);
   assert.match(html, /class="ref ref-branch ref-head" title="master \(current\)"/);
-  assert.match(html, /class="ref ref-remoteBranch"/);
-  assert.match(html, /class="ref ref-tag"/);
+  assert.match(html, /class="ref ref-branch" title="feature\/x"/);
+  assert.match(html, /class="ref ref-remoteBranch" title="origin\/master"/);
+  assert.match(html, /class="ref ref-tag" title="v1\.0\.0"/);
 });
 
 test('renderGraphHtml: the checked-out branch outranks a remote ref when the label cap is hit', () => {
@@ -82,7 +82,7 @@ test('renderGraphHtml: the checked-out branch outranks a remote ref when the lab
   ];
   const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [], { refs })]), now }, opts);
   assert.match(html, /ref-head" title="master \(current\)"/);
-  assert.match(html, /class="ref ref-more" title="origin\/master">\+1</);
+  assert.match(html, /class="ref ref-more" title="v9, origin\/master">\+2</);
   assert.ok(!html.includes('class="ref ref-remoteBranch"'));
 });
 
@@ -91,8 +91,8 @@ test('renderGraphHtml: caps visible ref labels, folding the rest into a "+N" lab
   const nodes = layoutGraph([commit('A', [], { refs })]);
   const html = renderGraphHtml({ nodes, now }, opts);
   const labelCount = (html.match(/class="ref ref-/g) ?? []).length;
-  assert.equal(labelCount, 3); // 2 visible + one "+N" overflow label
-  assert.match(html, /class="ref ref-more" title="v1\.0, v1\.1">\+2</);
+  assert.equal(labelCount, 2); // 1 visible + one "+N" overflow label
+  assert.match(html, /class="ref ref-more" title="develop, v1\.0, v1\.1">\+3</);
 });
 
 test('renderGraphHtml: draws an avatar node per commit, with curves for lane-changing edges', () => {

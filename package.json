@@ -208,7 +208,8 @@
     "icon": "rsvg-convert -w 256 -h 256 media/icon.svg -o media/icon.png",
     "package": "vsce package",
     "package:pre": "vsce package --pre-release",
-    "publish:pre": "vsce publish --pre-release"
+    "publish:pre": "vsce publish --pre-release",
+    "shots": "tsx scripts/shoot-screenshots.ts"
   },
   "dependencies": {
     "date-fns": "^4.1.0",

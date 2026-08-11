@@ -35,7 +35,9 @@ export interface GraphData {
 const ROW_HEIGHT = 24;
 const LANE_WIDTH = 18;
 const AVATAR_RADIUS = 6;
-const MAX_VISIBLE_REFS = 2;
+// One label, not two. At the panel's real width two labels plus the overflow badge shared ~132px
+// and both truncated to noise ("m…", "origi…"). The `+N` badge's tooltip still names the rest.
+const MAX_VISIBLE_REFS = 1;
 
 // VS Code's own categorical palette (Settings UI, extension charts) — theme-aware for free,
 // unlike a hardcoded hex list that could clash on a light theme or a high-contrast theme.

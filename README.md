@@ -47,7 +47,9 @@ Requires **VS Code 1.85+** and `git` on your `PATH`. Works in Cursor and other V
 
 ### Inline blame, where you're already looking
 
+<!-- Screenshot pending. Delete this comment wrapper once media/screenshots/inline-blame.png is committed and pushed (see media/screenshots/CAPTURE.md).
 <img src="https://raw.githubusercontent.com/rajjadon/git-retrace/master/media/screenshots/inline-blame.png" alt="Inline blame decoration at the end of the current line, with the hover card open showing author, message and dates" />
+-->
 
 The current line's author and age, as a muted end-of-line decoration. It updates when you change lines — not on every cursor move — and the hover card adds the full message, relative *and* absolute dates, that commit's diff stat for this file, and the short SHA. Customise the text with `gitRetrace.blame.format`, or turn it off entirely.
 
