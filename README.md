@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/rajjadon/git-retrace/master/media/icon.png" width="112" alt="" />
+<img src="media/icon.png" width="112" alt="" />
 
 # Git Retrace
 
@@ -48,20 +48,20 @@ Requires **VS Code 1.85+** and `git` on your `PATH`. Works in Cursor and other V
 ### Inline blame, where you're already looking
 
 <!-- Screenshot pending. Delete this comment wrapper once media/screenshots/inline-blame.png is committed and pushed (see media/screenshots/CAPTURE.md).
-<img src="https://raw.githubusercontent.com/rajjadon/git-retrace/master/media/screenshots/inline-blame.png" alt="Inline blame decoration at the end of the current line, with the hover card open showing author, message and dates" />
+<img src="media/screenshots/inline-blame.png" alt="Inline blame decoration at the end of the current line, with the hover card open showing author, message and dates" />
 -->
 
 The current line's author and age, as a muted end-of-line decoration. It updates when you change lines — not on every cursor move — and the hover card adds the full message, relative *and* absolute dates, that commit's diff stat for this file, and the short SHA. Customise the text with `gitRetrace.blame.format`, or turn it off entirely.
 
 ### An interactive commit graph, in the panel
 
-<img src="https://raw.githubusercontent.com/rajjadon/git-retrace/master/media/screenshots/commit-graph.png" alt="The Git Retrace panel showing the commit graph with branch labels, a working-changes row, and commit details beside it" />
+<img src="media/screenshots/commit-graph.png" alt="The Git Retrace panel showing the commit graph with branch labels, a working-changes row, and commit details beside it" />
 
 A repo-wide, branch-and-merge-aware graph — not a flat log. Branch, tag and remote-tracking labels are each styled distinctly, uncommitted work is pinned at the top as a **Working Changes** row, and the toolbar lets you scope to one branch, filter by message/author/SHA as you type, and refresh. Arrow keys move the selection; Enter opens the commit.
 
 ### Commit details you can act on
 
-<img src="https://raw.githubusercontent.com/rajjadon/git-retrace/master/media/screenshots/commit-details.png" alt="Commit details showing the action bar and a per-file collapsible diff with old and new line numbers in a gutter" />
+<img src="media/screenshots/commit-details.png" alt="Commit details showing the action bar and a per-file collapsible diff with old and new line numbers in a gutter" />
 
 Each changed file is its own collapsible section holding only that file's hunks, with a filter box for large commits. Diffs show **old and new line numbers in a gutter** and tint changed lines, so you can see *which* line moved — and line numbers stay out of your text selection, so copying a diff gives you just the code.
 
@@ -69,7 +69,7 @@ Each changed file is its own collapsible section holding only that file's hunks,
 
 ### Branch comparison without modal prompts
 
-<img src="https://raw.githubusercontent.com/rajjadon/git-retrace/master/media/screenshots/branch-comparison.png" alt="Branch comparison showing two ref pickers with a swap button and Ahead, Behind and All Files tabs with counts" />
+<img src="media/screenshots/branch-comparison.png" alt="Branch comparison showing two ref pickers with a swap button and Ahead, Behind and All Files tabs with counts" />
 
 Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with counts. It opens on your current branch versus its upstream, so it's useful immediately — retarget either side in place. Diffs are taken against the merge-base, matching what a GitHub or GitLab pull request shows you.
 
