@@ -2,9 +2,9 @@
 
 <img src="media/icon.png" width="112" alt="" />
 
-# Git Retrace
+# GitLore
 
-**Retrace any line to the commit that wrote it.**
+**The story behind every line.**
 
 Free, local-first git insight inside VS Code — blame, history, an interactive commit graph,
 and branch comparison. No account, no paywall, no telemetry, no backend.
@@ -15,22 +15,22 @@ and branch comparison. No account, no paywall, no telemetry, no backend.
 
 ## What is this?
 
-Open any file in any git repo and Git Retrace answers the question you actually have: **who wrote this line, when, why, and what else changed with it.**
+Open any file in any git repo and GitLore answers the question you actually have: **who wrote this line, when, why, and what else changed with it.**
 
 It does that without leaving your editor, without signing in, and without sending your code anywhere. Everything runs against the `git` binary already on your machine.
 
-If you've used GitLens, Git Retrace covers the same core ground — inline blame, a commit graph, commit details, branch comparison — with every feature free and a deliberately smaller surface area. See [How it compares](#how-it-compares).
+If you've used GitLens, GitLore covers the same core ground — inline blame, a commit graph, commit details, branch comparison — with every feature free and a deliberately smaller surface area. See [How it compares](#how-it-compares).
 
 > **Status: alpha.** This is a pre-release. The features below work and are covered by tests, but expect rough edges and breaking changes before `1.0`. Bug reports are very welcome.
 
 ## Install
 
-**From the Marketplace** — search *Git Retrace* in the Extensions view (`⇧⌘X` / `Ctrl+Shift+X`). Because this is a pre-release, click **Switch to Pre-Release Version** on the extension page.
+**From the Marketplace** — search *GitLore* in the Extensions view (`⇧⌘X` / `Ctrl+Shift+X`). Because this is a pre-release, click **Switch to Pre-Release Version** on the extension page.
 
 **From a `.vsix`** — grab one from [Releases](https://github.com/rajjadon/git-retrace/releases), then:
 
 ```bash
-code --install-extension git-retrace-0.1.0.vsix
+code --install-extension gitlore-0.1.0.vsix
 ```
 
 Requires **VS Code 1.85+** and `git` on your `PATH`. Works in Cursor and other VS Code-based editors.
@@ -39,7 +39,7 @@ Requires **VS Code 1.85+** and `git` on your `PATH`. Works in Cursor and other V
 
 1. **Open a file in a git repo.** The current line's author and age appear at the end of the line, and in the status bar.
 2. **Hover that line** for the full commit message, dates, and the diff stat.
-3. **Open the panel** — `⌘J` / `Ctrl+J`, then pick the **Git Retrace** tab (next to Terminal and Output). The commit graph loads itself.
+3. **Open the panel** — `⌘J` / `Ctrl+J`, then pick the **GitLore** tab (next to Terminal and Output). The commit graph loads itself.
 4. **Click any commit row.** Its details load in the pane beside the graph — every changed file, collapsible, with a real diff gutter.
 5. **Everything else is a button** in each view's title bar. You never need the command palette.
 
@@ -49,11 +49,11 @@ Requires **VS Code 1.85+** and `git` on your `PATH`. Works in Cursor and other V
 
 <img src="media/screenshots/inline-blame.png" width="470" alt="Inline blame decoration at the end of the current line, with the hover card open showing author, message and dates" />
 
-The current line's author and age, as a muted end-of-line decoration. It updates when you change lines — not on every cursor move — and the hover card adds the full message, relative *and* absolute dates, that commit's diff stat for this file, and the short SHA. Customise the text with `gitRetrace.blame.format`, or turn it off entirely.
+The current line's author and age, as a muted end-of-line decoration. It updates when you change lines — not on every cursor move — and the hover card adds the full message, relative *and* absolute dates, that commit's diff stat for this file, and the short SHA. Customise the text with `gitLore.blame.format`, or turn it off entirely.
 
 ### An interactive commit graph, in the panel
 
-<img src="media/screenshots/commit-graph.png" alt="The Git Retrace panel showing the commit graph with branch labels, a working-changes row, and commit details beside it" />
+<img src="media/screenshots/commit-graph.png" alt="The GitLore panel showing the commit graph with branch labels, a working-changes row, and commit details beside it" />
 
 A repo-wide, branch-and-merge-aware graph — not a flat log. Branch, tag and remote-tracking labels are each styled distinctly, uncommitted work is pinned at the top as a **Working Changes** row, and the toolbar lets you scope to one branch, filter by message/author/SHA as you type, and refresh. Arrow keys move the selection; Enter opens the commit.
 
@@ -78,47 +78,47 @@ Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with
 
 ## Commands
 
-Every command is also a title-bar button in the Git Retrace panel.
+Every command is also a title-bar button in the GitLore panel.
 
 | Command | What it does |
 |---|---|
-| `Git Retrace: Open Commit Graph` | Reveal the panel and load the repo's graph |
-| `Git Retrace: Show Commit Details` | Load a commit into the details pane |
-| `Git Retrace: Compare Branches` | Compare two refs, ahead/behind/files |
-| `Git Retrace: Show File History` | List commits touching the current file |
-| `Git Retrace: Toggle Inline Blame` | Turn the end-of-line decoration on or off |
-| `Git Retrace: Copy Commit SHA` | Copy a commit's full SHA (from a commit's context menu) |
+| `GitLore: Open Commit Graph` | Reveal the panel and load the repo's graph |
+| `GitLore: Show Commit Details` | Load a commit into the details pane |
+| `GitLore: Compare Branches` | Compare two refs, ahead/behind/files |
+| `GitLore: Show File History` | List commits touching the current file |
+| `GitLore: Toggle Inline Blame` | Turn the end-of-line decoration on or off |
+| `GitLore: Copy Commit SHA` | Copy a commit's full SHA (from a commit's context menu) |
 
 ## Settings
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `gitRetrace.blame.enabled` | boolean | `true` | Show inline blame decorations, hover cards, and the status bar item. |
-| `gitRetrace.blame.format` | string | `"{author}, {age}"` | Template for the inline blame text. Tokens: `{author} {age} {date} {message} {sha}` |
-| `gitRetrace.blame.highlightCurrentLine` | boolean | `true` | Highlight the current line's blame decoration. |
-| `gitRetrace.blame.ignoreWhitespace` | boolean | `true` | Pass `-w` to git blame to ignore whitespace-only changes. |
-| `gitRetrace.maxBlameFileSize` | number | `1048576` | Skip blame for files larger than this size, in bytes. |
-| `gitRetrace.maxHistoryItems` | number | `200` | Max commits loaded per file history. |
-| `gitRetrace.maxGraphItems` | number | `200` | Max commits loaded in the commit graph. |
-| `gitRetrace.issueLinking.enabled` | boolean | `true` | Auto-link issue/PR references in commit messages. |
-| `gitRetrace.issueLinking.pattern` | string | `"#(\\d+)"` | Regex matching issue references. The first capture group (or the whole match) fills `{issue}` in the URL template. |
-| `gitRetrace.issueLinking.urlTemplate` | string | `""` | `{issue}`-templated issue URL. Empty = auto-detect from the repo's GitHub/GitLab remote. |
+| `gitLore.blame.enabled` | boolean | `true` | Show inline blame decorations, hover cards, and the status bar item. |
+| `gitLore.blame.format` | string | `"{author}, {age}"` | Template for the inline blame text. Tokens: `{author} {age} {date} {message} {sha}` |
+| `gitLore.blame.highlightCurrentLine` | boolean | `true` | Highlight the current line's blame decoration. |
+| `gitLore.blame.ignoreWhitespace` | boolean | `true` | Pass `-w` to git blame to ignore whitespace-only changes. |
+| `gitLore.maxBlameFileSize` | number | `1048576` | Skip blame for files larger than this size, in bytes. |
+| `gitLore.maxHistoryItems` | number | `200` | Max commits loaded per file history. |
+| `gitLore.maxGraphItems` | number | `200` | Max commits loaded in the commit graph. |
+| `gitLore.issueLinking.enabled` | boolean | `true` | Auto-link issue/PR references in commit messages. |
+| `gitLore.issueLinking.pattern` | string | `"#(\\d+)"` | Regex matching issue references. The first capture group (or the whole match) fills `{issue}` in the URL template. |
+| `gitLore.issueLinking.urlTemplate` | string | `""` | `{issue}`-templated issue URL. Empty = auto-detect from the repo's GitHub/GitLab remote. |
 
 ## Privacy
 
-Git Retrace runs entirely locally. Your git data never leaves your machine.
+GitLore runs entirely locally. Your git data never leaves your machine.
 
 The one network request it makes on its own: author avatars from `gravatar.com`, keyed by an MD5 hash of the commit email — that's Gravatar's own lookup spec, not a security-relevant use of the hash.
 
-Two things open your browser, and only when you click them: **Open on GitHub/GitLab/Bitbucket**, and issue links. Both URLs are built locally from your `origin` remote; Git Retrace doesn't contact the host to construct them.
+Two things open your browser, and only when you click them: **Open on GitHub/GitLab/Bitbucket**, and issue links. Both URLs are built locally from your `origin` remote; GitLore doesn't contact the host to construct them.
 
 No telemetry. No analytics. No account.
 
 ## How it compares
 
-Git Retrace is not trying to out-feature GitLens — it's trying to be the free, fast, small part you actually use every day. Honest accounting for this alpha:
+GitLore is not trying to out-feature GitLens — it's trying to be the free, fast, small part you actually use every day. Honest accounting for this alpha:
 
-**What Git Retrace does** — inline blame and hover, status bar, file history, commit graph, commit details with per-file diffs, branch comparison, issue linking. All free, forever.
+**What GitLore does** — inline blame and hover, status bar, file history, commit graph, commit details with per-file diffs, branch comparison, issue linking. All free, forever.
 
 **What it deliberately doesn't** — staging, stashing or committing (that's VS Code's own Source Control view, and the graph links you there), and anything behind a sign-in.
 
@@ -133,7 +133,7 @@ npm run lint      # eslint + tsc --noEmit
 npm run test      # unit + integration
 ```
 
-Press `F5` to launch the Extension Development Host with Git Retrace loaded.
+Press `F5` to launch the Extension Development Host with GitLore loaded.
 
 - `npm run test:unit` runs just the fast, VS Code-free tests over `src/core` and the renderers.
 - `npm run package` builds a `.vsix`; `npm run package:pre` builds a pre-release one.

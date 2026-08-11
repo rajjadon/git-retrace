@@ -1,8 +1,8 @@
 # Changelog
 
-All notable changes to Git Retrace are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+All notable changes to GitLore are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The VS Code Marketplace shows this file on Git Retrace's extension page, so entries describe what changed for someone *using* Git Retrace. Why a change was made the way it was belongs in the commit message and in code comments, next to the code it explains.
+The VS Code Marketplace shows this file on GitLore's extension page, so entries describe what changed for someone *using* GitLore. Why a change was made the way it was belongs in the commit message and in code comments, next to the code it explains.
 
 ## [Unreleased]
 
@@ -18,16 +18,16 @@ Install it by clicking **Switch to Pre-Release Version** on the extension page. 
 
 **Inline blame**
 
-- The current line's author and age, shown as a muted, right-aligned editor decoration. Updates when you move to a different line, not on every keystroke. Toggle with **Git Retrace: Toggle Inline Blame**.
+- The current line's author and age, shown as a muted, right-aligned editor decoration. Updates when you move to a different line, not on every keystroke. Toggle with **GitLore: Toggle Inline Blame**.
 - Hover any line for a card with the author's avatar, the full commit message, relative and absolute dates, that commit's diff stat for the file, and the short SHA.
 - The same author and age in the status bar. Click it to open the commit.
-- Blame is skipped on files larger than `gitRetrace.maxBlameFileSize`, and stays silent on untracked files, unsaved files, and folders that aren't git repos.
+- Blame is skipped on files larger than `gitLore.maxBlameFileSize`, and stays silent on untracked files, unsaved files, and folders that aren't git repos.
 
 **File history**
 
-- **Git Retrace: Show File History** lists every commit that touched the current file, newest first, in the Explorer — following the active editor as you switch files. Click an entry to open its details; right-click to copy its SHA. Renames are followed.
+- **GitLore: Show File History** lists every commit that touched the current file, newest first, in the Explorer — following the active editor as you switch files. Click an entry to open its details; right-click to copy its SHA. Renames are followed.
 
-**Commit graph** — in a "Git Retrace" tab in the bottom panel
+**Commit graph** — in a "GitLore" tab in the bottom panel
 
 - A repo-wide, branch-and-merge-aware graph of every commit, with curved merge lines, per-lane colors that follow your theme, and each author's avatar at their commit.
 - Seven columns: Branch/Tag, Graph, Commit Message, Author, Changes, Commit Date, SHA. The header stays put while you scroll, and narrow panels scroll sideways instead of clipping.
@@ -51,20 +51,20 @@ Install it by clicking **Switch to Pre-Release Version** on the extension page. 
 
 **Issue and PR linking**
 
-- References like `#123` in commit messages become links, in both the blame hover and commit details. Auto-detected from your GitHub or GitLab remote, or point it at any tracker with `gitRetrace.issueLinking.pattern` and `.urlTemplate`.
+- References like `#123` in commit messages become links, in both the blame hover and commit details. Auto-detected from your GitHub or GitLab remote, or point it at any tracker with `gitLore.issueLinking.pattern` and `.urlTemplate`.
 
 **Throughout**
 
-- Every command is a button in a Git Retrace panel view's title bar, so nothing requires the command palette.
+- Every command is a button in a GitLore panel view's title bar, so nothing requires the command palette.
 - All four views are keyboard-navigable, take their colors from your theme in both light and dark, and honour `prefers-reduced-motion`.
 - Fully local and free. No account, no telemetry, no paid tier. The only network request is fetching author avatars from Gravatar; see the README's Privacy section.
 
 ### Known limitations
 
-- No AI features yet. Commit summaries and line explanations are planned, using your own model via VS Code's Language Model API — no Git Retrace account or API key.
+- No AI features yet. Commit summaries and line explanations are planned, using your own model via VS Code's Language Model API — no GitLore account or API key.
 - No staging, stashing or committing. That's VS Code's Source Control view — the Working Changes row links you there.
 - The graph doesn't refresh itself when the repo changes; use the toolbar's refresh button.
 - The changed-file list is flat, with no tree view of paths.
 - Commit details loads a whole commit's diff up front, so a very large commit takes a moment to open.
 - Toggling inline blame from the panel button gives no on/off indicator; the editor shows the result immediately.
-- File History appears in the Explorer, not in the Git Retrace panel.
+- File History appears in the Explorer, not in the GitLore panel.

@@ -2,7 +2,7 @@ import * as assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as vscode from 'vscode';
 import { MANIFEST_PATH, type FixtureManifest } from '../fixtures/build-fixture-repo';
-import type { GitRetraceTestApi } from '../../src/extension';
+import type { GitLoreTestApi } from '../../src/extension';
 import { COMMANDS } from '../../src/constants';
 import { EXTENSION_ID } from './extensionId';
 
@@ -19,11 +19,11 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void
 
 suite('File history', () => {
   let manifest: FixtureManifest;
-  let api: GitRetraceTestApi;
+  let api: GitLoreTestApi;
 
   suiteSetup(async () => {
     manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as FixtureManifest;
-    const ext = vscode.extensions.getExtension<GitRetraceTestApi>(EXTENSION_ID);
+    const ext = vscode.extensions.getExtension<GitLoreTestApi>(EXTENSION_ID);
     assert.ok(ext, 'extension not found');
     api = await ext.activate();
   });
@@ -54,7 +54,7 @@ suite('File history', () => {
 
 suite('Copy SHA command', () => {
   suiteSetup(async () => {
-    const ext = vscode.extensions.getExtension<GitRetraceTestApi>(EXTENSION_ID);
+    const ext = vscode.extensions.getExtension<GitLoreTestApi>(EXTENSION_ID);
     assert.ok(ext, 'extension not found');
     await ext.activate();
   });

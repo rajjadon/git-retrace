@@ -11,7 +11,7 @@ export function handleCompareBranchesCommand(git: GitService, provider: BranchCo
   return vscode.commands.registerCommand(COMMANDS.compareBranches, async (base?: string, compare?: string) => {
     const filePath = resolveRepoContextPath();
     if (!filePath) {
-      void vscode.window.showInformationMessage('Git Retrace: open a folder or file in a git repo to compare branches.');
+      void vscode.window.showInformationMessage('GitLore: open a folder or file in a git repo to compare branches.');
       return;
     }
 
@@ -25,7 +25,7 @@ export function handleCompareBranchesCommand(git: GitService, provider: BranchCo
     const [branches, currentBranch] = await Promise.all([git.getBranches(filePath), git.getCurrentBranch(filePath)]);
     const refs = pickDefaultRefs(branches, currentBranch);
     if (!refs) {
-      void vscode.window.showInformationMessage('Git Retrace: need at least two branches to compare.');
+      void vscode.window.showInformationMessage('GitLore: need at least two branches to compare.');
       return;
     }
     await provider.show(filePath, refs.base, refs.compare);

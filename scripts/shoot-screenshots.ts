@@ -90,7 +90,7 @@ function shoot(dir: string, name: string, width: number, height: number): void {
 }
 
 async function main(): Promise<void> {
-  const dir = mkdtempSync(join(tmpdir(), 'git-retrace-shots-'));
+  const dir = mkdtempSync(join(tmpdir(), 'gitlore-shots-'));
   const git = new GitService();
   const base = { nonce: 'shot', cspSource: '' };
   const editorFontFamily = 'Menlo';

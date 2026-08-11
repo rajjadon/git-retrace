@@ -2,27 +2,30 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseRemoteUrl } from '../../../../src/core/git/parsers';
 
+// Deliberately neutral fixtures. Using this project's own repo name here coupled the tests to it,
+// and two renames later the inputs and the expectations had drifted apart.
+
 test('parseRemoteUrl: https URL with .git suffix', () => {
-  assert.deepEqual(parseRemoteUrl('https://github.com/rajjadon/git-retrace.git'), {
+  assert.deepEqual(parseRemoteUrl('https://github.com/acme/widgets.git'), {
     host: 'github.com',
-    owner: 'rajjadon',
-    repo: 'git-retrace',
+    owner: 'acme',
+    repo: 'widgets',
   });
 });
 
 test('parseRemoteUrl: https URL without .git suffix', () => {
-  assert.deepEqual(parseRemoteUrl('https://github.com/rajjadon/git-retrace'), {
+  assert.deepEqual(parseRemoteUrl('https://github.com/acme/widgets'), {
     host: 'github.com',
-    owner: 'rajjadon',
-    repo: 'git-retrace',
+    owner: 'acme',
+    repo: 'widgets',
   });
 });
 
 test('parseRemoteUrl: scp-style SSH shorthand', () => {
-  assert.deepEqual(parseRemoteUrl('git@github.com:rajjadon/git-retrace.git'), {
+  assert.deepEqual(parseRemoteUrl('git@github.com:acme/widgets.git'), {
     host: 'github.com',
-    owner: 'rajjadon',
-    repo: 'git-retrace',
+    owner: 'acme',
+    repo: 'widgets',
   });
 });
 

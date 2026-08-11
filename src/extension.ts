@@ -18,7 +18,7 @@ import { CommitGraphViewProvider } from './views/CommitGraph/CommitGraphViewProv
 import { BranchComparisonViewProvider } from './views/BranchComparison/BranchComparisonViewProvider';
 
 /** Test-only introspection surface — accessed via `vscode.extensions.getExtension(id).exports` in integration tests. */
-export interface GitRetraceTestApi {
+export interface GitLoreTestApi {
   blameProvider: BlameDecorationProvider;
   fileHistoryProvider: FileHistoryProvider;
   statusBarProvider: StatusBarProvider;
@@ -28,7 +28,7 @@ export interface GitRetraceTestApi {
   getBranchComparisonHtml: () => string | undefined;
 }
 
-export function activate(ctx: vscode.ExtensionContext): GitRetraceTestApi {
+export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
   const output = vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
   ctx.subscriptions.push(output);
 
@@ -68,7 +68,7 @@ export function activate(ctx: vscode.ExtensionContext): GitRetraceTestApi {
     vscode.window.registerWebviewViewProvider(VIEWS.commitDetails, commitDetailsViewProvider),
     vscode.window.registerWebviewViewProvider(VIEWS.branchComparison, branchComparisonViewProvider),
   );
-  output.appendLine('Git Retrace activated.');
+  output.appendLine('GitLore activated.');
 
   return {
     blameProvider,

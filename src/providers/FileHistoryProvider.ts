@@ -55,7 +55,7 @@ export class FileHistoryProvider implements vscode.TreeDataProvider<Commit>, vsc
       `![](${avatarUrl}) **${escapeMarkdown(commit.author)}**\n\n${escapeMarkdown(commit.message)}\n\n${formatAge(date)} · ${formatAbsolute(date, 'yyyy-MM-dd HH:mm')} · \`${commit.shortSha}\``,
     );
     item.iconPath = new vscode.ThemeIcon('git-commit');
-    item.contextValue = 'gitRetrace.commit';
+    item.contextValue = 'gitLore.commit';
     item.command = {
       command: COMMANDS.showCommit,
       title: 'Show Commit Details',
@@ -83,7 +83,7 @@ export class FileHistoryProvider implements vscode.TreeDataProvider<Commit>, vsc
     } catch (err) {
       this.setCommits([], undefined);
       const message = err instanceof Error ? err.message : String(err);
-      void vscode.window.showErrorMessage(`Git Retrace: failed to load file history — ${message}`);
+      void vscode.window.showErrorMessage(`GitLore: failed to load file history — ${message}`);
     }
   }
 

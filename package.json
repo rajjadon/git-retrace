@@ -1,7 +1,7 @@
 {
-  "name": "git-retrace",
-  "displayName": "Git Retrace — blame, history & graph",
-  "description": "Retrace any line to the commit that wrote it. Free, local-first git blame, history, commit graph and branch comparison — no account, no telemetry.",
+  "name": "gitlore",
+  "displayName": "GitLore — git blame, history & commit graph",
+  "description": "The story behind every line. Free, local-first git blame, history, commit graph and branch comparison — no account, no telemetry.",
   "version": "0.1.0",
   "publisher": "RajpratapsinghJadon",
   "license": "MIT",
@@ -20,41 +20,41 @@
   "contributes": {
     "commands": [
       {
-        "command": "gitRetrace.toggleBlame",
-        "title": "Git Retrace: Toggle Inline Blame",
+        "command": "gitLore.toggleBlame",
+        "title": "GitLore: Toggle Inline Blame",
         "icon": "$(eye)"
       },
       {
-        "command": "gitRetrace.showFileHistory",
-        "title": "Git Retrace: Show File History",
+        "command": "gitLore.showFileHistory",
+        "title": "GitLore: Show File History",
         "icon": "$(history)"
       },
       {
-        "command": "gitRetrace.copySha",
-        "title": "Git Retrace: Copy Commit SHA",
+        "command": "gitLore.copySha",
+        "title": "GitLore: Copy Commit SHA",
         "icon": "$(copy)"
       },
       {
-        "command": "gitRetrace.showCommit",
-        "title": "Git Retrace: Show Commit Details",
+        "command": "gitLore.showCommit",
+        "title": "GitLore: Show Commit Details",
         "icon": "$(git-commit)"
       },
       {
-        "command": "gitRetrace.openGraph",
-        "title": "Git Retrace: Open Commit Graph",
+        "command": "gitLore.openGraph",
+        "title": "GitLore: Open Commit Graph",
         "icon": "$(type-hierarchy)"
       },
       {
-        "command": "gitRetrace.compareBranches",
-        "title": "Git Retrace: Compare Branches",
+        "command": "gitLore.compareBranches",
+        "title": "GitLore: Compare Branches",
         "icon": "$(git-compare)"
       }
     ],
     "viewsContainers": {
       "panel": [
         {
-          "id": "gitRetrace",
-          "title": "Git Retrace",
+          "id": "gitLore",
+          "title": "GitLore",
           "icon": "media/panel-icon.svg"
         }
       ]
@@ -62,25 +62,25 @@
     "views": {
       "explorer": [
         {
-          "id": "gitRetrace.fileHistory",
+          "id": "gitLore.fileHistory",
           "name": "File History",
-          "when": "gitRetrace.fileHistory.hasContent"
+          "when": "gitLore.fileHistory.hasContent"
         }
       ],
-      "gitRetrace": [
+      "gitLore": [
         {
           "type": "webview",
-          "id": "gitRetrace.commitGraph",
+          "id": "gitLore.commitGraph",
           "name": "Commit Graph"
         },
         {
           "type": "webview",
-          "id": "gitRetrace.commitDetails",
+          "id": "gitLore.commitDetails",
           "name": "Commit Details"
         },
         {
           "type": "webview",
-          "id": "gitRetrace.branchComparison",
+          "id": "gitLore.branchComparison",
           "name": "Branch Comparison"
         }
       ]
@@ -88,108 +88,108 @@
     "menus": {
       "view/item/context": [
         {
-          "command": "gitRetrace.copySha",
-          "when": "view == gitRetrace.fileHistory && viewItem == gitRetrace.commit"
+          "command": "gitLore.copySha",
+          "when": "view == gitLore.fileHistory && viewItem == gitLore.commit"
         }
       ],
       "view/title": [
         {
-          "command": "gitRetrace.compareBranches",
-          "when": "view == gitRetrace.commitGraph",
+          "command": "gitLore.compareBranches",
+          "when": "view == gitLore.commitGraph",
           "group": "navigation@1"
         },
         {
-          "command": "gitRetrace.showFileHistory",
-          "when": "view == gitRetrace.commitGraph",
+          "command": "gitLore.showFileHistory",
+          "when": "view == gitLore.commitGraph",
           "group": "navigation@2"
         },
         {
-          "command": "gitRetrace.toggleBlame",
-          "when": "view == gitRetrace.commitGraph",
+          "command": "gitLore.toggleBlame",
+          "when": "view == gitLore.commitGraph",
           "group": "navigation@3"
         },
         {
-          "command": "gitRetrace.openGraph",
-          "when": "view == gitRetrace.commitGraph",
+          "command": "gitLore.openGraph",
+          "when": "view == gitLore.commitGraph",
           "group": "navigation@4"
         },
         {
-          "command": "gitRetrace.compareBranches",
-          "when": "view == gitRetrace.branchComparison",
+          "command": "gitLore.compareBranches",
+          "when": "view == gitLore.branchComparison",
           "group": "navigation@1"
         },
         {
-          "command": "gitRetrace.toggleBlame",
-          "when": "view == gitRetrace.branchComparison",
+          "command": "gitLore.toggleBlame",
+          "when": "view == gitLore.branchComparison",
           "group": "navigation@2"
         },
         {
-          "command": "gitRetrace.showFileHistory",
-          "when": "view == gitRetrace.commitDetails",
+          "command": "gitLore.showFileHistory",
+          "when": "view == gitLore.commitDetails",
           "group": "navigation@1"
         },
         {
-          "command": "gitRetrace.toggleBlame",
-          "when": "view == gitRetrace.commitDetails",
+          "command": "gitLore.toggleBlame",
+          "when": "view == gitLore.commitDetails",
           "group": "navigation@2"
         }
       ],
       "commandPalette": [
         {
-          "command": "gitRetrace.copySha",
+          "command": "gitLore.copySha",
           "when": "false"
         }
       ]
     },
     "configuration": {
-      "title": "Git Retrace",
+      "title": "GitLore",
       "properties": {
-        "gitRetrace.blame.enabled": {
+        "gitLore.blame.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Show inline blame decorations, hover cards, and the status bar item."
         },
-        "gitRetrace.blame.format": {
+        "gitLore.blame.format": {
           "type": "string",
           "default": "{author}, {age}",
           "description": "Template for the inline blame text. Tokens: {author} {age} {date} {message} {sha}"
         },
-        "gitRetrace.blame.highlightCurrentLine": {
+        "gitLore.blame.highlightCurrentLine": {
           "type": "boolean",
           "default": true,
           "description": "Highlight the current line's blame decoration."
         },
-        "gitRetrace.blame.ignoreWhitespace": {
+        "gitLore.blame.ignoreWhitespace": {
           "type": "boolean",
           "default": true,
           "description": "Pass -w to git blame to ignore whitespace-only changes."
         },
-        "gitRetrace.maxBlameFileSize": {
+        "gitLore.maxBlameFileSize": {
           "type": "number",
           "default": 1048576,
           "description": "Skip blame for files larger than this size, in bytes."
         },
-        "gitRetrace.maxHistoryItems": {
+        "gitLore.maxHistoryItems": {
           "type": "number",
           "default": 200,
           "description": "Max commits loaded per file history."
         },
-        "gitRetrace.maxGraphItems": {
+        "gitLore.maxGraphItems": {
           "type": "number",
           "default": 200,
           "description": "Max commits loaded in the commit graph."
         },
-        "gitRetrace.issueLinking.enabled": {
+        "gitLore.issueLinking.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Auto-link issue/PR references in commit messages (e.g. #123) in the blame hover and commit details."
         },
-        "gitRetrace.issueLinking.pattern": {
+        "gitLore.issueLinking.pattern": {
           "type": "string",
           "default": "#(\\d+)",
           "description": "Regex matching issue/PR references in commit messages. The first capture group (or the whole match, if none) fills {issue} in the URL template."
         },
-        "gitRetrace.issueLinking.urlTemplate": {
+        "gitLore.issueLinking.urlTemplate": {
           "type": "string",
           "default": "",
           "description": "'{issue}'-templated URL for issue links, e.g. https://github.com/owner/repo/issues/{issue}. Leave empty to auto-detect from the repo's git remote (GitHub or GitLab)."

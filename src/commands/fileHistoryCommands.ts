@@ -34,10 +34,10 @@ export function handleCopyShaCommand(): vscode.Disposable {
   return vscode.commands.registerCommand(COMMANDS.copySha, async (arg?: string | Commit) => {
     const sha = resolveSha(arg);
     if (!sha) {
-      void vscode.window.showInformationMessage('Git Retrace: pick a commit first to copy its SHA.');
+      void vscode.window.showInformationMessage('GitLore: pick a commit first to copy its SHA.');
       return;
     }
     await vscode.env.clipboard.writeText(sha);
-    void vscode.window.showInformationMessage(`Git Retrace: copied ${sha.slice(0, 7)}`);
+    void vscode.window.showInformationMessage(`GitLore: copied ${sha.slice(0, 7)}`);
   });
 }

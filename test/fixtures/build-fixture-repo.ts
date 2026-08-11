@@ -18,7 +18,7 @@ export interface FixtureManifest {
 }
 
 /** Where runTests.ts writes the manifest so the suite running inside the Extension Development Host can read it back. */
-export const MANIFEST_PATH = join(tmpdir(), 'gitretrace-fixture-manifest.json');
+export const MANIFEST_PATH = join(tmpdir(), 'gitlore-fixture-manifest.json');
 
 function git(cwd: string, args: string[], env?: NodeJS.ProcessEnv): void {
   execFileSync('git', args, { cwd, env: { ...process.env, ...env }, stdio: 'pipe' });
@@ -42,7 +42,7 @@ function commitEnv(name: string, email: string, isoDate: string): NodeJS.Process
  * one on demand before the integration suite runs.
  */
 export function buildFixtureRepo(): FixtureManifest {
-  const repoRoot = mkdtempSync(join(tmpdir(), 'gitretrace-fixture-'));
+  const repoRoot = mkdtempSync(join(tmpdir(), 'gitlore-fixture-'));
   git(repoRoot, ['init', '-q', '-b', 'main']);
   git(repoRoot, ['config', 'user.name', 'Raj Jadon']);
   git(repoRoot, ['config', 'user.email', 'raj@example.com']);
@@ -85,7 +85,7 @@ export interface BranchFixtureManifest {
  * (like the commit graph) elsewhere must not see this extra branch/commit.
  */
 export function buildBranchFixtureRepo(): BranchFixtureManifest {
-  const repoRoot = mkdtempSync(join(tmpdir(), 'gitretrace-branch-fixture-'));
+  const repoRoot = mkdtempSync(join(tmpdir(), 'gitlore-branch-fixture-'));
   git(repoRoot, ['init', '-q', '-b', 'main']);
   git(repoRoot, ['config', 'user.name', 'Raj Jadon']);
   git(repoRoot, ['config', 'user.email', 'raj@example.com']);

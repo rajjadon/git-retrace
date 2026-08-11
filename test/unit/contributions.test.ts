@@ -43,7 +43,7 @@ test('contributes.commands: every COMMANDS entry that is user-invocable is decla
 
 test('contributes.commands: titles are namespaced so the command palette groups them', () => {
   for (const cmd of commands) {
-    assert.match(cmd.title, /^Git Retrace: /, `${cmd.command} has an un-namespaced title: ${cmd.title}`);
+    assert.match(cmd.title, /^GitLore: /, `${cmd.command} has an un-namespaced title: ${cmd.title}`);
   }
 });
 
@@ -77,7 +77,7 @@ test('view/title: each of the three panel views exposes at least one command', (
 
 test('commandPalette: copySha is hidden, because there is no commit selected there', () => {
   const hidden = (menus['commandPalette'] ?? []).filter((e) => e.when === 'false').map((e) => e.command);
-  assert.ok(hidden.includes(COMMANDS.copySha), 'gitRetrace.copySha must be hidden from the command palette');
+  assert.ok(hidden.includes(COMMANDS.copySha), 'gitLore.copySha must be hidden from the command palette');
 });
 
 test('view/item/context: entries name real commands and real views', () => {

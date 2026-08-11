@@ -2,7 +2,7 @@ import * as assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as vscode from 'vscode';
 import { MANIFEST_PATH, type FixtureManifest } from '../fixtures/build-fixture-repo';
-import type { GitRetraceTestApi } from '../../src/extension';
+import type { GitLoreTestApi } from '../../src/extension';
 import { EXTENSION_ID } from './extensionId';
 
 
@@ -20,11 +20,11 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void
 
 suite('Inline blame decoration', () => {
   let manifest: FixtureManifest;
-  let api: GitRetraceTestApi;
+  let api: GitLoreTestApi;
 
   suiteSetup(async () => {
     manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as FixtureManifest;
-    const ext = vscode.extensions.getExtension<GitRetraceTestApi>(EXTENSION_ID);
+    const ext = vscode.extensions.getExtension<GitLoreTestApi>(EXTENSION_ID);
     assert.ok(ext, 'extension not found');
     api = await ext.activate();
   });
@@ -49,8 +49,8 @@ suite('Inline blame decoration', () => {
     assert.equal(api.blameProvider.getRenderedLabel(doc.uri), undefined);
   });
 
-  test('respects gitRetrace.maxBlameFileSize by skipping oversized files', async () => {
-    const config = vscode.workspace.getConfiguration('gitRetrace');
+  test('respects gitLore.maxBlameFileSize by skipping oversized files', async () => {
+    const config = vscode.workspace.getConfiguration('gitLore');
     await config.update('maxBlameFileSize', 1, vscode.ConfigurationTarget.Global);
     try {
       const doc = await vscode.workspace.openTextDocument(manifest.trackedFile);

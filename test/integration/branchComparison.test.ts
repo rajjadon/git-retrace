@@ -1,7 +1,7 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import { buildBranchFixtureRepo } from '../fixtures/build-fixture-repo';
-import type { GitRetraceTestApi } from '../../src/extension';
+import type { GitLoreTestApi } from '../../src/extension';
 import { COMMANDS } from '../../src/constants';
 import { EXTENSION_ID } from './extensionId';
 
@@ -17,10 +17,10 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void
 }
 
 suite('Branch comparison webview', () => {
-  let api: GitRetraceTestApi;
+  let api: GitLoreTestApi;
 
   suiteSetup(async () => {
-    const ext = vscode.extensions.getExtension<GitRetraceTestApi>(EXTENSION_ID);
+    const ext = vscode.extensions.getExtension<GitLoreTestApi>(EXTENSION_ID);
     assert.ok(ext, 'extension not found');
     api = await ext.activate();
   });

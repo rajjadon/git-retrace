@@ -3,7 +3,7 @@
  * the inline diff. Both panels answer the same question ("what changed in this file?") and so must
  * look identical doing it — this file exists so the two can't drift apart.
  *
- * Type rule used throughout Git Retrace: anything git would accept as an argument — a path, a SHA,
+ * Type rule used throughout GitLore: anything git would accept as an argument — a path, a SHA,
  * a diff body, a line number — is set in the editor's font. UI chrome is set in the UI font.
  */
 
@@ -265,7 +265,7 @@ pre.diff {
   padding: 0.4rem 0;
   background-color: var(--vscode-textCodeBlock-background);
   border-radius: 3px;
-  font-family: var(--gitretrace-editor-font, var(--vscode-editor-font-family));
+  font-family: var(--gitlore-editor-font, var(--vscode-editor-font-family));
   font-size: var(--vscode-editor-font-size, 13px);
   line-height: 1.5;
 }

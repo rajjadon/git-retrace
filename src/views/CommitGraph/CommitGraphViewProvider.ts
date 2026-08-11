@@ -110,7 +110,7 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider {
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.view.webview.html = shellHtml(`<p>Git Retrace: failed to load the commit graph — ${escapeHtml(message)}</p>`);
+      this.view.webview.html = shellHtml(`<p>GitLore: failed to load the commit graph — ${escapeHtml(message)}</p>`);
     }
   }
 

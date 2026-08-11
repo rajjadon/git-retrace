@@ -1,21 +1,21 @@
 /** Single source of truth for command IDs, config keys, view IDs, and context keys. No magic strings elsewhere. */
 
-export const OUTPUT_CHANNEL_NAME = 'Git Retrace';
+export const OUTPUT_CHANNEL_NAME = 'GitLore';
 
 export const COMMANDS = {
-  toggleBlame: 'gitRetrace.toggleBlame',
-  showFileHistory: 'gitRetrace.showFileHistory',
-  showCommit: 'gitRetrace.showCommit',
-  copySha: 'gitRetrace.copySha',
-  openGraph: 'gitRetrace.openGraph',
-  compareBranches: 'gitRetrace.compareBranches',
+  toggleBlame: 'gitLore.toggleBlame',
+  showFileHistory: 'gitLore.showFileHistory',
+  showCommit: 'gitLore.showCommit',
+  copySha: 'gitLore.copySha',
+  openGraph: 'gitLore.openGraph',
+  compareBranches: 'gitLore.compareBranches',
   // Reserved for Phase 2 — not registered in package.json yet.
-  explainCommit: 'gitRetrace.explainCommit',
-  explainLine: 'gitRetrace.explainLine',
+  explainCommit: 'gitLore.explainCommit',
+  explainLine: 'gitLore.explainLine',
 } as const;
 
 export const CONFIG = {
-  section: 'gitRetrace',
+  section: 'gitLore',
   blameEnabled: 'blame.enabled',
   blameFormat: 'blame.format',
   blameHighlightCurrentLine: 'blame.highlightCurrentLine',
@@ -30,10 +30,10 @@ export const CONFIG = {
 } as const;
 
 export const VIEWS = {
-  fileHistory: 'gitRetrace.fileHistory',
-  commitDetails: 'gitRetrace.commitDetails',
-  commitGraph: 'gitRetrace.commitGraph',
-  branchComparison: 'gitRetrace.branchComparison',
+  fileHistory: 'gitLore.fileHistory',
+  commitDetails: 'gitLore.commitDetails',
+  commitGraph: 'gitLore.commitGraph',
+  branchComparison: 'gitLore.branchComparison',
 } as const;
 
 /**
@@ -50,12 +50,12 @@ export const MEDIA = {
   panelIcon: 'panel-icon.svg',
 } as const;
 
-/** URI schemes Git Retrace serves content for. Read-only — a document at a ref is immutable. */
+/** URI schemes GitLore serves content for. Read-only — a document at a ref is immutable. */
 export const SCHEMES = {
   /** One file's contents at one git ref, backing the native diff editor. */
-  gitContent: 'gitretrace-git',
+  gitContent: 'gitlore-git',
 } as const;
 
 export const CONTEXT_KEYS = {
-  fileHistoryHasContent: 'gitRetrace.fileHistory.hasContent',
+  fileHistoryHasContent: 'gitLore.fileHistory.hasContent',
 } as const;

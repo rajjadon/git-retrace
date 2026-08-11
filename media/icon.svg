@@ -1,5 +1,5 @@
 <!--
-  Git Retrace Marketplace icon. Source of truth; `media/icon.png` is rendered from this with
+  GitLore Marketplace icon. Source of truth; `media/icon.png` is rendered from this with
   `npm run icon` and is what package.json references (the Marketplace requires a raster icon).
 
   WHAT IT SAYS
@@ -9,7 +9,7 @@
   is camouflage rather than identity.
 
   COLOUR
-  Every colour inside the extension comes from the user's theme, so this is the only place Git Retrace
+  Every colour inside the extension comes from the user's theme, so this is the only place GitLore
   has a palette of its own.
     ink    #171B26  cool and deep, so one warm accent carries
     slate  #4A5568  the commits you are not asking about; recedes
@@ -26,7 +26,7 @@
       badge, and lands near the cream/terracotta cliché.
     - One single line out of the node: a ring on a straight shaft reads as a key. Two lines fixed it.
 -->
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Git Retrace">
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="GitLore">
   <rect width="128" height="128" rx="27" fill="#171B26" />
 
   <!-- The commits either side of the one in question. -->

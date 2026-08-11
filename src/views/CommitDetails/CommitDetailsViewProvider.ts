@@ -88,7 +88,7 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
         this.git.resolveRemoteInfo(filePath),
       ]);
       if (!commit) {
-        this.view.webview.html = shellHtml('<p>Git Retrace: commit not found.</p>');
+        this.view.webview.html = shellHtml('<p>GitLore: commit not found.</p>');
         return;
       }
       this.currentCommit = commit;
@@ -116,7 +116,7 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.view.webview.html = shellHtml(`<p>Git Retrace: failed to load commit — ${escapeHtml(message)}</p>`);
+      this.view.webview.html = shellHtml(`<p>GitLore: failed to load commit — ${escapeHtml(message)}</p>`);
     }
   }
 
@@ -133,7 +133,7 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
     }
     if (type === 'copyMessage' && commit) {
       await vscode.env.clipboard.writeText(commit.body);
-      void vscode.window.setStatusBarMessage('Git Retrace: commit message copied', 2000);
+      void vscode.window.setStatusBarMessage('GitLore: commit message copied', 2000);
       return;
     }
     if (type === 'openRemote' && this.currentRemoteUrl) {

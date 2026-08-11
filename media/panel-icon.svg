@@ -1,5 +1,5 @@
 <!--
-  The Git Retrace panel-container icon. VS Code tints this with the activity/panel foreground colour,
+  The GitLore panel-container icon. VS Code tints this with the activity/panel foreground colour,
   so it must be a single-colour silhouette — no palette here.
 
   Same mark as media/icon.svg (a commit spine with the lines that commit touched running out of it),

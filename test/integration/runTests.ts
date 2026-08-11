@@ -33,7 +33,7 @@ async function main(): Promise<void> {
 
   // Fresh user-data-dir per run — otherwise global settings changed by one test run (or one
   // that crashes mid-test, skipping its cleanup) silently leak into the next invocation.
-  const userDataDir = mkdtempSync(join(tmpdir(), 'gitretrace-vscode-userdata-'));
+  const userDataDir = mkdtempSync(join(tmpdir(), 'gitlore-vscode-userdata-'));
 
   await runTests({
     vscodeExecutablePath,
