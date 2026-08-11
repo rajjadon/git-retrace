@@ -81,9 +81,10 @@ suite('Commit graph webview', () => {
     assert.match(html, /class="stat-add" title="1 added">\+1</);
   });
 
-  test('lists the repo\'s branches in the ref picker', async () => {
+  test('lists the repo\'s branches in the ref picker, defaulting to all of them', async () => {
     const html = await openGraph();
-    assert.match(html, /<option value="">All branches<\/option>/);
+    // No ref filter is applied on load, so "All branches" is the selected option — not merely present.
+    assert.match(html, /<option value="" selected>All branches<\/option>/);
     assert.match(html, /<option value="main">main \(current\)<\/option>/);
   });
 

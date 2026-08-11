@@ -1,5 +1,5 @@
 import { dirname } from 'node:path';
-import { realpathSync } from 'node:fs';
+import { realpathSync, statSync } from 'node:fs';
 import { simpleGit, type SimpleGit } from 'simple-git';
 import {
   parseBlamePorcelain,
@@ -59,9 +59,9 @@ export class GitService {
     }
   }
 
-  /** Resolves the repo root for a file, searching upward from its directory. Null if not in a repo. */
+  /** Resolves the repo root for a file *or* a directory, searching upward. Null if not in a repo. */
   async getRepoRoot(filePath: string): Promise<string | null> {
-    const dir = dirname(this.toCanonicalPath(filePath));
+    const dir = this.toSearchDir(filePath);
     if (this.repoRootByDir.has(dir)) {
       return this.repoRootByDir.get(dir) ?? null;
     }
@@ -453,6 +453,24 @@ export class GitService {
       this.gitByRoot.set(repoRoot, git);
     }
     return git;
+  }
+
+  /**
+   * The directory to begin the upward repo search from.
+   *
+   * Callers pass either a file (the active editor) or a directory (the workspace folder, used when
+   * no editor is open). Taking `dirname` unconditionally breaks the second case: handed a repo
+   * *root*, it searches from the root's parent, so a repo that isn't nested inside another repo
+   * resolves to null — and every view silently renders empty instead of erroring.
+   */
+  private toSearchDir(filePath: string): string {
+    const canonical = this.toCanonicalPath(filePath);
+    try {
+      return statSync(canonical).isDirectory() ? canonical : dirname(canonical);
+    } catch {
+      // Nonexistent path (unsaved buffer, deleted file) — its parent is still where to look.
+      return dirname(canonical);
+    }
   }
 
   /**
