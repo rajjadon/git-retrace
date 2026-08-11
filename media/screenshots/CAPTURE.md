@@ -10,9 +10,20 @@ re-shooting by hand; see `scripts/shoot-screenshots.ts` for what is real and wha
 | `commit-graph.png` | `npm run shots` |
 | `commit-details.png` | `npm run shots` |
 | `branch-comparison.png` | `npm run shots` |
-| `inline-blame.png` | **manual** — an editor decoration is not a webview, so there is no HTML to render |
+| `inline-blame.png` | **manual** — an editor decoration is not a webview, so there is no HTML to render. Captured; re-shoot at 2x if it ever needs to be bigger. |
 
 ## Capturing inline-blame by hand
+
+Two traps worth naming, both hit once already:
+
+- **Screenshot, not a photo.** A phone picture of the monitor carries the bezel, desk, and moiré
+  from the LCD. Use `⌘⇧4` (or `⌘⇧5`) so it is a real capture, and save PNG — JPEG puts compression
+  artifacts on UI text.
+- **Check it is *this* extension.** GitLens is installed alongside during development and its hover
+  looks superficially similar. Tells that it is GitLens and not us: a `(Co-author)` line, a
+  whole-commit `N files changed, +X −Y` summary, a settings gear in the footer, and a status bar
+  reading `Blame <name> (<age>)`. Ours renders `<author>` / message / `age · absolute-date · sha` /
+  `+X -Y`, and the status bar reads `<author>, <age>`.
 
 The README references these four files by **absolute** `raw.githubusercontent.com` URL, because the
 VS Code Marketplace does not resolve relative image paths — a relative `media/...` link renders on
