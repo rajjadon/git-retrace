@@ -210,7 +210,9 @@
     "package": "vsce package",
     "package:pre": "vsce package --pre-release",
     "publish": "vsce publish",
-    "publish:pre": "vsce publish --pre-release"
+    "publish:pre": "vsce publish --pre-release",
+    "publish:ovsx": "ovsx publish",
+    "publish:ovsx:pre": "ovsx publish --pre-release"
   },
   "dependencies": {
     "date-fns": "^4.1.0",
@@ -227,6 +229,7 @@
     "eslint": "^9.15.0",
     "mocha": "^10.7.3",
     "@types/mocha": "^10.0.9",
+    "ovsx": "^0.10.12",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   },
