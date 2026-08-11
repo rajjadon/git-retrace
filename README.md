@@ -21,16 +21,20 @@ It does that without leaving your editor, without signing in, and without sendin
 
 If you've used GitLens, GitLore covers the same core ground — inline blame, a commit graph, commit details, branch comparison — with every feature free and a deliberately smaller surface area. See [How it compares](#how-it-compares).
 
-> **Status: alpha.** This is a pre-release. The features below work and are covered by tests, but expect rough edges and breaking changes before `1.0`. Bug reports are very welcome.
+> **Status: early but stable-channel.** Everything below works and is covered by tests — 207 unit tests and 32 integration tests against a real VS Code instance. It is still `0.x`, so expect breaking changes before `1.0`. Bug reports are very welcome.
 
 ## Install
 
-**From the Marketplace** — search *GitLore* in the Extensions view (`⇧⌘X` / `Ctrl+Shift+X`). Because this is a pre-release, click **Switch to Pre-Release Version** on the extension page.
+**From the Marketplace** — search *GitLore* in the Extensions view (`⇧⌘X` / `Ctrl+Shift+X`) and click Install. Or from the command line:
+
+```bash
+code --install-extension RajpratapsinghJadon.gitlore
+```
 
 **From a `.vsix`** — grab one from [Releases](https://github.com/rajjadon/gitlore/releases), then:
 
 ```bash
-code --install-extension gitlore-0.1.0.vsix
+code --install-extension gitlore-0.2.0.vsix
 ```
 
 Requires **VS Code 1.85+** and `git` on your `PATH`. Works in Cursor and other VS Code-based editors.
@@ -116,7 +120,7 @@ No telemetry. No analytics. No account.
 
 ## How it compares
 
-GitLore is not trying to out-feature GitLens — it's trying to be the free, fast, small part you actually use every day. Honest accounting for this alpha:
+GitLore is not trying to out-feature GitLens — it's trying to be the free, fast, small part you actually use every day. Honest accounting:
 
 **What GitLore does** — inline blame and hover, status bar, file history, commit graph, commit details with per-file diffs, branch comparison, issue linking. All free, forever.
 

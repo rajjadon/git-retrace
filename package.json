@@ -2,7 +2,7 @@
   "name": "gitlore",
   "displayName": "GitLore — git blame, history & commit graph",
   "description": "The story behind every line. Free, local-first git blame, history, commit graph and branch comparison — no account, no telemetry.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "RajpratapsinghJadon",
   "license": "MIT",
   "engines": {
@@ -206,10 +206,11 @@
     "test:integration": "npm run compile && tsc -p . --outDir out-test && node out-test/test/integration/runTests.js",
     "lint": "eslint --no-error-on-unmatched-pattern src test && tsc --noEmit -p .",
     "icon": "rsvg-convert -w 256 -h 256 media/icon.svg -o media/icon.png",
+    "shots": "tsx scripts/shoot-screenshots.ts",
     "package": "vsce package",
     "package:pre": "vsce package --pre-release",
-    "publish:pre": "vsce publish --pre-release",
-    "shots": "tsx scripts/shoot-screenshots.ts"
+    "publish": "vsce publish",
+    "publish:pre": "vsce publish --pre-release"
   },
   "dependencies": {
     "date-fns": "^4.1.0",
@@ -234,7 +235,6 @@
     "color": "#171B26",
     "theme": "dark"
   },
-  "preview": true,
   "repository": {
     "type": "git",
     "url": "https://github.com/rajjadon/gitlore.git"

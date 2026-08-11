@@ -8,11 +8,11 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 Nothing yet.
 
-## [0.1.0] - 2026-08-11
+## [0.2.0] - 2026-08-11
 
-First release — an **alpha**, published to the Marketplace's pre-release channel. Blame, history, the commit graph, commit details and branch comparison are all here and covered by tests, but expect rough edges and breaking changes before `1.0`. AI features are not in this release — see Known limitations.
+First stable release — installs by default, with no need to opt into pre-releases. Same code as the `0.1.0` pre-release, promoted after verification.
 
-Install it by clicking **Switch to Pre-Release Version** on the extension page. The first stable release will be `0.2.0`; `0.1.x` stays the pre-release line.
+Blame, history, the commit graph, commit details and branch comparison are all here and covered by tests. It is still `0.x`: expect breaking changes before `1.0`. AI features are not in this release — see Known limitations.
 
 ### Added
 
@@ -68,3 +68,7 @@ Install it by clicking **Switch to Pre-Release Version** on the extension page. 
 - Commit details loads a whole commit's diff up front, so a very large commit takes a moment to open.
 - Toggling inline blame from the panel button gives no on/off indicator; the editor shows the result immediately.
 - File History appears in the Explorer, not in the GitLore panel.
+
+## [0.1.0] - 2026-08-11
+
+Pre-release alpha, published to the Marketplace's pre-release channel. Identical feature set to `0.2.0`; superseded by it. `0.1.x` remains the pre-release line.
