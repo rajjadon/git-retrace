@@ -237,12 +237,12 @@
   "preview": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/rajjadon/git-retrace.git"
+    "url": "https://github.com/rajjadon/gitlore.git"
   },
   "bugs": {
-    "url": "https://github.com/rajjadon/git-retrace/issues"
+    "url": "https://github.com/rajjadon/gitlore/issues"
   },
-  "homepage": "https://github.com/rajjadon/git-retrace#readme",
+  "homepage": "https://github.com/rajjadon/gitlore#readme",
   "keywords": [
     "git",
     "blame",

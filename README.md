@@ -27,7 +27,7 @@ If you've used GitLens, GitLore covers the same core ground — inline blame, a 
 
 **From the Marketplace** — search *GitLore* in the Extensions view (`⇧⌘X` / `Ctrl+Shift+X`). Because this is a pre-release, click **Switch to Pre-Release Version** on the extension page.
 
-**From a `.vsix`** — grab one from [Releases](https://github.com/rajjadon/git-retrace/releases), then:
+**From a `.vsix`** — grab one from [Releases](https://github.com/rajjadon/gitlore/releases), then:
 
 ```bash
 code --install-extension gitlore-0.1.0.vsix

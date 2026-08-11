@@ -131,7 +131,7 @@ async function main(): Promise<void> {
             ...base,
             styleUris: [cssUrl('shared.css'), cssUrl('commitDetails.css')],
             editorFontFamily,
-            remote: { label: 'GitHub', url: `https://github.com/rajjadon/git-retrace/commit/${sha}` },
+            remote: { label: 'GitHub', url: `https://github.com/rajjadon/gitlore/commit/${sha}` },
           },
         ),
       ),
