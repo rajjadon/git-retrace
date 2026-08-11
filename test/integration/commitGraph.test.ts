@@ -5,8 +5,8 @@ import { MANIFEST_PATH, type FixtureManifest } from '../fixtures/build-fixture-r
 import type { GitRetraceTestApi } from '../../src/extension';
 import { COMMANDS } from '../../src/constants';
 import { resolveRepoContextPath } from '../../src/views/CommitGraph/CommitGraphViewProvider';
+import { EXTENSION_ID } from './extensionId';
 
-const EXTENSION_ID = 'rajjadon.git-retrace';
 
 async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
   const start = Date.now();

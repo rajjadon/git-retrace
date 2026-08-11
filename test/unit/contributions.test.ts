@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { COMMANDS, VIEWS } from '../../src/constants';
+import { EXTENSION_ID } from '../integration/extensionId';
 
 interface Manifest {
+  name: string;
+  publisher: string;
   contributes: {
     commands: Array<{ command: string; title: string; icon?: string }>;
     menus: Record<string, Array<{ command: string; when?: string; group?: string }>>;
@@ -92,4 +95,10 @@ test('contributes.views: every VIEWS entry is declared exactly once', () => {
   for (const [key, id] of Object.entries(VIEWS)) {
     assert.equal(declared.filter((d) => d === id).length, 1, `VIEWS.${key} (${id}) must be declared exactly once`);
   }
+});
+
+test("EXTENSION_ID matches the manifest's publisher.name", () => {
+  // The integration suites look the extension up by this id; if it drifts from package.json,
+  // every one of them fails with "extension not found" rather than pointing at the cause.
+  assert.equal(EXTENSION_ID, `${manifest.publisher}.${manifest.name}`);
 });

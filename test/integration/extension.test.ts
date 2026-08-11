@@ -1,7 +1,7 @@
 import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
+import { EXTENSION_ID } from './extensionId';
 
-const EXTENSION_ID = 'rajjadon.git-retrace';
 
 suite('Extension activation', () => {
   test('activates and registers gitRetrace.toggleBlame', async () => {

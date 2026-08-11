@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import * as vscode from 'vscode';
 import { MANIFEST_PATH, type FixtureManifest } from '../fixtures/build-fixture-repo';
 import type { GitRetraceTestApi } from '../../src/extension';
+import { EXTENSION_ID } from './extensionId';
 
-const EXTENSION_ID = 'rajjadon.git-retrace';
 
 /** Polls until `predicate` is true — a defined-but-stale value (e.g. the previous line's
  * label, still set from the initial editor-open) must not be mistaken for "updated". */

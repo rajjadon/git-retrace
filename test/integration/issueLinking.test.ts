@@ -4,8 +4,8 @@ import * as vscode from 'vscode';
 import { MANIFEST_PATH, type FixtureManifest } from '../fixtures/build-fixture-repo';
 import type { GitRetraceTestApi } from '../../src/extension';
 import { COMMANDS } from '../../src/constants';
+import { EXTENSION_ID } from './extensionId';
 
-const EXTENSION_ID = 'rajjadon.git-retrace';
 
 function hoverText(hover: vscode.Hover): string {
   return hover.contents.map((c) => (typeof c === 'string' ? c : c.value)).join('\n');

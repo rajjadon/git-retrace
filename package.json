@@ -3,7 +3,7 @@
   "displayName": "Git Retrace — blame, history & graph",
   "description": "Retrace any line to the commit that wrote it. Free, local-first git blame, history, commit graph and branch comparison — no account, no telemetry.",
   "version": "0.1.0",
-  "publisher": "rajjadon",
+  "publisher": "RajpratapsinghJadon",
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0",

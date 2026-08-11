@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs';
 import * as vscode from 'vscode';
 import { MANIFEST_PATH, type FixtureManifest } from '../fixtures/build-fixture-repo';
 import type { GitRetraceTestApi } from '../../src/extension';
+import { EXTENSION_ID } from './extensionId';
 
-const EXTENSION_ID = 'rajjadon.git-retrace';
 
 async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
   const start = Date.now();
