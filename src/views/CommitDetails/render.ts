@@ -103,7 +103,7 @@ ${bodyRest ? `<pre class="commit-body">${linkifyHtml(bodyRest, opts.issueLinking
 ${AI_ICON}<span class="section-title">AI Summary</span>
 </div>
 <div class="ai-summary">
-<button class="btn" id="explain-commit" type="button">${AI_ICON}Summarize with AI</button>
+<button class="btn btn-accent" id="explain-commit" type="button">${AI_ICON}Summarize with AI</button>
 <p class="ai-summary-text" id="ai-summary-text" aria-live="polite" hidden></p>
 <p class="ai-summary-hint" id="ai-summary-hint" role="status" hidden></p>
 </div>
@@ -136,9 +136,10 @@ const summaryText = document.getElementById('ai-summary-text');
 const summaryHint = document.getElementById('ai-summary-hint');
 explainBtn.addEventListener('click', () => {
   explainBtn.disabled = true;
-  summaryHint.hidden = true;
-  summaryText.hidden = false;
+  summaryText.hidden = true;
   summaryText.textContent = '';
+  summaryHint.hidden = false;
+  summaryHint.textContent = 'Generating…';
   vscode.postMessage({ type: 'explainCommit' });
 });
 window.addEventListener('message', (e) => {
@@ -146,15 +147,19 @@ window.addEventListener('message', (e) => {
   if (msg.type === 'aiSummaryChunk') {
     summaryText.hidden = false;
     summaryText.textContent += msg.text;
+    summaryHint.hidden = true;
   } else if (msg.type === 'aiSummaryCached') {
     summaryText.hidden = false;
     summaryText.textContent = msg.text;
+    summaryHint.hidden = true;
     explainBtn.disabled = false;
   } else if (msg.type === 'aiSummaryDone') {
+    summaryHint.hidden = true;
     explainBtn.disabled = false;
   } else if (msg.type === 'aiSummaryReset') {
     explainBtn.disabled = false;
     summaryText.hidden = true;
+    summaryHint.hidden = true;
   } else if (msg.type === 'aiSummaryNoModel') {
     summaryText.hidden = true;
     summaryHint.hidden = false;

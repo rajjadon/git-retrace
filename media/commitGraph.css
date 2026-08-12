@@ -48,11 +48,6 @@ body {
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
-.toolbar-icon {
-  flex: 0 0 auto;
-  opacity: 0.7;
-}
-
 .ref-picker {
   display: flex;
   align-items: center;
@@ -75,22 +70,10 @@ body {
   border-radius: 2px;
 }
 
+/* Wider than shared.css's default — the graph toolbar has more room than a section header. */
 .search {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex: 1 1 auto;
   min-width: 120px;
   max-width: 420px;
-  padding: 0.1rem 0.4rem;
-  color: var(--vscode-input-foreground);
-  background-color: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-radius: 2px;
-}
-
-.search:focus-within {
-  border-color: var(--vscode-focusBorder);
 }
 
 #search {
@@ -115,26 +98,9 @@ body {
   white-space: nowrap;
 }
 
-.icon-btn {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  padding: 0.25rem;
-  color: inherit;
-  background: none;
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
-}
-
-.icon-btn:hover {
-  background-color: var(--vscode-toolbar-hoverBackground);
-}
-
-.icon-btn:focus-visible,
 #ref-filter:focus-visible {
   outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: -1px;
+  outline-offset: 1px;
 }
 
 /* ---------- Grid ---------- */

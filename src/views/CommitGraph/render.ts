@@ -16,7 +16,8 @@ import {
 export interface RenderGraphOptions {
   nonce: string;
   cspSource: string;
-  styleUri: string;
+  /** Stylesheets to link, in order. Shared rules first, then the panel's own — same convention as Commit Details and Branch Comparison. */
+  styleUris: string[];
 }
 
 export interface GraphData {
@@ -204,10 +205,11 @@ function renderWorkingChangesRow(changes: WorkingChanges, svgWidth: number, tabb
 </div>`;
 }
 
-/** Builds the commit graph webview's full HTML document. Pure — nonce/cspSource/styleUri come from the caller, so this is unit-testable without a real webview host. */
+/** Builds the commit graph webview's full HTML document. Pure — nonce/cspSource/styleUris come from the caller, so this is unit-testable without a real webview host. */
 export function renderGraphHtml(data: GraphData, opts: RenderGraphOptions): string {
   const { nodes, branches = [], currentRef = '', workingChanges, selectedSha } = data;
   const now = data.now ?? new Date();
+  const styles = opts.styleUris.map((uri) => `<link rel="stylesheet" href="${uri}" />`).join('\n');
   // A little extra room beyond the widest lane so the dot never sits flush against the text
   // column — the bug that made a single-branch (one-lane) graph look like it was overlapping.
   const svgWidth = (maxLane(nodes) + 1) * LANE_WIDTH + LANE_WIDTH / 2;
@@ -255,7 +257,7 @@ export function renderGraphHtml(data: GraphData, opts: RenderGraphOptions): stri
 <head>
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource} 'nonce-${opts.nonce}'; img-src https: ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
-<link rel="stylesheet" href="${opts.styleUri}" />
+${styles}
 <style nonce="${opts.nonce}">:root { --graph-svg-width: ${svgWidth}px; --graph-row-height: ${ROW_HEIGHT}px; }</style>
 <title>Commit Graph</title>
 </head>

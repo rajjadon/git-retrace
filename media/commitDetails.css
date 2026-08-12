@@ -114,6 +114,23 @@ h1 {
   outline-offset: 1px;
 }
 
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* The one accent-colored action in the panel — reserved for AI, so it reads as the panel's
+   signature feature rather than another utility button next to Copy SHA. */
+.btn-accent {
+  color: var(--vscode-button-foreground);
+  background-color: var(--vscode-button-background);
+}
+
+.btn-accent:hover {
+  background-color: var(--vscode-button-hoverBackground);
+}
+
 .commit-body {
   flex: 0 1 auto;
   max-height: 30%;

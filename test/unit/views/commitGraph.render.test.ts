@@ -24,7 +24,11 @@ function commit(sha: string, parents: string[], overrides: Partial<GraphCommit> 
 }
 
 const now = new Date('2024-02-04T10:00:00Z');
-const opts = { nonce: 'abc123', cspSource: 'vscode-webview://xyz', styleUri: 'vscode-webview://xyz/style.css' };
+const opts = {
+  nonce: 'abc123',
+  cspSource: 'vscode-webview://xyz',
+  styleUris: ['vscode-webview://xyz/shared.css', 'vscode-webview://xyz/commitGraph.css'],
+};
 
 test('renderGraphHtml: includes commit message, author, age, sha, and ref labels', () => {
   const commits = [commit('C', ['A'], { message: 'add feature', refs: [{ name: 'main', type: 'branch' }] })];
@@ -261,6 +265,14 @@ test('renderGraphHtml: an empty repo says so instead of rendering a bare header'
   const html = renderGraphHtml({ nodes: [], now }, opts);
   assert.match(html, /No commits yet\./);
   assert.match(html, />0 commits</);
+});
+
+test('renderGraphHtml: links every stylesheet it is given, shared rules first', () => {
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
+  const shared = html.indexOf('shared.css');
+  const own = html.indexOf('commitGraph.css');
+  assert.ok(shared !== -1 && own !== -1, 'expected both stylesheets to be linked');
+  assert.ok(shared < own, 'shared rules must come first so the panel can override them');
 });
 
 test('renderGraphHtml: pluralizes the commit count', () => {

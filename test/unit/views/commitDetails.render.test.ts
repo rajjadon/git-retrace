@@ -200,6 +200,35 @@ test('renderCommitDetailsHtml: offers a Summarize with AI button that posts expl
   assert.match(html, /type: 'explainCommit'/);
 });
 
+test('renderCommitDetailsHtml: the Summarize with AI button carries the accent treatment, unlike the copy/open actions', () => {
+  const remote = { label: 'GitHub', url: 'https://github.com/o/r/commit/x' };
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, { ...opts, remote });
+  assert.match(html, /class="btn btn-accent" id="explain-commit"/);
+  assert.match(html, /class="btn" id="copy-sha"/);
+  assert.match(html, /class="btn" id="copy-message"/);
+  assert.match(html, /class="btn" id="open-remote"/);
+});
+
+test('renderCommitDetailsHtml: clicking Summarize with AI shows a "Generating…" hint until content arrives', () => {
+  // Regression: the click handler used to leave the summary paragraph empty with zero feedback
+  // until the first chunk streamed in — the same "did my click even register?" gap already fixed
+  // for the hover's line-explanation flow.
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(
+    html,
+    /explainBtn\.addEventListener\('click', \(\) => \{\s*explainBtn\.disabled = true;\s*summaryText\.hidden = true;\s*summaryText\.textContent = '';\s*summaryHint\.hidden = false;\s*summaryHint\.textContent = 'Generating…';/,
+  );
+});
+
+test('renderCommitDetailsHtml: every terminal AI-summary message hides the "Generating…" hint', () => {
+  // Regression: aiSummaryCached, aiSummaryDone, and aiSummaryReset never cleared the hint, so a
+  // cached response (which skips chunk events entirely) left "Generating…" showing forever.
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /msg\.type === 'aiSummaryCached'\) \{[^}]*summaryHint\.hidden = true;/s);
+  assert.match(html, /msg\.type === 'aiSummaryDone'\) \{[^}]*summaryHint\.hidden = true;/s);
+  assert.match(html, /msg\.type === 'aiSummaryReset'\) \{[^}]*summaryHint\.hidden = true;/s);
+});
+
 test('renderCommitDetailsHtml: the AI summary text and hint start hidden', () => {
   const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
   assert.match(html, /id="ai-summary-text"[^>]*hidden/);
