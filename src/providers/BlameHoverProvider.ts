@@ -3,11 +3,9 @@ import { GitService } from '../core/git/GitService';
 import type { BlameSource } from './BlameSource';
 import { formatBlameHover } from '../utils/format';
 import { resolveIssueLinking } from './issueLinking';
-import { CONFIG, COMMANDS } from '../constants';
+import { CONFIG, COMMANDS, DEFAULT_MAX_BLAME_FILE_SIZE } from '../constants';
 import { buildLineExplanationKey, type LineExplanationState } from '../core/ai/lineExplanationKey';
 import type { LruCache } from '../core/cache/LruCache';
-
-const DEFAULT_MAX_BLAME_FILE_SIZE = 1_048_576;
 
 export class BlameHoverProvider implements vscode.HoverProvider {
   constructor(

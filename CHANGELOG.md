@@ -20,6 +20,13 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - The blame hover's **Explain this line with AI** link generates the explanation in the background — a small status-bar spinner shows while it runs, no panel opens. Re-hover the same line once it's done and the hover card shows the finished explanation directly.
 - Reuses the exact same `gitLore.ai.enabled` gate and AI infrastructure as commit summaries: off by default, no model registered shows the same inline hint, and nothing is sent anywhere unless you've opted in.
 
+**Stale-code detector**
+
+- Functions and methods untouched for longer than `gitLore.staleThresholdDays` (default 180) get a subtle CodeLens — click it to open Commit Details for the commit that last changed them.
+- On by default. Turn it off with `gitLore.staleCode.enabled`.
+- Works for any language with a symbol provider installed (uses VS Code's built-in `executeDocumentSymbolProvider` — no new parser).
+- Known limitation: an arrow function assigned to a top-level `const` (e.g. `export const foo = () => {}`) isn't flagged in v1 — TypeScript's language server reports these as `SymbolKind.Variable`, not `Function`, and flagging every Variable would also catch plain data constants as "stale." Named `function` declarations and class methods are unaffected.
+
 ## [0.2.0] - 2026-08-11
 
 First stable release — installs by default, with no need to opt into pre-releases. Same code as the `0.1.0` pre-release, promoted after verification.

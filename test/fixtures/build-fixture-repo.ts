@@ -104,3 +104,85 @@ export function buildBranchFixtureRepo(): BranchFixtureManifest {
 
   return { repoRoot, trackedFile, baseBranch: 'main', featureBranch: 'feature-x' };
 }
+
+export interface StaleFixtureManifest {
+  repoRoot: string;
+  staleFile: string;
+  /** SHA of the commit that last touched every symbol except `recentlyChangedFunction`. */
+  staleSha: string;
+}
+
+const STALE_FILE_CONTENT_V1 = `export function longUnchangedFunction() {
+  return 1;
+}
+
+export function recentlyChangedFunction() {
+  return 2;
+}
+
+export class OldService {
+  run() {
+    return 1;
+  }
+}
+
+export function outerFunction() {
+  function innerHelper() {
+    return 1;
+  }
+  return innerHelper();
+}
+`;
+
+// Written out in full (not derived from V1 via string surgery) so the two versions stay easy to
+// diff by eye and an edit to one can't silently desync from the other.
+const STALE_FILE_CONTENT_V2 = `export function longUnchangedFunction() {
+  return 1;
+}
+
+export function recentlyChangedFunction() {
+  return 3;
+}
+
+export class OldService {
+  run() {
+    return 1;
+  }
+}
+
+export function outerFunction() {
+  function innerHelper() {
+    return 1;
+  }
+  return innerHelper();
+}
+`;
+
+/**
+ * A `.ts` fixture (TypeScript's built-in language server provides real document symbols for it,
+ * which the plain `tracked.txt` used elsewhere can't) with one old commit touching every symbol,
+ * and a second, effectively-"just now" commit that touches only `recentlyChangedFunction` — giving
+ * the stale-code-detector tests both a definitely-stale and a definitely-fresh function in one file.
+ */
+export function buildStaleFixtureRepo(): StaleFixtureManifest {
+  const repoRoot = mkdtempSync(join(tmpdir(), 'gitlore-stale-fixture-'));
+  git(repoRoot, ['init', '-q', '-b', 'main']);
+  git(repoRoot, ['config', 'user.name', 'Raj Jadon']);
+  git(repoRoot, ['config', 'user.email', 'raj@example.com']);
+
+  const staleFile = join(repoRoot, 'stale.ts');
+  writeFileSync(staleFile, STALE_FILE_CONTENT_V1);
+  git(repoRoot, ['add', 'stale.ts']);
+  // Far enough in the past to stay well past any plausible staleThresholdDays for decades.
+  git(repoRoot, ['commit', '-q', '-m', 'add stale.ts'], commitEnv('Raj Jadon', 'raj@example.com', '2015-01-01T10:00:00'));
+
+  const staleSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot }).toString().trim();
+
+  writeFileSync(staleFile, STALE_FILE_CONTENT_V2);
+  git(repoRoot, ['add', 'stale.ts']);
+  // Dated "now" (at fixture-build time, which happens immediately before the suite runs) so this
+  // function is always fresh relative to the real wall-clock `now` the provider uses internally.
+  git(repoRoot, ['commit', '-q', '-m', 'update recentlyChangedFunction'], commitEnv('Amy Dev', 'amy@example.com', new Date().toISOString()));
+
+  return { repoRoot, staleFile, staleSha };
+}

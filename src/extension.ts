@@ -8,6 +8,7 @@ import { BlameHoverProvider } from './providers/BlameHoverProvider';
 import { FileHistoryProvider } from './providers/FileHistoryProvider';
 import { StatusBarProvider } from './providers/StatusBarProvider';
 import { GitContentProvider } from './providers/GitContentProvider';
+import { StaleCodeLensProvider } from './providers/CodeLensProvider';
 import { handleToggleBlameCommand } from './commands/blameCommands';
 import { handleShowFileHistoryCommand, handleCopyShaCommand } from './commands/fileHistoryCommands';
 import { handleShowCommitCommand } from './commands/commitCommands';
@@ -54,6 +55,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
   const blameSource = new BlameSource(git, logger);
   const blameProvider = new BlameDecorationProvider(blameSource);
   const hoverProvider = new BlameHoverProvider(blameSource, git, lineExplanationStore);
+  const staleCodeLensProvider = new StaleCodeLensProvider(blameSource);
   const fileHistoryProvider = new FileHistoryProvider(git);
   const statusBarProvider = new StatusBarProvider(blameProvider);
   const commitGraphViewProvider = new CommitGraphViewProvider(ctx.extensionUri, git);
@@ -65,6 +67,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     blameProvider,
     fileHistoryProvider,
     statusBarProvider,
+    staleCodeLensProvider,
     handleToggleBlameCommand(blameProvider),
     handleShowFileHistoryCommand(fileHistoryProvider),
     handleCopyShaCommand(),
@@ -74,6 +77,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     handleExplainCommitCommand(commitDetailsViewProvider),
     handleExplainLineCommand(lineExplanationService),
     vscode.languages.registerHoverProvider({ scheme: 'file' }, hoverProvider),
+    vscode.languages.registerCodeLensProvider({ scheme: 'file' }, staleCodeLensProvider),
     // Backs the "Open changes" action in the commit-details and branch-comparison panels by
     // serving a file's contents at an arbitrary ref to the native diff editor.
     vscode.workspace.registerTextDocumentContentProvider(SCHEMES.gitContent, new GitContentProvider(git)),

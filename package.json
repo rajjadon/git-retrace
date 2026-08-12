@@ -193,6 +193,16 @@
           "default": 200,
           "description": "Max commits loaded in the commit graph."
         },
+        "gitLore.staleCode.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a CodeLens above functions and methods that haven't changed in longer than staleThresholdDays."
+        },
+        "gitLore.staleThresholdDays": {
+          "type": "number",
+          "default": 180,
+          "description": "Days since a function's or method's last change before it's flagged as stale."
+        },
         "gitLore.issueLinking.enabled": {
           "type": "boolean",
           "default": true,

@@ -79,6 +79,7 @@ Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with
 
 - **File history** — every commit that touched the current file, following renames, in the Explorer.
 - **Issue and PR links** — `#123` in a commit message becomes a link, auto-detected from your remote or pointed at any tracker (Jira included) via a regex and URL template.
+- **Stale-code detector** — a CodeLens above functions and methods untouched for longer than `gitLore.staleThresholdDays`, linking straight to the commit that last changed them.
 
 ## Commands
 
@@ -104,6 +105,8 @@ Every command is also a title-bar button in the GitLore panel.
 | `gitLore.maxBlameFileSize` | number | `1048576` | Skip blame for files larger than this size, in bytes. |
 | `gitLore.maxHistoryItems` | number | `200` | Max commits loaded per file history. |
 | `gitLore.maxGraphItems` | number | `200` | Max commits loaded in the commit graph. |
+| `gitLore.staleCode.enabled` | boolean | `true` | Show a CodeLens above functions and methods that haven't changed in longer than staleThresholdDays. |
+| `gitLore.staleThresholdDays` | number | `180` | Days since a function's or method's last change before it's flagged as stale. |
 | `gitLore.issueLinking.enabled` | boolean | `true` | Auto-link issue/PR references in commit messages. |
 | `gitLore.issueLinking.pattern` | string | `"#(\\d+)"` | Regex matching issue references. The first capture group (or the whole match) fills `{issue}` in the URL template. |
 | `gitLore.issueLinking.urlTemplate` | string | `""` | `{issue}`-templated issue URL. Empty = auto-detect from the repo's GitHub/GitLab remote. |
