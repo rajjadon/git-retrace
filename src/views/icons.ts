@@ -24,7 +24,7 @@ export const BRANCH_ICON = icon(
   12,
 );
 
-/** Remote-tracking branch — a cloud, matching how GitLens/VS Code signal "lives on the remote". */
+/** Remote-tracking branch — a cloud, matching how VS Code signals "lives on the remote". */
 export const REMOTE_ICON = icon(
   '<path d="M4.6 12.5h6.9a2.6 2.6 0 0 0 .3-5.18 3.6 3.6 0 0 0-6.7-1.1A2.95 2.95 0 0 0 4.6 12.5Z" />',
   'ref-icon',
@@ -44,7 +44,7 @@ export const COPY_ICON = icon(
   13,
 );
 
-/** Pending-changes row marker — a dashed node, mirroring how GitLens draws the uncommitted row. */
+/** Pending-changes row marker — a dashed node, the common convention for an uncommitted row. */
 export const PENDING_ICON = icon('<circle cx="8" cy="8" r="5.2" stroke-dasharray="2.4 2" />', 'ref-icon', 12);
 
 /** Open this file's before/after in a real diff editor. */

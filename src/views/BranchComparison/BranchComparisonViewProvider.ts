@@ -22,7 +22,7 @@ function shellHtml(bodyHtml: string): string {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta http-equiv="Content-Security-Policy" content="default-src 'none';" /></head><body>${bodyHtml}</body></html>`;
 }
 
-/** Docks branch comparison in the bottom panel (next to Commit Graph/Commit Details), matching GitLens's panel layout, instead of opening a new editor tab per comparison. */
+/** Docks branch comparison in the bottom panel (next to Commit Graph/Commit Details), instead of opening a new editor tab per comparison. */
 export class BranchComparisonViewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
   private currentFilePath: string | undefined;

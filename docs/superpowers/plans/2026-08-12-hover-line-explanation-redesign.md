@@ -813,7 +813,7 @@ function shellHtml(bodyHtml: string): string {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta http-equiv="Content-Security-Policy" content="default-src 'none';" /></head><body>${bodyHtml}</body></html>`;
 }
 
-/** Docks commit details in the bottom panel (next to Commit Graph), matching GitLens's panel layout, instead of opening a new editor tab per commit. */
+/** Docks commit details in the bottom panel (next to Commit Graph), instead of opening a new editor tab per commit. */
 export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
   private currentFilePath: string | undefined;

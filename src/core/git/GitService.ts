@@ -237,7 +237,7 @@ export class GitService {
     // layout algorithm processes newest-first and needs children resolved before parents.
     // `--exclude` must precede the `--all` it filters — refs/stash is a bare ref under refs/,
     // so --all walks it too, cluttering the graph with the stash's own commit + its "index"
-    // parent (and a stray "refs/stash" badge). GitLens/GitHub keep stashes out of the main graph.
+    // parent (and a stray "refs/stash" badge). GitHub keeps stashes out of the main graph.
     const revs = ref ? [ref] : ['--exclude=refs/stash', '--all'];
     // --numstat rides along on this one call so the Changes column costs no extra process;
     // ponytail: output grows with total files touched across maxCount commits, which the

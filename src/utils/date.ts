@@ -7,7 +7,7 @@ import { format } from 'date-fns/format';
  * date-fns hedges hour- and year-scale distances as "about 10 hours ago" / "about 1 year ago".
  * Every relative age is approximate, so the word carries no information — and it cost ~40px on
  * every row, which was enough to truncate the commit graph's date column to "about 10 hou…".
- * Dropped, matching how GitHub and GitLens render the same value.
+ * Dropped, matching how GitHub renders the same value.
  */
 export function formatAge(date: Date, now: Date = new Date()): string {
   return formatDistance(date, now, { addSuffix: true }).replace(/^about /, '');

@@ -49,14 +49,14 @@ export interface GraphCommit extends Commit {
   /**
    * Diff stat against the first parent, from the `--numstat` block of the same `git log`
    * call — no extra process per commit. Merge commits report 0 (git emits no numstat for
-   * them without `-m`), which is also what GitLens's Changes column shows.
+   * them without `-m`), matching the convention other git tools use for a Changes column.
    */
   filesChanged: number;
   insertions: number;
   deletions: number;
 }
 
-/** Uncommitted work in the repo, counted by file (not by line) — matches GitLens's `+A ~M -D` badge. */
+/** Uncommitted work in the repo, counted by file (not by line) — the standard `+A ~M -D` badge. */
 export interface WorkingChanges {
   added: number;
   modified: number;

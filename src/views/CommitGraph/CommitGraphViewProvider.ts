@@ -36,7 +36,7 @@ export function readMaxGraphItems(): number {
     .get<number>(CONFIG.maxGraphItems, DEFAULT_MAX_GRAPH_ITEMS);
 }
 
-/** Docks the commit graph in the bottom panel (next to Terminal/Debug Console/Output), matching GitLens's panel layout, instead of taking over an editor tab. */
+/** Docks the commit graph in the bottom panel (next to Terminal/Debug Console/Output), instead of taking over an editor tab. */
 export class CommitGraphViewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
   private currentFilePath: string | undefined;

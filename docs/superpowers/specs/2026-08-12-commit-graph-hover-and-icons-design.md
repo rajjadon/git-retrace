@@ -1,7 +1,7 @@
 # Commit Graph: row hover tooltip + icon-only headers — design
 
 **Status:** Approved for planning
-**Origin:** User reviewed GitLens's actual Pro UI (a VS Code panel screenshot) and asked for GitLore's Commit Graph to close the gap. After flagging that GitLens's screenshot includes Pro-tier/paywalled features that conflict with GitLore's "fully free, minimal surface" mission (CLAUDE.md §1, §4, §20), the user narrowed scope to two concrete, license-clean UX gaps. A third candidate — a mini history-overview sparkline for scroll position — was explicitly cut: GitLore's graph loads a bounded, fully-rendered list (`gitLore.maxGraphItems`, default 200) rather than a virtualized/paginated one, so a scroll-position minimap doesn't solve a problem GitLore currently has.
+**Origin:** User reviewed a competing extension's actual Pro UI (a VS Code panel screenshot) and asked for GitLore's Commit Graph to close the gap. After flagging that the screenshot includes Pro-tier/paywalled features that conflict with GitLore's "fully free, minimal surface" mission (CLAUDE.md §1, §4, §20), the user narrowed scope to two concrete, license-clean UX gaps. A third candidate — a mini history-overview sparkline for scroll position — was explicitly cut: GitLore's graph loads a bounded, fully-rendered list (`gitLore.maxGraphItems`, default 200) rather than a virtualized/paginated one, so a scroll-position minimap doesn't solve a problem GitLore currently has.
 
 ## Scope
 
@@ -88,4 +88,4 @@ Every icon-only header keeps its real column name as a `title` and `aria-label` 
 
 - The mini history-overview sparkline (explicitly cut — see Origin above).
 - Any change to what data the Commit Graph fetches or how many commits it loads.
-- Any AI, natural-language search, "Compose," issue-association, or other GitLens Pro-tier feature shown in the reviewed screenshot.
+- Any AI, natural-language search, "Compose," issue-association, or other Pro-tier feature shown in the reviewed screenshot.

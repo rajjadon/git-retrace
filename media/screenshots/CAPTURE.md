@@ -19,8 +19,8 @@ Two traps worth naming, both hit once already:
 - **Screenshot, not a photo.** A phone picture of the monitor carries the bezel, desk, and moiré
   from the LCD. Use `⌘⇧4` (or `⌘⇧5`) so it is a real capture, and save PNG — JPEG puts compression
   artifacts on UI text.
-- **Check it is *this* extension.** GitLens is installed alongside during development and its hover
-  looks superficially similar. Tells that it is GitLens and not us: a `(Co-author)` line, a
+- **Check it is *this* extension.** A similar extension is installed alongside during development
+  and its hover looks superficially similar. Tells that it is the other extension and not us: a `(Co-author)` line, a
   whole-commit `N files changed, +X −Y` summary, a settings gear in the footer, and a status bar
   reading `Blame <name> (<age>)`. Ours renders `<author>` / message / `age · absolute-date · sha` /
   `+X -Y`, and the status bar reads `<author>, <age>`.

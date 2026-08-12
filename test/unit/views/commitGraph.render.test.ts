@@ -186,7 +186,7 @@ test('renderGraphHtml: pins a Working Changes row with per-status file counts wh
   assert.match(html, /class="stat-add" title="5 added">\+5</);
   assert.match(html, /class="stat-mod" title="11 modified">~11</);
   assert.match(html, /class="stat-del" title="3 deleted">&minus;3</);
-  // The row sits above the newest commit, exactly as GitLens orders it.
+  // The row sits above the newest commit — Working Changes always sorts first.
   assert.ok(html.indexOf('class="row wip"') < html.indexOf('class="row commit'));
 });
 

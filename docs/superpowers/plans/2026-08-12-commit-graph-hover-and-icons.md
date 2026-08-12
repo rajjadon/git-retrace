@@ -36,7 +36,7 @@ In `test/unit/views/commitGraph.render.test.ts`, replace the existing test (it c
 
 Find this test:
 ```ts
-test('renderGraphHtml: renders GitLens\'s seven column headers', () => {
+test('renderGraphHtml: renders the seven column headers', () => {
   const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
   for (const header of ['Branch / Tag', 'Graph', 'Commit Message', 'Author', 'Changes', 'Commit Date', 'SHA']) {
     assert.match(html, new RegExp(`role="columnheader">${header.replace(/\//g, '\\/')}<`));

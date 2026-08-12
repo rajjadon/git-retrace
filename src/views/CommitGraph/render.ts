@@ -52,7 +52,7 @@ function laneX(lane: number): number {
   return lane * LANE_WIDTH + LANE_WIDTH / 2;
 }
 
-/** A straight line within one lane, or a smooth S-curve when the segment changes lanes — the sharp diagonals of a plain `<line>` are what made a busy merge area look cramped next to GitLens's curved graph. */
+/** A straight line within one lane, or a smooth S-curve when the segment changes lanes — the sharp diagonals of a plain `<line>` are what made a busy merge area look cramped. */
 function svgSegment(x1: number, y1: number, x2: number, y2: number, color: string): string {
   if (x1 === x2) {
     return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="2" stroke-linecap="round" />`;
@@ -61,7 +61,7 @@ function svgSegment(x1: number, y1: number, x2: number, y2: number, color: strin
   return `<path d="M${x1} ${y1} C${x1} ${midY} ${x2} ${midY} ${x2} ${y2}" stroke="${color}" stroke-width="2" fill="none" stroke-linecap="round" />`;
 }
 
-/** Builds one row's graph cell: a small SVG scoped to that row alone (local y: 0 top, ROW_HEIGHT bottom), in normal flex/grid flow next to the row's text — not one giant absolutely-positioned SVG behind a separately-flowing text column. The commit's own avatar sits clipped into a circle at the node position (like GitLens), ringed in the lane color, instead of a plain dot. */
+/** Builds one row's graph cell: a small SVG scoped to that row alone (local y: 0 top, ROW_HEIGHT bottom), in normal flex/grid flow next to the row's text — not one giant absolutely-positioned SVG behind a separately-flowing text column. The commit's own avatar sits clipped into a circle at the node position, ringed in the lane color, instead of a plain dot. */
 function renderRowGraphics(node: GraphNode, svgWidth: number, avatarUrl: string): string {
   const top = 0;
   const center = ROW_HEIGHT / 2;
@@ -168,7 +168,7 @@ function renderRefPicker(branches: BranchInfo[], currentRef: string): string {
   return `<span class="ref-picker">${BRANCH_ICON}<select id="ref-filter" aria-label="Scope the graph to a branch">${option('', 'All branches')}${group('Local', local)}${group('Remote', remote)}</select></span>`;
 }
 
-/** GitLens's `+added ~modified -deleted` badge — counted by file, so the three numbers sum to the file count. */
+/** The `+added ~modified -deleted` badge — counted by file, so the three numbers sum to the file count. */
 function renderWorkingChangeBadges(changes: WorkingChanges): string {
   const parts: string[] = [];
   if (changes.added > 0) {

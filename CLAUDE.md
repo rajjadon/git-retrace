@@ -6,7 +6,7 @@
 
 ## 1. Mission
 
-You are building **GitLore**, an open-source VS Code extension that makes deep sense of any Git repository — its history, authors, blame, branches, and commit patterns — directly inside the editor. It is a leaner, faster, smarter, and fully free alternative to GitLens.
+You are building **GitLore**, an open-source VS Code extension that makes deep sense of any Git repository — its history, authors, blame, branches, and commit patterns — directly inside the editor. It is leaner, faster, and smarter — with every feature free.
 
 **One-line pitch:** *GitLore makes sense of your repo.*
 
@@ -377,7 +377,7 @@ Press **F5** to launch the Extension Development Host with the extension loaded.
 
 ---
 
-## 20. What NOT to do (the anti-GitLens list)
+## 20. What NOT to do
 
 - ❌ No feature behind a sign-in, account, or "Pro" upsell — free means free.
 - ❌ No API key routed through any GitLore backend — the user's model, the user's key, local only.

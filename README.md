@@ -19,7 +19,7 @@ Open any file in any git repo and GitLore answers the question you actually have
 
 It does that without leaving your editor, without signing in, and without sending your code anywhere. Everything runs against the `git` binary already on your machine.
 
-If you've used GitLens, GitLore covers the same core ground — inline blame, a commit graph, commit details, branch comparison — with every feature free and a deliberately smaller surface area. See [How it compares](#how-it-compares).
+If you've used similar VS Code git extensions, GitLore covers the same core ground — inline blame, a commit graph, commit details, branch comparison — with every feature free and a deliberately smaller surface area. See [How it compares](#how-it-compares).
 
 > **Status: early but stable-channel.** Everything below works and is covered by tests — 207 unit tests and 32 integration tests against a real VS Code instance. It is still `0.x`, so expect breaking changes before `1.0`. Bug reports are very welcome.
 
@@ -126,7 +126,7 @@ No telemetry. No analytics. No account.
 
 ## How it compares
 
-GitLore is not trying to out-feature GitLens — it's trying to be the free, fast, small part you actually use every day. Honest accounting:
+GitLore is not trying to out-feature the bigger, paid alternatives — it's trying to be the free, fast, small part you actually use every day. Honest accounting:
 
 **What GitLore does** — inline blame and hover, status bar, file history, commit graph, commit details with per-file diffs, AI commit summaries, AI line explanations, branch comparison, issue linking. All free, forever.
 
