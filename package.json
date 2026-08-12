@@ -53,6 +53,11 @@
         "command": "gitLore.explainCommit",
         "title": "GitLore: Explain Commit with AI",
         "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitLore.explainLine",
+        "title": "GitLore: Explain This Line's History",
+        "icon": "$(sparkle)"
       }
     ],
     "viewsContainers": {
@@ -142,6 +147,10 @@
       "commandPalette": [
         {
           "command": "gitLore.copySha",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.explainLine",
           "when": "false"
         }
       ]

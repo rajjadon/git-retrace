@@ -30,9 +30,10 @@ const viewIds = new Set(Object.values(views).flat().map((v) => v.id));
  */
 
 test('contributes.commands: every COMMANDS entry that is user-invocable is declared', () => {
-  // explainLine is reserved for a future sub-project and intentionally not contributed yet.
-  // explainCommit is now legitimately contributed (package.json + handleExplainCommitCommand).
-  const reserved = new Set<string>([COMMANDS.explainLine]);
+  // No commands are Phase-2-reserved-but-uncontributed anymore — both explainCommit and
+  // explainLine are now declared. If a future sub-project reserves a new command, it goes
+  // back in this set.
+  const reserved = new Set<string>([]);
   for (const [key, id] of Object.entries(COMMANDS)) {
     if (reserved.has(id)) {
       assert.ok(!commandIds.has(id), `COMMANDS.${key} is reserved but declared in package.json`);
@@ -76,9 +77,10 @@ test('view/title: each of the three panel views exposes at least one command', (
   }
 });
 
-test('commandPalette: copySha is hidden, because there is no commit selected there', () => {
+test('commandPalette: commands that need arguments a manual invocation cannot supply are hidden', () => {
   const hidden = (menus['commandPalette'] ?? []).filter((e) => e.when === 'false').map((e) => e.command);
   assert.ok(hidden.includes(COMMANDS.copySha), 'gitLore.copySha must be hidden from the command palette');
+  assert.ok(hidden.includes(COMMANDS.explainLine), 'gitLore.explainLine must be hidden from the command palette');
 });
 
 test('view/item/context: entries name real commands and real views', () => {

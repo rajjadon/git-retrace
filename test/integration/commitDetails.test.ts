@@ -144,4 +144,34 @@ suite('Commit details webview', () => {
 
     assert.deepEqual(api.getAiSummaryMessagesForTest(), [{ type: 'aiSummaryNoModel' }]);
   });
+
+  test('opening via a line explanation link auto-runs the flow with no extra command', async () => {
+    const commit = manifest.commits[0];
+    assert.ok(commit);
+
+    // executeCommand returns a Thenable, not a Promise — withAiConfig requires the latter, same
+    // mismatch fixed the same way when explainCommit's command-wiring test was added.
+    await withAiConfig(true, () =>
+      Promise.resolve(vscode.commands.executeCommand(COMMANDS.explainLine, manifest.trackedFile, commit.sha, 'line three')),
+    );
+
+    assert.deepEqual(api.getAiSummaryMessagesForTest(), [{ type: 'aiSummaryNoModel' }]);
+  });
+
+  test('gitLore.explainLine with missing arguments shows an info message instead of throwing', async () => {
+    await vscode.commands.executeCommand(COMMANDS.explainLine);
+  });
+
+  test('the panel shows the line-focused heading and a pre-disabled button when opened via explainLine', async () => {
+    const commit = manifest.commits[0];
+    assert.ok(commit);
+
+    await withAiConfig(true, () =>
+      Promise.resolve(vscode.commands.executeCommand(COMMANDS.explainLine, manifest.trackedFile, commit.sha, 'line three')),
+    );
+
+    const html = api.getCommitDetailsHtml() ?? '';
+    assert.match(html, /Why does this line exist\?/);
+    assert.match(html, /id="explain-commit" disabled/);
+  });
 });

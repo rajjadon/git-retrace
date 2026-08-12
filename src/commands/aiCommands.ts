@@ -11,3 +11,16 @@ export function handleExplainCommitCommand(provider: CommitDetailsViewProvider):
     await provider.explainCommit();
   });
 }
+
+export function handleExplainLineCommand(provider: CommitDetailsViewProvider): vscode.Disposable {
+  return vscode.commands.registerCommand(
+    COMMANDS.explainLine,
+    async (filePath?: string, sha?: string, lineContent?: string) => {
+      if (!filePath || !sha || lineContent === undefined) {
+        void vscode.window.showInformationMessage('GitLore: pick a line with committed history to explain.');
+        return;
+      }
+      await provider.show(filePath, sha, lineContent);
+    },
+  );
+}

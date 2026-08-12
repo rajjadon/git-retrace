@@ -13,7 +13,7 @@ import { handleShowFileHistoryCommand, handleCopyShaCommand } from './commands/f
 import { handleShowCommitCommand } from './commands/commitCommands';
 import { handleOpenGraphCommand } from './commands/graphCommands';
 import { handleCompareBranchesCommand } from './commands/branchCommands';
-import { handleExplainCommitCommand } from './commands/aiCommands';
+import { handleExplainCommitCommand, handleExplainLineCommand } from './commands/aiCommands';
 import { CommitDetailsViewProvider } from './views/CommitDetails/CommitDetailsViewProvider';
 import { CommitGraphViewProvider } from './views/CommitGraph/CommitGraphViewProvider';
 import { BranchComparisonViewProvider } from './views/BranchComparison/BranchComparisonViewProvider';
@@ -66,6 +66,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     handleOpenGraphCommand(commitGraphViewProvider),
     handleCompareBranchesCommand(git, branchComparisonViewProvider),
     handleExplainCommitCommand(commitDetailsViewProvider),
+    handleExplainLineCommand(commitDetailsViewProvider),
     vscode.languages.registerHoverProvider({ scheme: 'file' }, hoverProvider),
     // Backs the "Open changes" action in the commit-details and branch-comparison panels by
     // serving a file's contents at an arbitrary ref to the native diff editor.

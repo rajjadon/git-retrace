@@ -9,7 +9,6 @@ export const COMMANDS = {
   copySha: 'gitLore.copySha',
   openGraph: 'gitLore.openGraph',
   compareBranches: 'gitLore.compareBranches',
-  // Reserved for Phase 2 — not registered in package.json yet.
   explainCommit: 'gitLore.explainCommit',
   explainLine: 'gitLore.explainLine',
 } as const;
