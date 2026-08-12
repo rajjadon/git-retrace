@@ -129,6 +129,62 @@ test('runCommitSummaryFlow: aborting mid-stream ends the generator with no error
   assert.deepEqual(events, [{ type: 'chunk', text: 'first ' }]);
 });
 
+test('runCommitSummaryFlow: aborting during model selection ends the generator before streaming starts', async () => {
+  const controller = new AbortController();
+  let buildCalls = 0;
+  let streamCalls = 0;
+  const model: SummaryModel = {
+    async *streamText(): AsyncGenerator<string, void, unknown> {
+      streamCalls++;
+      yield 'x';
+    },
+  };
+  const events = await collect(
+    runCommitSummaryFlow({
+      enabled: true,
+      cached: undefined,
+      signal: controller.signal,
+      selectModel: async () => {
+        // Simulates selectChatModels() resolving after the user has already navigated away —
+        // CommitDetailsViewProvider.load() aborts the in-flight controller in that case.
+        controller.abort();
+        return model;
+      },
+      buildPrompt: () => {
+        buildCalls++;
+        return 'prompt';
+      },
+    }),
+  );
+  assert.deepEqual(events, []);
+  assert.equal(buildCalls, 0);
+  assert.equal(streamCalls, 0);
+});
+
+test('runCommitSummaryFlow: the in-loop abort guard stops after the current chunk even if the model keeps yielding', async () => {
+  const controller = new AbortController();
+  const model: SummaryModel = {
+    async *streamText(): AsyncGenerator<string, void, unknown> {
+      yield 'first ';
+      controller.abort();
+      // Unlike the "aborting mid-stream" test above, this model does NOT throw after abort — it
+      // keeps yielding, so only the in-loop `if (signal.aborted)` guard (not the catch block's)
+      // can be what stops the flow here.
+      yield 'second';
+    },
+  };
+  const events = await collect(
+    runCommitSummaryFlow({
+      enabled: true,
+      cached: undefined,
+      signal: controller.signal,
+      selectModel: async () => model,
+      buildPrompt: () => 'prompt',
+    }),
+  );
+  assert.deepEqual(events, [{ type: 'chunk', text: 'first ' }]);
+});
+
 test('runCommitSummaryFlow: calls buildPrompt lazily, only once a model is found', async () => {
   let buildCalls = 0;
   await collect(

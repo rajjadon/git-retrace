@@ -6,7 +6,14 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+**AI commit summaries** — opt-in, using your own model
+
+- A **Summarize with AI** button in Commit Details streams a plain-English summary of the open commit.
+- Off by default. Turn it on with `gitLore.ai.enabled` — nothing is sent anywhere until you do.
+- Uses whatever language model you've already registered with VS Code (e.g. GitHub Copilot Chat) via the built-in Language Model API. No GitLore backend, no API key, no account.
+- Needs a language model registered to produce anything — without one, the panel shows an inline hint instead of erroring.
 
 ## [0.2.0] - 2026-08-11
 

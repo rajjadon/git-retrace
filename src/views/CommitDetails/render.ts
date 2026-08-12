@@ -104,8 +104,8 @@ ${AI_ICON}<span class="section-title">AI Summary</span>
 </div>
 <div class="ai-summary">
 <button class="btn" id="explain-commit" type="button">${AI_ICON}Summarize with AI</button>
-<p class="ai-summary-text" id="ai-summary-text" hidden></p>
-<p class="ai-summary-hint" id="ai-summary-hint" hidden></p>
+<p class="ai-summary-text" id="ai-summary-text" aria-live="polite" hidden></p>
+<p class="ai-summary-hint" id="ai-summary-hint" role="status" hidden></p>
 </div>
 <div class="section-head">
 ${FILES_ICON}<span class="section-title">Files changed</span><span class="badge">${files.length}</span>
@@ -149,8 +149,11 @@ window.addEventListener('message', (e) => {
     summaryText.hidden = false;
     summaryText.textContent = msg.text;
     explainBtn.disabled = false;
-  } else if (msg.type === 'aiSummaryDone' || msg.type === 'aiSummaryReset') {
+  } else if (msg.type === 'aiSummaryDone') {
     explainBtn.disabled = false;
+  } else if (msg.type === 'aiSummaryReset') {
+    explainBtn.disabled = false;
+    summaryText.hidden = true;
   } else if (msg.type === 'aiSummaryNoModel') {
     summaryText.hidden = true;
     summaryHint.hidden = false;

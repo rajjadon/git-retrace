@@ -43,6 +43,14 @@ export async function* runCommitSummaryFlow(params: CommitSummaryFlowParams): As
     yield { type: 'noModel' };
     return;
   }
+  // selectModel() can block on VS Code's model-consent UI for seconds; the caller may have
+  // aborted (e.g. the user switched to a different commit) by the time it resolves. Bail before
+  // building the prompt or starting a stream nobody wants — an already-aborted AbortSignal never
+  // re-fires its 'abort' event, so the listener LanguageModelClient.streamText() attaches would
+  // never run and a full model request would go out anyway.
+  if (signal.aborted) {
+    return;
+  }
 
   const prompt = buildPrompt();
   let fullText = '';
