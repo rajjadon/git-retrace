@@ -28,6 +28,31 @@ export function handleExplainLineCommand(service: LineExplanationService): vscod
           await service.explain(filePath, sha, lineContent, controller.signal);
         },
       );
+
+      const state = await service.getState(filePath, sha, lineContent);
+      if (state === undefined) {
+        // Disabled (already showed its own "AI features are disabled" prompt) or aborted
+        // (silent by design) — nothing more to surface.
+        return;
+      }
+
+      const editor = vscode.window.activeTextEditor;
+      const stillOnSameLine =
+        editor !== undefined &&
+        editor.document.uri.fsPath === filePath &&
+        editor.selection.active.line < editor.document.lineCount &&
+        editor.document.lineAt(editor.selection.active.line).text.slice(0, 500) === lineContent;
+
+      if (stillOnSameLine) {
+        // Closest achievable approximation of "the hover updates" — a vscode.Hover cannot
+        // actually be updated in place (no live-streaming API), so this forces a fresh one at
+        // the current cursor position, which now reads the state explain() just wrote.
+        await vscode.commands.executeCommand('editor.action.showHover');
+      } else {
+        // Cursor moved (different line, different file, or no active editor) — auto-reopening
+        // would show a hover for the wrong position or surprise the user mid-something-else.
+        void vscode.window.showInformationMessage('GitLore: line explanation finished — hover the line again to view it.');
+      }
     },
   );
 }

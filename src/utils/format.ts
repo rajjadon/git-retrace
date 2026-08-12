@@ -6,6 +6,8 @@ import { COMMANDS } from '../constants';
 import type { LineExplanationState } from '../core/ai/lineExplanationKey';
 
 const MARKDOWN_SPECIAL_RE = /([\\`*_{}[\]()#+\-.!|>~])/g;
+/** Caps the rendered "done" explanation length — nothing else in this file bounds model output, and an unbounded response pushes the whole hover very tall. */
+const MAX_EXPLANATION_CHARS = 500;
 
 /**
  * Escapes markdown syntax characters. `author` and `summary` come from git history, which
@@ -26,16 +28,19 @@ function formatMessage(text: string, issueLinking: IssueLinkOptions | null): str
     .join('');
 }
 
+/** `$(sparkle)` matches GitLore's existing AI glyph (see `AI_ICON` in `src/views/icons.ts`) — same metaphor, rendered as a codicon here instead of inline SVG since this is a native hover, not a webview. */
 function buildExplainLineLink(filePath: string, sha: string, lineContent: string): string {
   const linkArgs = encodeURIComponent(JSON.stringify([filePath, sha, lineContent]));
-  return `[Explain this line with AI](command:${COMMANDS.explainLine}?${linkArgs})`;
+  return `[$(sparkle) Explain this line](command:${COMMANDS.explainLine}?${linkArgs})`;
 }
 
 /**
  * Renders the line-explanation section of the hover based on its current state. A `Hover` can't
  * be updated after it's returned (no live-streaming API), so "in progress" and "finished" are
  * both just different static renders of whatever `formatBlameHover`'s caller looked up before
- * building this hover — see `LineExplanationService` for the writer side.
+ * building this hover — see `LineExplanationService` for the writer side. Every state shares the
+ * `$(sparkle)` anchor (link states have it inside the link, non-link states before the text) so
+ * switching states reads as one feature progressing, not unrelated content appearing.
  */
 function formatLineExplanation(
   state: LineExplanationState | undefined,
@@ -48,9 +53,12 @@ function formatLineExplanation(
   }
   switch (state.status) {
     case 'pending':
-      return '⏳ Generating explanation…';
-    case 'done':
-      return `**Why this line exists:**\n\n${escapeMarkdown(state.text)}`;
+      return '$(sparkle) $(loading~spin) Generating explanation…';
+    case 'done': {
+      const truncated =
+        state.text.length > MAX_EXPLANATION_CHARS ? `${state.text.slice(0, MAX_EXPLANATION_CHARS)}…` : state.text;
+      return `$(sparkle) **Why this line exists**\n\n${escapeMarkdown(truncated)}`;
+    }
     case 'noModel':
       return `No language model available. Enable a language model (e.g. GitHub Copilot Chat) to use this feature.\n\n${buildExplainLineLink(filePath, sha, lineContent)}`;
     case 'error':
@@ -60,9 +68,15 @@ function formatLineExplanation(
 
 /**
  * Builds the markdown body for the blame hover card. Pure — the caller wraps the result in
- * a `vscode.MarkdownString` and must set `isTrusted = { enabledCommands: [COMMANDS.explainLine] }`
- * for the "Explain this line with AI" link to actually be clickable — VS Code ignores command
- * links in untrusted markdown.
+ * a `vscode.MarkdownString` and must set both `isTrusted = { enabledCommands: [COMMANDS.explainLine] }`
+ * (for the command link to be clickable) and `supportThemeIcons = true` (for `$(sparkle)` etc. to
+ * render as icons instead of literal text) — VS Code ignores both by default.
+ *
+ * Every return path ends with a trailing `---` thematic break. GitLore cannot suppress or control
+ * other hover providers (VS Code's own native git blame, TypeScript's type-info hover, etc.) that
+ * VS Code may stack in the same tooltip for the same cursor position — the trailing rule is the
+ * one thing GitLore's own markdown can do to guarantee a clean visual seam against whatever
+ * renders after it, since VS Code's own inter-provider divider isn't reliably present.
  */
 export function formatBlameHover(
   entry: BlameLine,
@@ -74,7 +88,7 @@ export function formatBlameHover(
   issueLinking: IssueLinkOptions | null = null,
 ): string {
   if (entry.isUncommitted) {
-    return '**Uncommitted changes**\n\nThis line has not been committed yet.';
+    return '**Uncommitted changes**\n\nThis line has not been committed yet.\n\n---';
   }
 
   const date = new Date(entry.authorTime * 1000);
@@ -94,10 +108,11 @@ export function formatBlameHover(
   ];
 
   if (diffStat && !diffStat.binary) {
-    lines.push(`+${diffStat.insertions} -${diffStat.deletions}`);
+    lines.push(`$(diff) +${diffStat.insertions} -${diffStat.deletions} in this file`);
   }
 
   lines.push('', formatLineExplanation(lineExplanation, filePath, entry.sha, lineContent));
+  lines.push('', '---');
 
   return lines.join('\n');
 }

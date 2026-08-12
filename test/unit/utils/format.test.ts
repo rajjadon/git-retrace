@@ -85,9 +85,9 @@ test('formatBlameHover: without issueLinking, "#12" is left as escaped plain tex
   assert.ok(md.includes('\\#12'));
 });
 
-test('formatBlameHover: with no line-explanation state, shows the "Explain this line with AI" link', () => {
+test('formatBlameHover: with no line-explanation state, shows the Explain this line link with sparkle icon', () => {
   const md = formatBlameHover(entry, diffStat, 'tracked.txt', 'line three', undefined, now);
-  assert.match(md, /\[Explain this line with AI\]\(command:gitLore\.explainLine\?/);
+  assert.match(md, /\[\$\(sparkle\) Explain this line\]\(command:gitLore\.explainLine\?/);
   const match = /command:gitLore\.explainLine\?(\S+)\)/.exec(md);
   assert.ok(match, 'expected an encoded command link');
   const args = JSON.parse(decodeURIComponent(match[1] ?? '')) as unknown[];
@@ -122,12 +122,52 @@ test('formatBlameHover: noModel state shows the hint and a retry link', () => {
   const state: LineExplanationState = { status: 'noModel' };
   const md = formatBlameHover(entry, diffStat, 'tracked.txt', 'line three', state, now);
   assert.match(md, /No language model available/);
-  assert.match(md, /\[Explain this line with AI\]\(command:gitLore\.explainLine\?/);
+  assert.match(md, /\[\$\(sparkle\) Explain this line\]\(command:gitLore\.explainLine\?/);
 });
 
 test('formatBlameHover: error state shows the message and a retry link', () => {
   const state: LineExplanationState = { status: 'error', message: 'network timeout' };
   const md = formatBlameHover(entry, diffStat, 'tracked.txt', 'line three', state, now);
   assert.match(md, /Failed to generate explanation: network timeout/);
-  assert.match(md, /\[Explain this line with AI\]\(command:gitLore\.explainLine\?/);
+  assert.match(md, /\[\$\(sparkle\) Explain this line\]\(command:gitLore\.explainLine\?/);
+});
+
+test('formatBlameHover: every render path ends with a trailing --- divider', () => {
+  const endsWithDivider = (md: string) => md.trimEnd().endsWith('---');
+
+  // committed, no explanation state
+  assert.ok(endsWithDivider(formatBlameHover(entry, diffStat, 'tracked.txt', 'line three', undefined, now)));
+  // uncommitted early-return path
+  assert.ok(endsWithDivider(formatBlameHover({ ...entry, isUncommitted: true }, null, 'tracked.txt', 'line three', undefined, now)));
+  // pending
+  assert.ok(endsWithDivider(formatBlameHover(entry, null, 'tracked.txt', 'line three', { status: 'pending' }, now)));
+  // done
+  assert.ok(endsWithDivider(formatBlameHover(entry, null, 'tracked.txt', 'line three', { status: 'done', text: 'short' }, now)));
+  // noModel
+  assert.ok(endsWithDivider(formatBlameHover(entry, null, 'tracked.txt', 'line three', { status: 'noModel' }, now)));
+  // error
+  assert.ok(endsWithDivider(formatBlameHover(entry, null, 'tracked.txt', 'line three', { status: 'error', message: 'oops' }, now)));
+});
+
+test('formatBlameHover: done state truncates explanations over MAX_EXPLANATION_CHARS with a trailing ellipsis', () => {
+  const long = 'a'.repeat(501);
+  const state: LineExplanationState = { status: 'done', text: long };
+  const md = formatBlameHover(entry, null, 'tracked.txt', 'line three', state, now);
+  // Must end with '…' (before the trailing ---)
+  assert.ok(md.includes('a'.repeat(500) + '…'), 'expected truncation at 500 chars');
+  assert.ok(!md.includes('a'.repeat(501)), 'expected the 501st char to be cut');
+});
+
+test('formatBlameHover: done state does not truncate explanations at or under MAX_EXPLANATION_CHARS', () => {
+  const atLimit = 'b'.repeat(500);
+  const state: LineExplanationState = { status: 'done', text: atLimit };
+  const md = formatBlameHover(entry, null, 'tracked.txt', 'line three', state, now);
+  assert.ok(md.includes('b'.repeat(500)), 'expected full text preserved');
+  assert.ok(!md.includes('…'), 'expected no ellipsis when text is exactly at the limit');
+});
+
+test('formatBlameHover: diffstat includes "in this file" scope label', () => {
+  const md = formatBlameHover(entry, diffStat, 'tracked.txt', 'line three', undefined, now);
+  assert.match(md, /in this file/);
+  assert.match(md, /\$\(diff\)/);
 });

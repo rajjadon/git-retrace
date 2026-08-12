@@ -49,6 +49,7 @@ export class BlameHoverProvider implements vscode.HoverProvider {
         formatBlameHover(entry, diffStat, doc.uri.fsPath, lineContent, lineExplanation, undefined, issueLinking),
       );
       markdown.isTrusted = { enabledCommands: [COMMANDS.explainLine] };
+      markdown.supportThemeIcons = true;
       return new vscode.Hover(markdown);
     } catch {
       // Blame failing on an unsaved/untracked file is expected — stay silent.

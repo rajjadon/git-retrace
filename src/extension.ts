@@ -94,7 +94,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     explainCommit: () => commitDetailsViewProvider.explainCommit(),
     getAiSummaryMessagesForTest: () => commitDetailsViewProvider.getAiSummaryMessagesForTest(),
     getLineExplanationStateForTest: (filePath, sha, lineContent) =>
-      lineExplanationService.getStateForTest(filePath, sha, lineContent),
+      lineExplanationService.getState(filePath, sha, lineContent),
   };
 }
 

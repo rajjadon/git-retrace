@@ -21,8 +21,8 @@ export class LineExplanationService {
     private readonly store: LruCache<string, LineExplanationState>,
   ) {}
 
-  /** Test-only introspection seam, same spirit as CommitDetailsViewProvider's getAiSummaryMessagesForTest(). */
-  async getStateForTest(filePath: string, sha: string, lineContent: string): Promise<LineExplanationState | undefined> {
+  /** Reads the current line-explanation state. Used by tests (via `GitLoreTestApi`'s `getLineExplanationStateForTest`) and by `handleExplainLineCommand` itself, to decide whether it's safe to auto-reopen the hover after `explain()` completes. */
+  async getState(filePath: string, sha: string, lineContent: string): Promise<LineExplanationState | undefined> {
     const repoRoot = await this.git.getRepoRoot(filePath);
     return this.store.get(buildLineExplanationKey(repoRoot, filePath, sha, lineContent));
   }

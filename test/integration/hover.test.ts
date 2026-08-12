@@ -139,6 +139,99 @@ suite('Blame hover card', () => {
     assert.match(text, /No language model available/);
   });
 
+  test('BlameHoverProvider returns a MarkdownString with supportThemeIcons enabled so codicons render correctly', async () => {
+    const doc = await vscode.workspace.openTextDocument(manifest.trackedFile);
+    await vscode.window.showTextDocument(doc);
+
+    const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+      'vscode.executeHoverProvider',
+      doc.uri,
+      new vscode.Position(2, 0),
+    );
+
+    assert.ok(hovers && hovers.length > 0, 'expected at least one hover');
+    const content = hovers[0]?.contents[0] as vscode.MarkdownString;
+    assert.equal(content.supportThemeIcons, true);
+  });
+
+  test('gitLore.explainLine auto-reopens the hover when the cursor is still on the explained line', async () => {
+    const commit = manifest.commits[0];
+    assert.ok(commit);
+
+    const doc = await vscode.workspace.openTextDocument(manifest.trackedFile);
+    const editor = await vscode.window.showTextDocument(doc);
+    // Position cursor on line 2 (0-indexed) — "line three" — the line being explained.
+    editor.selection = new vscode.Selection(2, 0, 2, 0);
+
+    let showHoverCalled = false;
+    const originalExecuteCommand = vscode.commands.executeCommand;
+    (vscode.commands as { executeCommand: typeof vscode.commands.executeCommand }).executeCommand = ((
+      cmd: string,
+      ...args: unknown[]
+    ) => {
+      if (cmd === 'editor.action.showHover') {
+        showHoverCalled = true;
+        return Promise.resolve(undefined);
+      }
+      return originalExecuteCommand(cmd, ...args);
+    }) as typeof vscode.commands.executeCommand;
+
+    try {
+      await withAiConfig(true, () =>
+        Promise.resolve(vscode.commands.executeCommand(COMMANDS.explainLine, manifest.trackedFile, commit.sha, 'line three')),
+      );
+    } finally {
+      (vscode.commands as { executeCommand: typeof vscode.commands.executeCommand }).executeCommand = originalExecuteCommand;
+    }
+
+    assert.ok(showHoverCalled, 'expected editor.action.showHover to be invoked when cursor is still on the explained line');
+  });
+
+  test('gitLore.explainLine shows a notification when the cursor has moved off the explained line', async () => {
+    const commit = manifest.commits[0];
+    assert.ok(commit);
+
+    const doc = await vscode.workspace.openTextDocument(manifest.trackedFile);
+    const editor = await vscode.window.showTextDocument(doc);
+    // Cursor on line 0 ("line one") — NOT the line being explained ("line three" at line 2).
+    editor.selection = new vscode.Selection(0, 0, 0, 0);
+
+    let notificationMessage: string | undefined;
+    const originalShowInfo = vscode.window.showInformationMessage;
+    (vscode.window as { showInformationMessage: typeof vscode.window.showInformationMessage }).showInformationMessage = ((
+      message: string,
+      ..._rest: unknown[]
+    ) => {
+      notificationMessage = message;
+      return Promise.resolve(undefined);
+    }) as typeof vscode.window.showInformationMessage;
+
+    let showHoverCalled = false;
+    const originalExecuteCommand = vscode.commands.executeCommand;
+    (vscode.commands as { executeCommand: typeof vscode.commands.executeCommand }).executeCommand = ((
+      cmd: string,
+      ...args: unknown[]
+    ) => {
+      if (cmd === 'editor.action.showHover') {
+        showHoverCalled = true;
+        return Promise.resolve(undefined);
+      }
+      return originalExecuteCommand(cmd, ...args);
+    }) as typeof vscode.commands.executeCommand;
+
+    try {
+      await withAiConfig(true, () =>
+        Promise.resolve(vscode.commands.executeCommand(COMMANDS.explainLine, manifest.trackedFile, commit.sha, 'line three')),
+      );
+    } finally {
+      vscode.window.showInformationMessage = originalShowInfo;
+      (vscode.commands as { executeCommand: typeof vscode.commands.executeCommand }).executeCommand = originalExecuteCommand;
+    }
+
+    assert.match(notificationMessage ?? '', /hover the line again/);
+    assert.ok(!showHoverCalled, 'expected editor.action.showHover NOT to be invoked when cursor has moved');
+  });
+
   test('gitLore.explainLine recovers to an error state instead of leaving the entry stuck at pending when git fails', async () => {
     // A sha absent from the fixture repo: GitService.getCommit/getCommitDiff throw GitCommandError
     // for it (real git, no mocking needed — `git show` on a nonexistent revision fails
