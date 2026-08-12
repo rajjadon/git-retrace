@@ -30,7 +30,6 @@ function shellHtml(bodyHtml: string): string {
 
 /** Docks commit details in the bottom panel (next to Commit Graph), matching GitLens's panel layout, instead of opening a new editor tab per commit. */
 export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
-  [x: string]: any;
   private view: vscode.WebviewView | undefined;
   private currentFilePath: string | undefined;
   private currentCommit: CommitDetail | undefined;
