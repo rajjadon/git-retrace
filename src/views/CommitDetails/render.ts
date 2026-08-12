@@ -21,6 +21,8 @@ export interface RenderCommitDetailsOptions {
   editorFontFamily: string;
   issueLinking?: IssueLinkOptions | null;
   remote?: RemoteTarget | null;
+  /** True when opened via the blame hover's "Explain this line with AI" link — the AI section adapts its heading/button and starts the button disabled, since the flow is already running by the time this HTML is sent. */
+  lineExplanation?: boolean;
 }
 
 /** Escapes `text` as HTML, wrapping any issue references per `issueLinking` in a real `<a>` link. */
@@ -100,10 +102,10 @@ ${styles}
 ${renderActions(commit, opts.remote)}
 ${bodyRest ? `<pre class="commit-body">${linkifyHtml(bodyRest, opts.issueLinking)}</pre>` : ''}
 <div class="section-head">
-${AI_ICON}<span class="section-title">AI Summary</span>
+${AI_ICON}<span class="section-title">${opts.lineExplanation ? 'Why does this line exist?' : 'AI Summary'}</span>
 </div>
 <div class="ai-summary">
-<button class="btn" id="explain-commit" type="button">${AI_ICON}Summarize with AI</button>
+<button class="btn" id="explain-commit"${opts.lineExplanation ? ' disabled' : ''} type="button">${AI_ICON}${opts.lineExplanation ? 'Explain this line' : 'Summarize with AI'}</button>
 <p class="ai-summary-text" id="ai-summary-text" aria-live="polite" hidden></p>
 <p class="ai-summary-hint" id="ai-summary-hint" role="status" hidden></p>
 </div>

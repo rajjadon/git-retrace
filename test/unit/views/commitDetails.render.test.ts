@@ -205,3 +205,17 @@ test('renderCommitDetailsHtml: the AI summary text and hint start hidden', () =>
   assert.match(html, /id="ai-summary-text"[^>]*hidden/);
   assert.match(html, /id="ai-summary-hint"[^>]*hidden/);
 });
+
+test('renderCommitDetailsHtml: in line-explanation mode, shows a line-focused heading and a disabled, pre-labeled button', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, { ...opts, lineExplanation: true });
+  assert.match(html, /Why does this line exist\?/);
+  assert.match(html, /id="explain-commit" disabled type="button">.*?Explain this line<\/button>/s);
+});
+
+test('renderCommitDetailsHtml: without line-explanation mode, keeps the original heading, label, and enabled button', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /AI Summary/);
+  assert.ok(!html.includes('Why does this line exist?'));
+  assert.match(html, /id="explain-commit" type="button">.*?Summarize with AI<\/button>/s);
+  assert.ok(!html.includes('id="explain-commit" disabled'));
+});
