@@ -6,6 +6,12 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-13
+
+### Changed
+
+- Removed named comparisons to other extensions from the README, code comments, and docs. No functional change — GitLore's behavior, settings, and commands are unaffected.
+
 ## [0.3.0] - 2026-08-13
 
 AI features, the stale-code detector, and the author ownership heatmap — closing out Phase 2 of the roadmap. All opt-in features stay off until you turn them on; nothing here changes what data leaves your machine.

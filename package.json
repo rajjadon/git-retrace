@@ -2,7 +2,7 @@
   "name": "gitlore",
   "displayName": "GitLore — git blame, history & commit graph",
   "description": "The story behind every line. Free, local-first git blame, history, commit graph and branch comparison — no account, no telemetry.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "RajpratapsinghJadon",
   "license": "MIT",
   "engines": {
