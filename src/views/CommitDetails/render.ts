@@ -4,7 +4,7 @@ import { escapeHtml } from '../escapeHtml';
 import { renderFileSections } from '../diffRender';
 import { linkifyIssues, type IssueLinkOptions } from '../../utils/issueLinks';
 import { buildGravatarUrl } from '../../utils/gravatar';
-import { COPY_ICON, EXTERNAL_ICON, FILES_ICON, MESSAGE_ICON, SEARCH_ICON, WRAP_ICON } from '../icons';
+import { AI_ICON, COPY_ICON, EXTERNAL_ICON, FILES_ICON, MESSAGE_ICON, SEARCH_ICON, WRAP_ICON } from '../icons';
 
 /** Where "Open on <host>" should send the user, when the repo has a remote we know the URL shape for. */
 export interface RemoteTarget {
@@ -100,6 +100,14 @@ ${styles}
 ${renderActions(commit, opts.remote)}
 ${bodyRest ? `<pre class="commit-body">${linkifyHtml(bodyRest, opts.issueLinking)}</pre>` : ''}
 <div class="section-head">
+${AI_ICON}<span class="section-title">AI Summary</span>
+</div>
+<div class="ai-summary">
+<button class="btn" id="explain-commit" type="button">${AI_ICON}Summarize with AI</button>
+<p class="ai-summary-text" id="ai-summary-text" hidden></p>
+<p class="ai-summary-hint" id="ai-summary-hint" hidden></p>
+</div>
+<div class="section-head">
 ${FILES_ICON}<span class="section-title">Files changed</span><span class="badge">${files.length}</span>
 ${renderTotals(files)}
 <span class="search">${SEARCH_ICON}<input id="file-filter" type="search" placeholder="Filter files…" aria-label="Filter changed files by path" autocomplete="off" spellcheck="false" /></span>
@@ -122,6 +130,39 @@ const remoteBtn = document.getElementById('open-remote');
 if (remoteBtn) {
   remoteBtn.addEventListener('click', () => vscode.postMessage({ type: 'openRemote' }));
 }
+
+const explainBtn = document.getElementById('explain-commit');
+const summaryText = document.getElementById('ai-summary-text');
+const summaryHint = document.getElementById('ai-summary-hint');
+explainBtn.addEventListener('click', () => {
+  explainBtn.disabled = true;
+  summaryHint.hidden = true;
+  summaryText.hidden = false;
+  summaryText.textContent = '';
+  vscode.postMessage({ type: 'explainCommit' });
+});
+window.addEventListener('message', (e) => {
+  const msg = e.data;
+  if (msg.type === 'aiSummaryChunk') {
+    summaryText.textContent += msg.text;
+  } else if (msg.type === 'aiSummaryCached') {
+    summaryText.hidden = false;
+    summaryText.textContent = msg.text;
+    explainBtn.disabled = false;
+  } else if (msg.type === 'aiSummaryDone' || msg.type === 'aiSummaryReset') {
+    explainBtn.disabled = false;
+  } else if (msg.type === 'aiSummaryNoModel') {
+    summaryText.hidden = true;
+    summaryHint.hidden = false;
+    summaryHint.textContent = 'No language model available. Enable a language model (e.g. GitHub Copilot Chat) to use this feature.';
+    explainBtn.disabled = false;
+  } else if (msg.type === 'aiSummaryError') {
+    summaryText.hidden = true;
+    summaryHint.hidden = false;
+    summaryHint.textContent = 'Failed to generate summary: ' + msg.message;
+    explainBtn.disabled = false;
+  }
+});
 
 // Opening a file's changes must not also toggle the <details> it lives in.
 for (const btn of document.querySelectorAll('.row-btn')) {

@@ -193,3 +193,15 @@ test('renderCommitDetailsHtml: numbers the diff gutter from the hunk header', ()
   assert.match(html, /<span class="dn dn-old">1<\/span><span class="dn dn-new">1<\/span><span class="dc diff-ctx"> line one</);
   assert.match(html, /<span class="dn dn-old"><\/span><span class="dn dn-new">3<\/span><span class="dc diff-add">\+line three</);
 });
+
+test('renderCommitDetailsHtml: offers a Summarize with AI button that posts explainCommit', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /id="explain-commit" type="button">.*?Summarize with AI<\/button>/s);
+  assert.match(html, /type: 'explainCommit'/);
+});
+
+test('renderCommitDetailsHtml: the AI summary text and hint start hidden', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /id="ai-summary-text"[^>]*hidden/);
+  assert.match(html, /id="ai-summary-hint"[^>]*hidden/);
+});

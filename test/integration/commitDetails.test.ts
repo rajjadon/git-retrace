@@ -122,4 +122,26 @@ suite('Commit details webview', () => {
 
     assert.deepEqual(api.getAiSummaryMessagesForTest(), [{ type: 'aiSummaryNoModel' }]);
   });
+
+  test('the AI Summary section and button are present in the rendered panel', async () => {
+    const commit = manifest.commits[0];
+    assert.ok(commit);
+    await vscode.commands.executeCommand(COMMANDS.showCommit, manifest.trackedFile, commit.sha);
+    await waitFor(() => (api.getCommitDetailsHtml() ?? '').includes(commit.sha));
+
+    const html = api.getCommitDetailsHtml() ?? '';
+    assert.match(html, /id="explain-commit"/);
+    assert.match(html, /AI Summary/);
+  });
+
+  test('gitLore.explainCommit command drives the same flow as the panel button', async () => {
+    const commit = manifest.commits[0];
+    assert.ok(commit);
+    await vscode.commands.executeCommand(COMMANDS.showCommit, manifest.trackedFile, commit.sha);
+    await waitFor(() => (api.getCommitDetailsHtml() ?? '').includes(commit.sha));
+
+    await withAiConfig(true, () => Promise.resolve(vscode.commands.executeCommand(COMMANDS.explainCommit)));
+
+    assert.deepEqual(api.getAiSummaryMessagesForTest(), [{ type: 'aiSummaryNoModel' }]);
+  });
 });

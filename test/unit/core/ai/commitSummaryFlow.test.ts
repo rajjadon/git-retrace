@@ -13,11 +13,10 @@ async function collect(gen: AsyncGenerator<SummaryEvent>): Promise<SummaryEvent[
 function fakeModel(chunks: string[], failAfter?: number): SummaryModel {
   return {
     async *streamText(): AsyncGenerator<string, void, unknown> {
-      for (let i = 0; i < chunks.length; i++) {
+      for (const [i, chunk] of chunks.entries()) {
         if (failAfter !== undefined && i === failAfter) {
           throw new Error('model exploded');
         }
-        const chunk = chunks[i]!;
         yield chunk;
       }
     },
