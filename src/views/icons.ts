@@ -72,3 +72,27 @@ export const SWAP_ICON = icon('<path d="M2.5 5.5h11L10.5 2.5" /><path d="M13.5 1
 
 /** Nothing to show, and that's the good outcome — used by the "up to date" empty state. */
 export const CHECK_ICON = icon('<path d="M3 8.5 6.5 12 13 4.5" />', 'empty-icon', 15);
+
+/** Four-point sparkle — marks AI-generated content. */
+export const AI_ICON = icon(
+  '<path d="M8 2.2 9.1 6 12.9 7 9.1 8 8 11.8 6.9 8 3.1 7 6.9 6Z" /><path d="M12.5 2.4l0.5 1.3 1.3 0.5-1.3 0.5-0.5 1.3-0.5-1.3-1.3-0.5 1.3-0.5Z" />',
+  'action-icon',
+  12,
+);
+
+/** Author column header — a simple head-and-shoulders glyph. */
+export const AUTHOR_ICON = icon(
+  '<circle cx="8" cy="5.3" r="2.6" /><path d="M3 13.3c0-2.9 2.2-4.6 5-4.6s5 1.7 5 4.6" />',
+  'cell-icon',
+  12,
+);
+
+/** Commit Date column header. */
+export const CLOCK_ICON = icon('<circle cx="8" cy="8" r="5.3" /><path d="M8 5.2v3l2 1.2" />', 'cell-icon', 12);
+
+/** SHA column header — a hash mark, since a git SHA is a hash. */
+export const HASH_ICON = icon(
+  '<path d="M6.2 2.5 4.6 13.5M11.4 2.5 9.8 13.5M3 6.3h10M2.6 9.7h10" />',
+  'cell-icon',
+  12,
+);

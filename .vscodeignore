@@ -24,6 +24,12 @@ CLAUDE.md
 .gitignore
 .vscodeignore
 
+# Dev-process tooling: the code-review-graph index, subagent-driven-development scratch/ledgers,
+# and the spec/plan docs those processes produce. None of this is user-facing.
+.code-review-graph/**
+.superpowers/**
+docs/**
+
 # The icon source; package.json points at the rendered PNG.
 media/icon.svg
 

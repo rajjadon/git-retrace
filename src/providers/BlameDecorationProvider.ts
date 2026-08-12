@@ -1,10 +1,8 @@
 import * as vscode from 'vscode';
 import type { BlameLine } from '../core/git/types';
 import { formatBlameEntry } from '../utils/blameFormat';
-import { CONFIG } from '../constants';
+import { CONFIG, DEFAULT_MAX_BLAME_FILE_SIZE } from '../constants';
 import type { BlameSource } from './BlameSource';
-
-const DEFAULT_MAX_BLAME_FILE_SIZE = 1_048_576;
 
 /** `undefined` = no active file editor at all; `entry: null` = there's an editor but no blame for its current line. */
 export interface ActiveLineBlame {

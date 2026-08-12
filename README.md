@@ -34,7 +34,7 @@ code --install-extension RajpratapsinghJadon.gitlore
 **From a `.vsix`** — grab one from [Releases](https://github.com/rajjadon/gitlore/releases), then:
 
 ```bash
-code --install-extension gitlore-0.2.0.vsix
+code --install-extension gitlore-0.3.0.vsix
 ```
 
 Requires **VS Code 1.85+** and `git` on your `PATH`. Works in Cursor and other VS Code-based editors.
@@ -79,6 +79,8 @@ Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with
 
 - **File history** — every commit that touched the current file, following renames, in the Explorer.
 - **Issue and PR links** — `#123` in a commit message becomes a link, auto-detected from your remote or pointed at any tracker (Jira included) via a regex and URL template.
+- **Stale-code detector** — a CodeLens above functions and methods untouched for longer than `gitLore.staleThresholdDays`, linking straight to the commit that last changed them.
+- **Author ownership heatmap** — an overview-ruler color mark per line, by that line's author (`gitLore.ownership.enabled`, off by default), plus **GitLore: Show File Ownership** for a recency-weighted breakdown of who owns the file.
 
 ## Commands
 
@@ -92,6 +94,7 @@ Every command is also a title-bar button in the GitLore panel.
 | `GitLore: Show File History` | List commits touching the current file |
 | `GitLore: Toggle Inline Blame` | Turn the end-of-line decoration on or off |
 | `GitLore: Copy Commit SHA` | Copy a commit's full SHA (from a commit's context menu) |
+| `GitLore: Show File Ownership` | See a file's authors ranked by recency-weighted ownership share (command palette only, no title-bar button) |
 
 ## Settings
 
@@ -104,6 +107,9 @@ Every command is also a title-bar button in the GitLore panel.
 | `gitLore.maxBlameFileSize` | number | `1048576` | Skip blame for files larger than this size, in bytes. |
 | `gitLore.maxHistoryItems` | number | `200` | Max commits loaded per file history. |
 | `gitLore.maxGraphItems` | number | `200` | Max commits loaded in the commit graph. |
+| `gitLore.staleCode.enabled` | boolean | `true` | Show a CodeLens above functions and methods that haven't changed in longer than staleThresholdDays. |
+| `gitLore.staleThresholdDays` | number | `180` | Days since a function's or method's last change before it's flagged as stale. |
+| `gitLore.ownership.enabled` | boolean | `false` | Show a color mark per line in the editor's overview ruler for that line's author. |
 | `gitLore.issueLinking.enabled` | boolean | `true` | Auto-link issue/PR references in commit messages. |
 | `gitLore.issueLinking.pattern` | string | `"#(\\d+)"` | Regex matching issue references. The first capture group (or the whole match) fills `{issue}` in the URL template. |
 | `gitLore.issueLinking.urlTemplate` | string | `""` | `{issue}`-templated issue URL. Empty = auto-detect from the repo's GitHub/GitLab remote. |
@@ -122,11 +128,11 @@ No telemetry. No analytics. No account.
 
 GitLore is not trying to out-feature GitLens — it's trying to be the free, fast, small part you actually use every day. Honest accounting:
 
-**What GitLore does** — inline blame and hover, status bar, file history, commit graph, commit details with per-file diffs, branch comparison, issue linking. All free, forever.
+**What GitLore does** — inline blame and hover, status bar, file history, commit graph, commit details with per-file diffs, AI commit summaries, AI line explanations, branch comparison, issue linking. All free, forever.
 
 **What it deliberately doesn't** — staging, stashing or committing (that's VS Code's own Source Control view, and the graph links you there), and anything behind a sign-in.
 
-**What's missing for now** — AI commit summaries and line explanations (planned, using your own model via VS Code's Language Model API, so no key goes to us), a file-tree view of changed files, and graph auto-refresh. See the [changelog](CHANGELOG.md) for the current list.
+**What's missing for now** — a file-tree view of changed files, and graph auto-refresh. See the [changelog](CHANGELOG.md) for the current list.
 
 ## Contributing
 

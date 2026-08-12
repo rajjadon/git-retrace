@@ -193,3 +193,56 @@ test('renderCommitDetailsHtml: numbers the diff gutter from the hunk header', ()
   assert.match(html, /<span class="dn dn-old">1<\/span><span class="dn dn-new">1<\/span><span class="dc diff-ctx"> line one</);
   assert.match(html, /<span class="dn dn-old"><\/span><span class="dn dn-new">3<\/span><span class="dc diff-add">\+line three</);
 });
+
+test('renderCommitDetailsHtml: offers a Summarize with AI button that posts explainCommit', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /id="explain-commit" type="button">.*?Summarize with AI<\/button>/s);
+  assert.match(html, /type: 'explainCommit'/);
+});
+
+test('renderCommitDetailsHtml: the Summarize with AI button carries the accent treatment, unlike the copy/open actions', () => {
+  const remote = { label: 'GitHub', url: 'https://github.com/o/r/commit/x' };
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, { ...opts, remote });
+  assert.match(html, /class="btn btn-accent" id="explain-commit"/);
+  assert.match(html, /class="btn" id="copy-sha"/);
+  assert.match(html, /class="btn" id="copy-message"/);
+  assert.match(html, /class="btn" id="open-remote"/);
+});
+
+test('renderCommitDetailsHtml: clicking Summarize with AI shows a "Generating…" hint until content arrives', () => {
+  // Regression: the click handler used to leave the summary paragraph empty with zero feedback
+  // until the first chunk streamed in — the same "did my click even register?" gap already fixed
+  // for the hover's line-explanation flow.
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(
+    html,
+    /explainBtn\.addEventListener\('click', \(\) => \{\s*explainBtn\.disabled = true;\s*summaryText\.hidden = true;\s*summaryText\.textContent = '';\s*summaryHint\.hidden = false;\s*summaryHint\.textContent = 'Generating…';/,
+  );
+});
+
+test('renderCommitDetailsHtml: every terminal AI-summary message hides the "Generating…" hint', () => {
+  // Regression: aiSummaryCached, aiSummaryDone, and aiSummaryReset never cleared the hint, so a
+  // cached response (which skips chunk events entirely) left "Generating…" showing forever.
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /msg\.type === 'aiSummaryCached'\) \{[^}]*summaryHint\.hidden = true;/s);
+  assert.match(html, /msg\.type === 'aiSummaryDone'\) \{[^}]*summaryHint\.hidden = true;/s);
+  assert.match(html, /msg\.type === 'aiSummaryReset'\) \{[^}]*summaryHint\.hidden = true;/s);
+});
+
+test('renderCommitDetailsHtml: the AI summary text and hint start hidden', () => {
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(html, /id="ai-summary-text"[^>]*hidden/);
+  assert.match(html, /id="ai-summary-hint"[^>]*hidden/);
+});
+
+test('renderCommitDetailsHtml: the aiSummaryChunk handler unhides the summary text before appending', () => {
+  // Regression test: the text element starts `hidden` in the static HTML. Any code path that
+  // invokes explainCommit() without going through the button's own click handler (the click
+  // handler is the only thing that currently unhides it) would stream into a permanently
+  // invisible element unless the chunk handler itself unhides it too.
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(
+    html,
+    /if \(msg\.type === 'aiSummaryChunk'\) \{\s*summaryText\.hidden = false;\s*summaryText\.textContent \+= msg\.text;/,
+  );
+});

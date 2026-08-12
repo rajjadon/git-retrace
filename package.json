@@ -2,7 +2,7 @@
   "name": "gitlore",
   "displayName": "GitLore — git blame, history & commit graph",
   "description": "The story behind every line. Free, local-first git blame, history, commit graph and branch comparison — no account, no telemetry.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "RajpratapsinghJadon",
   "license": "MIT",
   "engines": {
@@ -48,6 +48,21 @@
         "command": "gitLore.compareBranches",
         "title": "GitLore: Compare Branches",
         "icon": "$(git-compare)"
+      },
+      {
+        "command": "gitLore.explainCommit",
+        "title": "GitLore: Explain Commit with AI",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitLore.explainLine",
+        "title": "GitLore: Explain This Line's History",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitLore.showFileOwnership",
+        "title": "GitLore: Show File Ownership",
+        "icon": "$(person)"
       }
     ],
     "viewsContainers": {
@@ -76,12 +91,14 @@
         {
           "type": "webview",
           "id": "gitLore.commitDetails",
-          "name": "Commit Details"
+          "name": "Commit Details",
+          "visibility": "collapsed"
         },
         {
           "type": "webview",
           "id": "gitLore.branchComparison",
-          "name": "Branch Comparison"
+          "name": "Branch Comparison",
+          "visibility": "collapsed"
         }
       ]
     },
@@ -138,6 +155,10 @@
         {
           "command": "gitLore.copySha",
           "when": "false"
+        },
+        {
+          "command": "gitLore.explainLine",
+          "when": "false"
         }
       ]
     },
@@ -179,6 +200,21 @@
           "default": 200,
           "description": "Max commits loaded in the commit graph."
         },
+        "gitLore.staleCode.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a CodeLens above functions and methods that haven't changed in longer than staleThresholdDays."
+        },
+        "gitLore.staleThresholdDays": {
+          "type": "number",
+          "default": 180,
+          "description": "Days since a function's or method's last change before it's flagged as stale."
+        },
+        "gitLore.ownership.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show a color mark per line in the editor's overview ruler for that line's author. A more opinionated visual than inline blame, so it's off by default."
+        },
         "gitLore.issueLinking.enabled": {
           "type": "boolean",
           "default": true,
@@ -193,6 +229,21 @@
           "type": "string",
           "default": "",
           "description": "'{issue}'-templated URL for issue links, e.g. https://github.com/owner/repo/issues/{issue}. Leave empty to auto-detect from the repo's git remote (GitHub or GitLab)."
+        },
+        "gitLore.ai.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable AI features (commit summaries, line explanations). Uses your own language model via vscode.lm — no key or diff ever leaves your machine unless this is on."
+        },
+        "gitLore.ai.modelFamily": {
+          "type": "string",
+          "default": "gpt-4o",
+          "description": "Preferred language model family hint (e.g. gpt-4o, claude-3.5-sonnet). Falls back to any available model if no match is found."
+        },
+        "gitLore.ai.maxDiffChars": {
+          "type": "number",
+          "default": 8000,
+          "description": "Max diff size, in characters, sent to the model for a commit summary. Longer diffs are truncated."
         }
       }
     }

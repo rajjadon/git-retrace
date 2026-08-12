@@ -6,7 +6,45 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
-Nothing yet.
+## [0.3.0] - 2026-08-13
+
+AI features, the stale-code detector, and the author ownership heatmap — closing out Phase 2 of the roadmap. All opt-in features stay off until you turn them on; nothing here changes what data leaves your machine.
+
+### Added
+
+**AI commit summaries** — opt-in, using your own model
+
+- A **Summarize with AI** button in Commit Details streams a plain-English summary of the open commit.
+- Off by default. Turn it on with `gitLore.ai.enabled` — nothing is sent anywhere until you do.
+- Uses whatever language model you've already registered with VS Code (e.g. GitHub Copilot Chat) via the built-in Language Model API. No GitLore backend, no API key, no account.
+- Needs a language model registered to produce anything — without one, the panel shows an inline hint instead of erroring.
+
+**AI line explanations** — "why does this line exist?", from the blame hover
+
+- The blame hover's **Explain this line with AI** link generates the explanation in the background — a small status-bar spinner shows while it runs, no panel opens. Re-hover the same line once it's done and the hover card shows the finished explanation directly.
+- Reuses the exact same `gitLore.ai.enabled` gate and AI infrastructure as commit summaries: off by default, no model registered shows the same inline hint, and nothing is sent anywhere unless you've opted in.
+
+**Stale-code detector**
+
+- Functions and methods untouched for longer than `gitLore.staleThresholdDays` (default 180) get a subtle CodeLens — click it to open Commit Details for the commit that last changed them.
+- On by default. Turn it off with `gitLore.staleCode.enabled`.
+- Works for any language with a symbol provider installed (uses VS Code's built-in `executeDocumentSymbolProvider` — no new parser).
+- Known limitation: an arrow function assigned to a top-level `const` (e.g. `export const foo = () => {}`) isn't flagged in v1 — TypeScript's language server reports these as `SymbolKind.Variable`, not `Function`, and flagging every Variable would also catch plain data constants as "stale." Named `function` declarations and class methods are unaffected.
+
+**Commit Graph: row tooltip and icon headers**
+
+- Hovering or keyboard-focusing a commit row shows a tooltip with the author, full commit message, age/date/SHA, and diffstat — no more waiting on native browser tooltips split across separate cells.
+- The Author, Changes, Commit Date, and SHA column headers are now compact icons (each still announces its real name to screen readers via `title`/`aria-label`).
+
+**Author ownership heatmap** — closes out Phase 2 of the roadmap
+
+- Turn on `gitLore.ownership.enabled` for a colored mark in the overview ruler for every line, colored by that line's author (from a 7-color palette shared with the commit graph — with more than 7 authors, colors repeat), so you can see at a glance who owns which regions of a file.
+- **GitLore: Show File Ownership** lists every author on the current file, weighted by recency (a line touched last week counts for more than one untouched for years) rather than raw line count, most-recently-active author first — with their share, line count, and last-active age.
+- Off by default (the ruler marks); the command works regardless. Respects `gitLore.maxBlameFileSize` and `gitLore.blame.ignoreWhitespace` like the rest of blame.
+
+### Changed
+
+- Commit Details and Branch Comparison now start collapsed beside the commit graph instead of sitting open and empty. Clicking a commit row expands Commit Details; the compare-branches button expands Branch Comparison. (Only affects workspaces opening the GitLore panel for the first time — VS Code remembers your own manual layout choices after that.)
 
 ## [0.2.0] - 2026-08-11
 

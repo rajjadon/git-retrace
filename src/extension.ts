@@ -8,24 +8,37 @@ import { BlameHoverProvider } from './providers/BlameHoverProvider';
 import { FileHistoryProvider } from './providers/FileHistoryProvider';
 import { StatusBarProvider } from './providers/StatusBarProvider';
 import { GitContentProvider } from './providers/GitContentProvider';
+import { StaleCodeLensProvider } from './providers/CodeLensProvider';
+import { OwnershipDecorationProvider } from './providers/OwnershipDecorationProvider';
 import { handleToggleBlameCommand } from './commands/blameCommands';
 import { handleShowFileHistoryCommand, handleCopyShaCommand } from './commands/fileHistoryCommands';
 import { handleShowCommitCommand } from './commands/commitCommands';
 import { handleOpenGraphCommand } from './commands/graphCommands';
 import { handleCompareBranchesCommand } from './commands/branchCommands';
+import { handleExplainCommitCommand, handleExplainLineCommand } from './commands/aiCommands';
+import { handleShowFileOwnershipCommand, buildOwnershipQuickPickItems } from './commands/ownershipCommands';
 import { CommitDetailsViewProvider } from './views/CommitDetails/CommitDetailsViewProvider';
 import { CommitGraphViewProvider } from './views/CommitGraph/CommitGraphViewProvider';
 import { BranchComparisonViewProvider } from './views/BranchComparison/BranchComparisonViewProvider';
+import { LanguageModelClient } from './ai/LanguageModelClient';
+import { LineExplanationService } from './ai/LineExplanationService';
+import { LruCache } from './core/cache/LruCache';
+import type { LineExplanationState } from './core/ai/lineExplanationKey';
 
 /** Test-only introspection surface — accessed via `vscode.extensions.getExtension(id).exports` in integration tests. */
 export interface GitLoreTestApi {
   blameProvider: BlameDecorationProvider;
   fileHistoryProvider: FileHistoryProvider;
   statusBarProvider: StatusBarProvider;
+  ownershipProvider: OwnershipDecorationProvider;
   git: GitService;
   getCommitDetailsHtml: () => string | undefined;
   getCommitGraphHtml: () => string | undefined;
   getBranchComparisonHtml: () => string | undefined;
+  explainCommit: () => Promise<void>;
+  getAiSummaryMessagesForTest: () => unknown[];
+  getLineExplanationStateForTest: (filePath: string, sha: string, lineContent: string) => Promise<LineExplanationState | undefined>;
+  getOwnershipItemsForTest: (filePath: string) => Promise<vscode.QuickPickItem[] | null>;
 }
 
 export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
@@ -40,13 +53,18 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
   // one lazily), so there's nothing "heavy" to defer here and doing so would only
   // delay command registration past when activate() resolves, racing test/startup code.
   const git = new GitService(logger);
+  const languageModelClient = new LanguageModelClient(logger);
+  const lineExplanationStore = new LruCache<string, LineExplanationState>(50);
+  const lineExplanationService = new LineExplanationService(git, languageModelClient, logger, lineExplanationStore);
   const blameSource = new BlameSource(git, logger);
   const blameProvider = new BlameDecorationProvider(blameSource);
-  const hoverProvider = new BlameHoverProvider(blameSource, git);
+  const hoverProvider = new BlameHoverProvider(blameSource, git, lineExplanationStore);
+  const staleCodeLensProvider = new StaleCodeLensProvider(blameSource);
+  const ownershipProvider = new OwnershipDecorationProvider(blameSource);
   const fileHistoryProvider = new FileHistoryProvider(git);
   const statusBarProvider = new StatusBarProvider(blameProvider);
   const commitGraphViewProvider = new CommitGraphViewProvider(ctx.extensionUri, git);
-  const commitDetailsViewProvider = new CommitDetailsViewProvider(ctx.extensionUri, git);
+  const commitDetailsViewProvider = new CommitDetailsViewProvider(ctx.extensionUri, git, languageModelClient, logger);
   const branchComparisonViewProvider = new BranchComparisonViewProvider(ctx.extensionUri, git);
 
   ctx.subscriptions.push(
@@ -54,13 +72,19 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     blameProvider,
     fileHistoryProvider,
     statusBarProvider,
+    staleCodeLensProvider,
+    ownershipProvider,
     handleToggleBlameCommand(blameProvider),
     handleShowFileHistoryCommand(fileHistoryProvider),
     handleCopyShaCommand(),
     handleShowCommitCommand(commitDetailsViewProvider),
     handleOpenGraphCommand(commitGraphViewProvider),
     handleCompareBranchesCommand(git, branchComparisonViewProvider),
+    handleExplainCommitCommand(commitDetailsViewProvider),
+    handleExplainLineCommand(lineExplanationService),
+    handleShowFileOwnershipCommand(blameSource),
     vscode.languages.registerHoverProvider({ scheme: 'file' }, hoverProvider),
+    vscode.languages.registerCodeLensProvider({ scheme: 'file' }, staleCodeLensProvider),
     // Backs the "Open changes" action in the commit-details and branch-comparison panels by
     // serving a file's contents at an arbitrary ref to the native diff editor.
     vscode.workspace.registerTextDocumentContentProvider(SCHEMES.gitContent, new GitContentProvider(git)),
@@ -74,10 +98,16 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     blameProvider,
     fileHistoryProvider,
     statusBarProvider,
+    ownershipProvider,
     git,
     getCommitDetailsHtml: () => commitDetailsViewProvider.getCurrentHtmlForTest(),
     getCommitGraphHtml: () => commitGraphViewProvider.getCurrentHtmlForTest(),
     getBranchComparisonHtml: () => branchComparisonViewProvider.getCurrentHtmlForTest(),
+    explainCommit: () => commitDetailsViewProvider.explainCommit(),
+    getAiSummaryMessagesForTest: () => commitDetailsViewProvider.getAiSummaryMessagesForTest(),
+    getLineExplanationStateForTest: (filePath, sha, lineContent) =>
+      lineExplanationService.getState(filePath, sha, lineContent),
+    getOwnershipItemsForTest: (filePath: string) => buildOwnershipQuickPickItems(blameSource, filePath),
   };
 }
 

@@ -24,7 +24,11 @@ function commit(sha: string, parents: string[], overrides: Partial<GraphCommit> 
 }
 
 const now = new Date('2024-02-04T10:00:00Z');
-const opts = { nonce: 'abc123', cspSource: 'vscode-webview://xyz', styleUri: 'vscode-webview://xyz/style.css' };
+const opts = {
+  nonce: 'abc123',
+  cspSource: 'vscode-webview://xyz',
+  styleUris: ['vscode-webview://xyz/shared.css', 'vscode-webview://xyz/commitGraph.css'],
+};
 
 test('renderGraphHtml: includes commit message, author, age, sha, and ref labels', () => {
   const commits = [commit('C', ['A'], { message: 'add feature', refs: [{ name: 'main', type: 'branch' }] })];
@@ -37,23 +41,84 @@ test('renderGraphHtml: includes commit message, author, age, sha, and ref labels
   assert.match(html, /class="ref ref-branch"[^>]*>.*?main<\/span>/s);
 });
 
-test('renderGraphHtml: renders GitLens\'s seven column headers', () => {
+test('renderGraphHtml: renders the three text column headers (Branch/Tag, Graph, Commit Message)', () => {
   const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
-  for (const header of ['Branch / Tag', 'Graph', 'Commit Message', 'Author', 'Changes', 'Commit Date', 'SHA']) {
+  for (const header of ['Branch / Tag', 'Graph', 'Commit Message']) {
     assert.match(html, new RegExp(`role="columnheader">${header.replace(/\//g, '\\/')}<`));
   }
+});
+
+test('renderGraphHtml: Author/Changes/Commit Date/SHA headers are icon-only, with a title and aria-label naming the column', () => {
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
+  assert.match(html, /role="columnheader" title="Author" aria-label="Author"><svg/);
+  assert.match(html, /role="columnheader" title="Changes" aria-label="Changes"><svg/);
+  assert.match(html, /role="columnheader" title="Commit Date" aria-label="Commit Date"><svg/);
+  assert.match(html, /role="columnheader" title="SHA" aria-label="SHA"><svg/);
+  assert.ok(!html.includes('role="columnheader">Author<'));
+  assert.ok(!html.includes('role="columnheader">Changes<'));
+  assert.ok(!html.includes('role="columnheader">Commit Date<'));
+  assert.ok(!html.includes('role="columnheader">SHA<'));
+});
+
+test('renderGraphHtml: includes exactly one shared row-tooltip container', () => {
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
+  const matches = html.match(/id="row-tooltip"/g) ?? [];
+  assert.equal(matches.length, 1);
+  assert.match(html, /<div id="row-tooltip" class="row-tooltip" role="tooltip" aria-hidden="true" hidden><\/div>/);
+});
+
+test('renderGraphHtml: rows show/hide the tooltip on hover, keyboard focus, scroll, and Escape', () => {
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
+  assert.match(html, /addEventListener\('mouseenter', \(\) => showTooltip\(row\)\)/);
+  assert.match(html, /addEventListener\('mouseleave', hideTooltip\)/);
+  assert.match(html, /addEventListener\('focus', \(\) => showTooltip\(row\)\)/);
+  assert.match(html, /addEventListener\('blur', hideTooltip\)/);
+  // Scroll repositions the tooltip for the currently-shown row instead of hiding it — hiding would
+  // fight with ArrowDown's focus()-triggered scroll-into-view, flashing the tooltip on every press.
+  assert.match(html, /addEventListener\('scroll', \(\) => \{\s*if \(shownRow\) positionTooltip\(shownRow\);\s*\}\)/);
+  assert.match(html, /e\.key === 'Escape'/);
+});
+
+test('renderGraphHtml: the tooltip reads content from the row\'s own already-rendered cells, not a new data path', () => {
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
+  assert.match(html, /querySelector\('\.cell-graph image'\)/);
+  assert.match(html, /querySelector\('\.cell-author'\)/);
+  assert.match(html, /querySelector\('\.cell-message'\)\?\.getAttribute\('data-full-message'\)/);
+  assert.match(html, /querySelector\('\.cell-date'\)/);
+  assert.match(html, /querySelector\('\.cell-sha code'\)/);
+  assert.match(html, /querySelector\('\.cell-changes'\)/);
+});
+
+test('renderGraphHtml: builds repo-controlled author/message text via textContent, never innerHTML concatenation', () => {
+  // Regression guard: textContent read off an existing element returns the *decoded* string. If
+  // that string were concatenated into a new innerHTML assignment instead of set via textContent,
+  // a maliciously-crafted author name or commit message (e.g. containing "<img onerror=...>")
+  // would be re-parsed as live HTML in the tooltip. Pinning the exact safe assignment pattern here.
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
+  assert.match(html, /authorText\.textContent = row\.querySelector\('\.cell-author'\)\?\.textContent \|\| ''/);
+  assert.match(html, /message\.textContent = row\.querySelector\('\.cell-message'\)\?\.getAttribute\('data-full-message'\) \|\| ''/);
+  assert.ok(
+    !/innerHTML\s*=(?!\s*'')/.test(html),
+    'expected no innerHTML assignment other than clearing it to an empty string',
+  );
+});
+
+test('renderGraphHtml: the Working Changes row gets its own tooltip branch, reusing its existing status badges', () => {
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
+  assert.match(html, /row\.dataset\.wip/);
+  assert.match(html, /row\.querySelector\('\.cell-changes'\)\.cloneNode\(true\)/);
 });
 
 test('renderGraphHtml: the Changes column shows the changed-file count, with the line stat as its tooltip', () => {
   const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
   assert.match(html, /class="file-count">3</);
-  assert.match(html, /title="3 files, \+12 −4"/);
+  assert.match(html, /data-stat="3 files, \+12 −4"/);
 });
 
 test('renderGraphHtml: a zero-file (merge) commit explains the empty stat instead of showing a bare 0', () => {
   const merge = commit('M', ['A', 'B'], { filesChanged: 0, insertions: 0, deletions: 0 });
   const html = renderGraphHtml({ nodes: layoutGraph([merge]), now }, opts);
-  assert.match(html, /title="No per-file stat \(merge commit\)"/);
+  assert.match(html, /data-stat="No per-file stat \(merge commit\)"/);
 });
 
 test('renderGraphHtml: gives the current branch, a local branch, a remote branch and a tag distinct styling', () => {
@@ -261,6 +326,14 @@ test('renderGraphHtml: an empty repo says so instead of rendering a bare header'
   const html = renderGraphHtml({ nodes: [], now }, opts);
   assert.match(html, /No commits yet\./);
   assert.match(html, />0 commits</);
+});
+
+test('renderGraphHtml: links every stylesheet it is given, shared rules first', () => {
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
+  const shared = html.indexOf('shared.css');
+  const own = html.indexOf('commitGraph.css');
+  assert.ok(shared !== -1 && own !== -1, 'expected both stylesheets to be linked');
+  assert.ok(shared < own, 'shared rules must come first so the panel can override them');
 });
 
 test('renderGraphHtml: pluralizes the commit count', () => {

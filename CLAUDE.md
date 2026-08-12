@@ -162,7 +162,7 @@ Do not start a phase until the previous phase is tested and merged.
 | `gitLore.ai.enabled` | boolean | `false` | Enable AI features (uses your own model via vscode.lm) |
 | `gitLore.ai.modelFamily` | string | `"gpt-4o"` | Preferred LM family hint |
 | `gitLore.ai.maxDiffChars` | number | `8000` | Max diff size sent to the model |
-| `gitLore.staleThresholdDays` | number | `180` | Days before a file is considered stale |
+| `gitLore.staleThresholdDays` | number | `180` | Days before a function is considered stale |
 | `gitLore.maxHistoryItems` | number | `200` | Max commits loaded per file history |
 | `gitLore.maxBlameFileSize` | number | `1048576` | Skip blame for files larger than this (bytes) |
 | `gitLore.dateFormat` | string | `"relative"` | `relative` or an absolute date-fns pattern |

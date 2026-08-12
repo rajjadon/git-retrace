@@ -2,6 +2,9 @@
 
 export const OUTPUT_CHANNEL_NAME = 'GitLore';
 
+/** Default for `gitLore.maxBlameFileSize` — shared so every blame-consuming provider agrees on the fallback. */
+export const DEFAULT_MAX_BLAME_FILE_SIZE = 1_048_576;
+
 export const COMMANDS = {
   toggleBlame: 'gitLore.toggleBlame',
   showFileHistory: 'gitLore.showFileHistory',
@@ -9,9 +12,9 @@ export const COMMANDS = {
   copySha: 'gitLore.copySha',
   openGraph: 'gitLore.openGraph',
   compareBranches: 'gitLore.compareBranches',
-  // Reserved for Phase 2 — not registered in package.json yet.
   explainCommit: 'gitLore.explainCommit',
   explainLine: 'gitLore.explainLine',
+  showFileOwnership: 'gitLore.showFileOwnership',
 } as const;
 
 export const CONFIG = {
@@ -24,9 +27,15 @@ export const CONFIG = {
   maxBlameFileSize: 'maxBlameFileSize',
   maxGraphItems: 'maxGraphItems',
   dateFormat: 'dateFormat',
+  staleCodeEnabled: 'staleCode.enabled',
+  staleThresholdDays: 'staleThresholdDays',
+  ownershipEnabled: 'ownership.enabled',
   issueLinkingEnabled: 'issueLinking.enabled',
   issueLinkingPattern: 'issueLinking.pattern',
   issueLinkingUrlTemplate: 'issueLinking.urlTemplate',
+  aiEnabled: 'ai.enabled',
+  aiModelFamily: 'ai.modelFamily',
+  aiMaxDiffChars: 'ai.maxDiffChars',
 } as const;
 
 export const VIEWS = {

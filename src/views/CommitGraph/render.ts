@@ -3,9 +3,13 @@ import type { BranchInfo, Ref, WorkingChanges } from '../../core/git/types';
 import { formatAge, formatAbsolute } from '../../utils/date';
 import { escapeHtml } from '../escapeHtml';
 import { buildGravatarUrl } from '../../utils/gravatar';
+import { chartCssVarForIndex } from '../../utils/colors';
 import {
+  AUTHOR_ICON,
   BRANCH_ICON,
+  CLOCK_ICON,
   FILE_COUNT_ICON,
+  HASH_ICON,
   PENDING_ICON,
   REFRESH_ICON,
   REMOTE_ICON,
@@ -16,7 +20,8 @@ import {
 export interface RenderGraphOptions {
   nonce: string;
   cspSource: string;
-  styleUri: string;
+  /** Stylesheets to link, in order. Shared rules first, then the panel's own — same convention as Commit Details and Branch Comparison. */
+  styleUris: string[];
 }
 
 export interface GraphData {
@@ -39,21 +44,8 @@ const AVATAR_RADIUS = 6;
 // and both truncated to noise ("m…", "origi…"). The `+N` badge's tooltip still names the rest.
 const MAX_VISIBLE_REFS = 1;
 
-// VS Code's own categorical palette (Settings UI, extension charts) — theme-aware for free,
-// unlike a hardcoded hex list that could clash on a light theme or a high-contrast theme.
-const LANE_COLOR_VARS = [
-  '--vscode-charts-blue',
-  '--vscode-charts-orange',
-  '--vscode-charts-green',
-  '--vscode-charts-purple',
-  '--vscode-charts-red',
-  '--vscode-charts-yellow',
-  '--vscode-charts-foreground',
-];
-
 function laneColor(lane: number): string {
-  const name = LANE_COLOR_VARS[lane % LANE_COLOR_VARS.length] ?? LANE_COLOR_VARS[0] ?? '--vscode-charts-foreground';
-  return `var(${name})`;
+  return chartCssVarForIndex(lane);
 }
 
 function laneX(lane: number): number {
@@ -198,16 +190,17 @@ function renderWorkingChangesRow(changes: WorkingChanges, svgWidth: number, tabb
 <span class="cell cell-graph" role="gridcell">${renderPendingGraphics(svgWidth)}</span>
 <span class="cell cell-message" role="gridcell">Uncommitted changes</span>
 <span class="cell cell-author" role="gridcell"></span>
-<span class="cell cell-changes" role="gridcell" title="${escapeHtml(label)}">${renderWorkingChangeBadges(changes)}</span>
+<span class="cell cell-changes" role="gridcell" data-stat="${escapeHtml(label)}">${renderWorkingChangeBadges(changes)}</span>
 <span class="cell cell-date" role="gridcell"></span>
 <span class="cell cell-sha" role="gridcell"></span>
 </div>`;
 }
 
-/** Builds the commit graph webview's full HTML document. Pure — nonce/cspSource/styleUri come from the caller, so this is unit-testable without a real webview host. */
+/** Builds the commit graph webview's full HTML document. Pure — nonce/cspSource/styleUris come from the caller, so this is unit-testable without a real webview host. */
 export function renderGraphHtml(data: GraphData, opts: RenderGraphOptions): string {
   const { nodes, branches = [], currentRef = '', workingChanges, selectedSha } = data;
   const now = data.now ?? new Date();
+  const styles = opts.styleUris.map((uri) => `<link rel="stylesheet" href="${uri}" />`).join('\n');
   // A little extra room beyond the widest lane so the dot never sits flush against the text
   // column — the bug that made a single-branch (one-lane) graph look like it was overlapping.
   const svgWidth = (maxLane(nodes) + 1) * LANE_WIDTH + LANE_WIDTH / 2;
@@ -239,10 +232,10 @@ export function renderGraphHtml(data: GraphData, opts: RenderGraphOptions): stri
       return `<div class="row commit${isSelected ? ' selected' : ''}" role="row" tabindex="${commit.sha === tabStopSha ? '0' : '-1'}" aria-selected="${isSelected}" data-sha="${escapeHtml(commit.sha)}" data-filter="${escapeHtml(filter)}">
 <span class="cell cell-refs" role="gridcell">${renderRefs(commit.refs)}</span>
 <span class="cell cell-graph" role="gridcell">${renderRowGraphics(node, svgWidth, avatarUrl)}</span>
-<span class="cell cell-message" role="gridcell" title="${escapeHtml(commit.message)}">${escapeHtml(commit.message)}</span>
+<span class="cell cell-message" role="gridcell" data-full-message="${escapeHtml(commit.message)}">${escapeHtml(commit.message)}</span>
 <span class="cell cell-author" role="gridcell">${escapeHtml(commit.author)}</span>
-<span class="cell cell-changes" role="gridcell" title="${escapeHtml(statTitle)}">${FILE_COUNT_ICON}<span class="file-count">${commit.filesChanged}</span></span>
-<span class="cell cell-date" role="gridcell" title="${escapeHtml(absolute)}">${escapeHtml(age)}</span>
+<span class="cell cell-changes" role="gridcell" data-stat="${escapeHtml(statTitle)}">${FILE_COUNT_ICON}<span class="file-count">${commit.filesChanged}</span></span>
+<span class="cell cell-date" role="gridcell" data-absolute="${escapeHtml(absolute)}">${escapeHtml(age)}</span>
 <span class="cell cell-sha" role="gridcell"><code>${escapeHtml(commit.shortSha)}</code></span>
 </div>`;
     })
@@ -255,7 +248,7 @@ export function renderGraphHtml(data: GraphData, opts: RenderGraphOptions): stri
 <head>
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource} 'nonce-${opts.nonce}'; img-src https: ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
-<link rel="stylesheet" href="${opts.styleUri}" />
+${styles}
 <style nonce="${opts.nonce}">:root { --graph-svg-width: ${svgWidth}px; --graph-row-height: ${ROW_HEIGHT}px; }</style>
 <title>Commit Graph</title>
 </head>
@@ -271,10 +264,10 @@ ${renderRefPicker(branches, currentRef)}
 <span class="cell" role="columnheader">Branch / Tag</span>
 <span class="cell" role="columnheader">Graph</span>
 <span class="cell" role="columnheader">Commit Message</span>
-<span class="cell" role="columnheader">Author</span>
-<span class="cell" role="columnheader">Changes</span>
-<span class="cell" role="columnheader">Commit Date</span>
-<span class="cell" role="columnheader">SHA</span>
+<span class="cell" role="columnheader" title="Author" aria-label="Author">${AUTHOR_ICON}</span>
+<span class="cell" role="columnheader" title="Changes" aria-label="Changes">${FILE_COUNT_ICON}</span>
+<span class="cell" role="columnheader" title="Commit Date" aria-label="Commit Date">${CLOCK_ICON}</span>
+<span class="cell" role="columnheader" title="SHA" aria-label="SHA">${HASH_ICON}</span>
 </div>
 <div class="rows" id="rows">
 ${hasWip ? renderWorkingChangesRow(workingChanges, svgWidth, wipTabbable) : ''}
@@ -282,6 +275,7 @@ ${rows}
 </div>
 ${empty ? '<p class="empty">No commits yet.</p>' : ''}
 </div>
+<div id="row-tooltip" class="row-tooltip" role="tooltip" aria-hidden="true" hidden></div>
 <script nonce="${opts.nonce}">
 const vscode = acquireVsCodeApi();
 const rowsEl = document.getElementById('rows');
@@ -307,9 +301,104 @@ function select(row, { open = true } = {}) {
   else vscode.postMessage({ type: 'openCommit', sha: row.dataset.sha });
 }
 
+const tooltipEl = document.getElementById('row-tooltip');
+let shownRow = null;
+
+function positionTooltip(row) {
+  const rect = row.getBoundingClientRect();
+  tooltipEl.style.left = '0px';
+  tooltipEl.style.top = '0px';
+  const tw = tooltipEl.offsetWidth;
+  const th = tooltipEl.offsetHeight;
+  let top = rect.bottom + 4;
+  if (top + th > window.innerHeight) {
+    top = Math.max(4, rect.top - th - 4);
+  }
+  let left = Math.max(8, rect.left);
+  if (left + tw > window.innerWidth - 8) {
+    left = Math.max(8, window.innerWidth - 8 - tw);
+  }
+  tooltipEl.style.top = top + 'px';
+  tooltipEl.style.left = left + 'px';
+}
+
+function showTooltip(row) {
+  shownRow = row;
+  tooltipEl.innerHTML = '';
+  const head = document.createElement('div');
+  head.className = 'row-tooltip-head';
+
+  if (row.dataset.wip) {
+    head.textContent = 'Working Changes';
+    tooltipEl.append(head);
+
+    const stat = row.querySelector('.cell-changes').cloneNode(true);
+    stat.classList.add('row-tooltip-stat');
+    stat.removeAttribute('role');
+    tooltipEl.append(stat);
+
+    const meta = document.createElement('div');
+    meta.className = 'row-tooltip-meta';
+    meta.textContent = 'Uncommitted — open the Source Control view';
+    tooltipEl.append(meta);
+  } else {
+    const avatarUrl = row.querySelector('.cell-graph image')?.getAttribute('href') || '';
+    const avatar = document.createElement('img');
+    avatar.className = 'row-tooltip-avatar';
+    avatar.src = avatarUrl;
+    avatar.width = 16;
+    avatar.height = 16;
+    avatar.alt = '';
+    head.append(avatar);
+
+    const authorText = document.createElement('span');
+    authorText.textContent = row.querySelector('.cell-author')?.textContent || '';
+    head.append(authorText);
+    tooltipEl.append(head);
+
+    const message = document.createElement('div');
+    message.className = 'row-tooltip-message';
+    message.textContent = row.querySelector('.cell-message')?.getAttribute('data-full-message') || '';
+    tooltipEl.append(message);
+
+    const dateCell = row.querySelector('.cell-date');
+    const meta = document.createElement('div');
+    meta.className = 'row-tooltip-meta';
+    meta.textContent = [dateCell?.textContent, dateCell?.getAttribute('data-absolute'), row.querySelector('.cell-sha code')?.textContent]
+      .filter(Boolean)
+      .join(' · ');
+    tooltipEl.append(meta);
+
+    const stat = document.createElement('div');
+    stat.className = 'row-tooltip-stat';
+    stat.textContent = row.querySelector('.cell-changes')?.getAttribute('data-stat') || '';
+    tooltipEl.append(stat);
+  }
+
+  tooltipEl.hidden = false;
+  positionTooltip(row);
+}
+
+function hideTooltip() {
+  shownRow = null;
+  tooltipEl.hidden = true;
+}
+
 for (const row of allRows) {
   row.addEventListener('click', () => select(row));
+  row.addEventListener('mouseenter', () => showTooltip(row));
+  row.addEventListener('mouseleave', hideTooltip);
+  row.addEventListener('focus', () => showTooltip(row));
+  row.addEventListener('blur', hideTooltip);
 }
+
+document.querySelector('.grid').addEventListener('scroll', () => {
+  if (shownRow) positionTooltip(shownRow);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideTooltip();
+});
 
 rowsEl.addEventListener('keydown', (e) => {
   const row = e.target.closest('.row');

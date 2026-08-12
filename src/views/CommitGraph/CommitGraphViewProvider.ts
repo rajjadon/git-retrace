@@ -54,6 +54,10 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider {
     return this.view?.webview.html;
   }
 
+  private mediaUri(name: string): string {
+    return this.view?.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', name)).toString() ?? '';
+  }
+
   resolveWebviewView(webviewView: vscode.WebviewView): void {
     this.view = webviewView;
     webviewView.webview.options = {
@@ -97,7 +101,6 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider {
         this.git.getWorkingChanges(filePath),
       ]);
       const nodes = layoutGraph(commits);
-      const styleUri = this.view.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', MEDIA.commitGraph));
       this.view.webview.html = renderGraphHtml(
         {
           nodes,
@@ -106,7 +109,11 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider {
           currentRef: this.currentRef,
           selectedSha: this.selectedSha,
         },
-        { nonce: createNonce(), cspSource: this.view.webview.cspSource, styleUri: styleUri.toString() },
+        {
+          nonce: createNonce(),
+          cspSource: this.view.webview.cspSource,
+          styleUris: [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.commitGraph)],
+        },
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
