@@ -206,24 +206,11 @@ test('renderCommitDetailsHtml: the AI summary text and hint start hidden', () =>
   assert.match(html, /id="ai-summary-hint"[^>]*hidden/);
 });
 
-test('renderCommitDetailsHtml: in line-explanation mode, shows a line-focused heading and a disabled, pre-labeled button', () => {
-  const html = renderCommitDetailsHtml({ commit, files, diff, now }, { ...opts, lineExplanation: true });
-  assert.match(html, /Why does this line exist\?/);
-  assert.match(html, /id="explain-commit" disabled type="button">.*?Explain this line<\/button>/s);
-});
-
-test('renderCommitDetailsHtml: without line-explanation mode, keeps the original heading, label, and enabled button', () => {
-  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
-  assert.match(html, /AI Summary/);
-  assert.ok(!html.includes('Why does this line exist?'));
-  assert.match(html, /id="explain-commit" type="button">.*?Summarize with AI<\/button>/s);
-  assert.ok(!html.includes('id="explain-commit" disabled'));
-});
-
 test('renderCommitDetailsHtml: the aiSummaryChunk handler unhides the summary text before appending', () => {
-  // Regression test: the text element starts `hidden` in the static HTML, and only the
-  // click handler ever unhid it — so a flow that auto-runs without a click (line explanation)
-  // streamed into a permanently invisible element. The chunk handler itself must unhide it.
+  // Regression test: the text element starts `hidden` in the static HTML. Any code path that
+  // invokes explainCommit() without going through the button's own click handler (the click
+  // handler is the only thing that currently unhides it) would stream into a permanently
+  // invisible element unless the chunk handler itself unhides it too.
   const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
   assert.match(
     html,

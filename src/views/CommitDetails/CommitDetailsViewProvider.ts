@@ -11,7 +11,7 @@ import { LruCache } from '../../core/cache/LruCache';
 import type { LanguageModelClient } from '../../ai/LanguageModelClient';
 import type { GitLogger } from '../../core/git/errors';
 import { runCommitSummaryFlow } from '../../core/ai/commitSummaryFlow';
-import { buildCommitSummaryPrompt, buildLineExplanationPrompt } from '../../core/ai/prompts';
+import { buildCommitSummaryPrompt } from '../../core/ai/prompts';
 import { COMMANDS, CONFIG, MEDIA, VIEWS } from '../../constants';
 import type { CommitDetail } from '../../core/git/types';
 
@@ -35,7 +35,6 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
   private currentCommit: CommitDetail | undefined;
   private currentRemoteUrl: string | undefined;
   private currentDiff: string | undefined;
-  private currentLineContent: string | undefined;
   private aiSummaryCache = new LruCache<string, string>(50);
   private aiAbortController: AbortController | undefined;
   private aiMessagesForTest: unknown[] = [];
@@ -55,11 +54,6 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
   /** Test-only introspection seam, same spirit as `getCurrentHtmlForTest()` — the AI summary's state lives in postMessage traffic, not in the static webview HTML, so there's nothing else to assert against. */
   getAiSummaryMessagesForTest(): unknown[] {
     return this.aiMessagesForTest;
-  }
-
-  /** Test-only introspection seam — proves which mode `handleMessage`'s `explainCommit` case will route to, since that decision reads this private field. */
-  getCurrentLineContentForTest(): string | undefined {
-    return this.currentLineContent;
   }
 
   hasLoadedCommit(): boolean {
@@ -86,23 +80,22 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  /** Called by "Show Commit Details" (no `lineContent`) or the blame hover's explain-line link (with it) — reveals the panel tab, loads the commit, and auto-runs the line explanation when `lineContent` is given. */
-  async show(filePath: string, sha: string, lineContent?: string): Promise<void> {
+  /** Called by the "Show Commit Details" command — reveals the panel tab and loads the given commit. */
+  async show(filePath: string, sha: string): Promise<void> {
     await vscode.commands.executeCommand(`${VIEWS.commitDetails}.focus`);
     await waitForWebviewView(() => this.view);
-    await this.load(filePath, sha, lineContent);
+    await this.load(filePath, sha);
   }
 
   private mediaUri(name: string): string {
     return this.view?.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', name)).toString() ?? '';
   }
 
-  private async load(filePath: string, sha: string, lineContent?: string): Promise<void> {
+  private async load(filePath: string, sha: string): Promise<void> {
     if (!this.view) {
       return;
     }
     this.currentFilePath = filePath;
-    this.currentLineContent = lineContent;
     this.aiAbortController?.abort();
     this.aiMessagesForTest = [];
     this.view.title = `Commit ${sha.slice(0, 7)}`;
@@ -142,13 +135,8 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
           editorFontFamily,
           issueLinking,
           remote,
-          lineExplanation: lineContent !== undefined,
         },
       );
-
-      if (lineContent !== undefined) {
-        await this.explainLine(lineContent);
-      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.view.webview.html = shellHtml(`<p>GitLore: failed to load commit — ${escapeHtml(message)}</p>`);
@@ -156,26 +144,6 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
   }
 
   async explainCommit(): Promise<void> {
-    await this.runAiFlow((commit, diff, maxDiffChars) => buildCommitSummaryPrompt(commit, diff, maxDiffChars), '');
-  }
-
-  /** Auto-invoked by `load()` when opened via the blame hover's "Explain this line with AI" link — the hover click is the user action that authorizes the model call, so no second click is required here. */
-  async explainLine(lineContent: string): Promise<void> {
-    await this.runAiFlow(
-      (commit, diff, maxDiffChars) => buildLineExplanationPrompt(commit, diff, lineContent, maxDiffChars),
-      `:line:${lineContent}`,
-    );
-  }
-
-  /**
-   * Shared by `explainCommit()` and `explainLine()` — same disabled/cache/no-model/streaming/error
-   * handling either way. `cacheKeySuffix` keeps a whole-commit summary and a line explanation (or
-   * two different lines' explanations) of the same commit from colliding in `aiSummaryCache`.
-   */
-  private async runAiFlow(
-    promptBuilder: (commit: CommitDetail, diff: string, maxDiffChars: number) => string,
-    cacheKeySuffix: string,
-  ): Promise<void> {
     if (!this.view || !this.currentCommit || !this.currentFilePath) {
       return;
     }
@@ -192,7 +160,7 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
     const maxDiffChars = config.get<number>(CONFIG.aiMaxDiffChars, 8000);
 
     const repoRoot = await this.git.getRepoRoot(filePath);
-    const cacheKey = `${repoRoot ?? filePath}:${commit.sha}${cacheKeySuffix}`;
+    const cacheKey = `${repoRoot ?? filePath}:${commit.sha}`;
     const cached = this.aiSummaryCache.get(cacheKey);
 
     const flow = runCommitSummaryFlow({
@@ -200,7 +168,7 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
       cached,
       signal: controller.signal,
       selectModel: () => this.languageModelClient.selectModel(modelFamily),
-      buildPrompt: () => promptBuilder(commit, diff, maxDiffChars),
+      buildPrompt: () => buildCommitSummaryPrompt(commit, diff, maxDiffChars),
     });
 
     for await (const event of flow) {
@@ -263,15 +231,7 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     if (type === 'explainCommit') {
-      // The webview always posts this same message type on a button click, regardless of which
-      // mode the panel is in — route based on how the panel was actually opened, so a re-click
-      // after a line explanation doesn't silently overwrite it with an unrelated whole-commit
-      // summary (currentLineContent is only set when opened via the blame hover's explain-line link).
-      if (this.currentLineContent !== undefined) {
-        await this.explainLine(this.currentLineContent);
-      } else {
-        await this.explainCommit();
-      }
+      await this.explainCommit();
       return;
     }
     if (type === 'openFileDiff' && typeof path === 'string' && commit && this.currentFilePath) {

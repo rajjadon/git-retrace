@@ -18,6 +18,9 @@ import { CommitDetailsViewProvider } from './views/CommitDetails/CommitDetailsVi
 import { CommitGraphViewProvider } from './views/CommitGraph/CommitGraphViewProvider';
 import { BranchComparisonViewProvider } from './views/BranchComparison/BranchComparisonViewProvider';
 import { LanguageModelClient } from './ai/LanguageModelClient';
+import { LineExplanationService } from './ai/LineExplanationService';
+import { LruCache } from './core/cache/LruCache';
+import type { LineExplanationState } from './core/ai/lineExplanationKey';
 
 /** Test-only introspection surface — accessed via `vscode.extensions.getExtension(id).exports` in integration tests. */
 export interface GitLoreTestApi {
@@ -30,7 +33,7 @@ export interface GitLoreTestApi {
   getBranchComparisonHtml: () => string | undefined;
   explainCommit: () => Promise<void>;
   getAiSummaryMessagesForTest: () => unknown[];
-  getCurrentLineContentForTest: () => string | undefined;
+  getLineExplanationStateForTest: (filePath: string, sha: string, lineContent: string) => Promise<LineExplanationState | undefined>;
 }
 
 export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
@@ -46,9 +49,11 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
   // delay command registration past when activate() resolves, racing test/startup code.
   const git = new GitService(logger);
   const languageModelClient = new LanguageModelClient(logger);
+  const lineExplanationStore = new LruCache<string, LineExplanationState>(50);
+  const lineExplanationService = new LineExplanationService(git, languageModelClient, logger, lineExplanationStore);
   const blameSource = new BlameSource(git, logger);
   const blameProvider = new BlameDecorationProvider(blameSource);
-  const hoverProvider = new BlameHoverProvider(blameSource, git);
+  const hoverProvider = new BlameHoverProvider(blameSource, git, lineExplanationStore);
   const fileHistoryProvider = new FileHistoryProvider(git);
   const statusBarProvider = new StatusBarProvider(blameProvider);
   const commitGraphViewProvider = new CommitGraphViewProvider(ctx.extensionUri, git);
@@ -67,7 +72,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     handleOpenGraphCommand(commitGraphViewProvider),
     handleCompareBranchesCommand(git, branchComparisonViewProvider),
     handleExplainCommitCommand(commitDetailsViewProvider),
-    handleExplainLineCommand(commitDetailsViewProvider),
+    handleExplainLineCommand(lineExplanationService),
     vscode.languages.registerHoverProvider({ scheme: 'file' }, hoverProvider),
     // Backs the "Open changes" action in the commit-details and branch-comparison panels by
     // serving a file's contents at an arbitrary ref to the native diff editor.
@@ -88,7 +93,8 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     getBranchComparisonHtml: () => branchComparisonViewProvider.getCurrentHtmlForTest(),
     explainCommit: () => commitDetailsViewProvider.explainCommit(),
     getAiSummaryMessagesForTest: () => commitDetailsViewProvider.getAiSummaryMessagesForTest(),
-    getCurrentLineContentForTest: () => commitDetailsViewProvider.getCurrentLineContentForTest(),
+    getLineExplanationStateForTest: (filePath, sha, lineContent) =>
+      lineExplanationService.getStateForTest(filePath, sha, lineContent),
   };
 }
 

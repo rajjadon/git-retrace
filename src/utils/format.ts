@@ -3,6 +3,7 @@ import { formatAge, formatAbsolute } from './date';
 import { buildGravatarUrl } from './gravatar';
 import { linkifyIssues, type IssueLinkOptions } from './issueLinks';
 import { COMMANDS } from '../constants';
+import type { LineExplanationState } from '../core/ai/lineExplanationKey';
 
 const MARKDOWN_SPECIAL_RE = /([\\`*_{}[\]()#+\-.!|>~])/g;
 
@@ -25,17 +26,50 @@ function formatMessage(text: string, issueLinking: IssueLinkOptions | null): str
     .join('');
 }
 
+function buildExplainLineLink(filePath: string, sha: string, lineContent: string): string {
+  const linkArgs = encodeURIComponent(JSON.stringify([filePath, sha, lineContent]));
+  return `[Explain this line with AI](command:${COMMANDS.explainLine}?${linkArgs})`;
+}
+
+/**
+ * Renders the line-explanation section of the hover based on its current state. A `Hover` can't
+ * be updated after it's returned (no live-streaming API), so "in progress" and "finished" are
+ * both just different static renders of whatever `formatBlameHover`'s caller looked up before
+ * building this hover — see `LineExplanationService` for the writer side.
+ */
+function formatLineExplanation(
+  state: LineExplanationState | undefined,
+  filePath: string,
+  sha: string,
+  lineContent: string,
+): string {
+  if (state === undefined) {
+    return buildExplainLineLink(filePath, sha, lineContent);
+  }
+  switch (state.status) {
+    case 'pending':
+      return '⏳ Generating explanation…';
+    case 'done':
+      return `**Why this line exists:**\n\n${escapeMarkdown(state.text)}`;
+    case 'noModel':
+      return `No language model available. Enable a language model (e.g. GitHub Copilot Chat) to use this feature.\n\n${buildExplainLineLink(filePath, sha, lineContent)}`;
+    case 'error':
+      return `Failed to generate explanation: ${escapeMarkdown(state.message)}\n\n${buildExplainLineLink(filePath, sha, lineContent)}`;
+  }
+}
+
 /**
  * Builds the markdown body for the blame hover card. Pure — the caller wraps the result in
  * a `vscode.MarkdownString` and must set `isTrusted = { enabledCommands: [COMMANDS.explainLine] }`
- * for the "Explain this line with AI" link below to actually be clickable — VS Code ignores
- * command links in untrusted markdown.
+ * for the "Explain this line with AI" link to actually be clickable — VS Code ignores command
+ * links in untrusted markdown.
  */
 export function formatBlameHover(
   entry: BlameLine,
   diffStat: FileChange | null,
   filePath: string,
   lineContent: string,
+  lineExplanation: LineExplanationState | undefined,
   now: Date = new Date(),
   issueLinking: IssueLinkOptions | null = null,
 ): string {
@@ -44,7 +78,7 @@ export function formatBlameHover(
   }
 
   const date = new Date(entry.authorTime * 1000);
-  const avatarUrl = buildGravatarUrl(entry.authorEmail);
+  const avatarUrl = buildGravatarUrl(entry.authorEmail, { size: 20 });
   const author = escapeMarkdown(entry.author);
   const message = formatMessage(entry.summary, issueLinking);
   const age = formatAge(date, now);
@@ -63,8 +97,7 @@ export function formatBlameHover(
     lines.push(`+${diffStat.insertions} -${diffStat.deletions}`);
   }
 
-  const linkArgs = encodeURIComponent(JSON.stringify([filePath, entry.sha, lineContent]));
-  lines.push('', `[Explain this line with AI](command:${COMMANDS.explainLine}?${linkArgs})`);
+  lines.push('', formatLineExplanation(lineExplanation, filePath, entry.sha, lineContent));
 
   return lines.join('\n');
 }

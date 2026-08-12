@@ -17,7 +17,7 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 **AI line explanations** — "why does this line exist?", from the blame hover
 
-- The blame hover's **Explain this line with AI** link opens Commit Details for that line's blamed commit and streams an explanation focused on that specific line — no extra click in the panel, since the hover click itself is the action.
+- The blame hover's **Explain this line with AI** link generates the explanation in the background — a small status-bar spinner shows while it runs, no panel opens. Re-hover the same line once it's done and the hover card shows the finished explanation directly.
 - Reuses the exact same `gitLore.ai.enabled` gate and AI infrastructure as commit summaries: off by default, no model registered shows the same inline hint, and nothing is sent anywhere unless you've opted in.
 
 ## [0.2.0] - 2026-08-11
