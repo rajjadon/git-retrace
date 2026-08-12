@@ -35,6 +35,7 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
   private currentCommit: CommitDetail | undefined;
   private currentRemoteUrl: string | undefined;
   private currentDiff: string | undefined;
+  private currentLineContent: string | undefined;
   private aiSummaryCache = new LruCache<string, string>(50);
   private aiAbortController: AbortController | undefined;
   private aiMessagesForTest: unknown[] = [];
@@ -54,6 +55,11 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
   /** Test-only introspection seam, same spirit as `getCurrentHtmlForTest()` — the AI summary's state lives in postMessage traffic, not in the static webview HTML, so there's nothing else to assert against. */
   getAiSummaryMessagesForTest(): unknown[] {
     return this.aiMessagesForTest;
+  }
+
+  /** Test-only introspection seam — proves which mode `handleMessage`'s `explainCommit` case will route to, since that decision reads this private field. */
+  getCurrentLineContentForTest(): string | undefined {
+    return this.currentLineContent;
   }
 
   hasLoadedCommit(): boolean {
@@ -96,6 +102,7 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     this.currentFilePath = filePath;
+    this.currentLineContent = lineContent;
     this.aiAbortController?.abort();
     this.aiMessagesForTest = [];
     this.view.title = `Commit ${sha.slice(0, 7)}`;
@@ -256,7 +263,15 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     if (type === 'explainCommit') {
-      await this.explainCommit();
+      // The webview always posts this same message type on a button click, regardless of which
+      // mode the panel is in — route based on how the panel was actually opened, so a re-click
+      // after a line explanation doesn't silently overwrite it with an unrelated whole-commit
+      // summary (currentLineContent is only set when opened via the blame hover's explain-line link).
+      if (this.currentLineContent !== undefined) {
+        await this.explainLine(this.currentLineContent);
+      } else {
+        await this.explainCommit();
+      }
       return;
     }
     if (type === 'openFileDiff' && typeof path === 'string' && commit && this.currentFilePath) {

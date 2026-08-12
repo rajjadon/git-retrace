@@ -15,6 +15,11 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - Uses whatever language model you've already registered with VS Code (e.g. GitHub Copilot Chat) via the built-in Language Model API. No GitLore backend, no API key, no account.
 - Needs a language model registered to produce anything — without one, the panel shows an inline hint instead of erroring.
 
+**AI line explanations** — "why does this line exist?", from the blame hover
+
+- The blame hover's **Explain this line with AI** link opens Commit Details for that line's blamed commit and streams an explanation focused on that specific line — no extra click in the panel, since the hover click itself is the action.
+- Reuses the exact same `gitLore.ai.enabled` gate and AI infrastructure as commit summaries: off by default, no model registered shows the same inline hint, and nothing is sent anywhere unless you've opted in.
+
 ## [0.2.0] - 2026-08-11
 
 First stable release — installs by default, with no need to opt into pre-releases. Same code as the `0.1.0` pre-release, promoted after verification.

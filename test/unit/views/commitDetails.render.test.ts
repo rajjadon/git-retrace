@@ -219,3 +219,14 @@ test('renderCommitDetailsHtml: without line-explanation mode, keeps the original
   assert.match(html, /id="explain-commit" type="button">.*?Summarize with AI<\/button>/s);
   assert.ok(!html.includes('id="explain-commit" disabled'));
 });
+
+test('renderCommitDetailsHtml: the aiSummaryChunk handler unhides the summary text before appending', () => {
+  // Regression test: the text element starts `hidden` in the static HTML, and only the
+  // click handler ever unhid it — so a flow that auto-runs without a click (line explanation)
+  // streamed into a permanently invisible element. The chunk handler itself must unhide it.
+  const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
+  assert.match(
+    html,
+    /if \(msg\.type === 'aiSummaryChunk'\) \{\s*summaryText\.hidden = false;\s*summaryText\.textContent \+= msg\.text;/,
+  );
+});

@@ -174,4 +174,22 @@ suite('Commit details webview', () => {
     assert.match(html, /Why does this line exist\?/);
     assert.match(html, /id="explain-commit" disabled/);
   });
+
+  test('a re-click of the AI button after a line explanation re-runs the line flow, not a whole-commit summary', async () => {
+    // The webview always posts { type: 'explainCommit' } on a button click, regardless of mode.
+    // handleMessage must route that to explainLine() when the panel is showing a line explanation
+    // — proven here via the field the routing decision actually reads, since there's no way to
+    // post a webview message directly from an integration test.
+    const commit = manifest.commits[0];
+    assert.ok(commit);
+
+    await withAiConfig(true, () =>
+      Promise.resolve(vscode.commands.executeCommand(COMMANDS.explainLine, manifest.trackedFile, commit.sha, 'line three')),
+    );
+    assert.equal(api.getCurrentLineContentForTest(), 'line three');
+
+    await vscode.commands.executeCommand(COMMANDS.showCommit, manifest.trackedFile, commit.sha);
+    await waitFor(() => (api.getCommitDetailsHtml() ?? '').includes(commit.sha));
+    assert.equal(api.getCurrentLineContentForTest(), undefined);
+  });
 });

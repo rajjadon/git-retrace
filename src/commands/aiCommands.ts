@@ -16,7 +16,7 @@ export function handleExplainLineCommand(provider: CommitDetailsViewProvider): v
   return vscode.commands.registerCommand(
     COMMANDS.explainLine,
     async (filePath?: string, sha?: string, lineContent?: string) => {
-      if (!filePath || !sha || lineContent === undefined) {
+      if (typeof filePath !== 'string' || typeof sha !== 'string' || typeof lineContent !== 'string') {
         void vscode.window.showInformationMessage('GitLore: pick a line with committed history to explain.');
         return;
       }

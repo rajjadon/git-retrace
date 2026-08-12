@@ -30,6 +30,7 @@ export interface GitLoreTestApi {
   getBranchComparisonHtml: () => string | undefined;
   explainCommit: () => Promise<void>;
   getAiSummaryMessagesForTest: () => unknown[];
+  getCurrentLineContentForTest: () => string | undefined;
 }
 
 export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
@@ -87,6 +88,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     getBranchComparisonHtml: () => branchComparisonViewProvider.getCurrentHtmlForTest(),
     explainCommit: () => commitDetailsViewProvider.explainCommit(),
     getAiSummaryMessagesForTest: () => commitDetailsViewProvider.getAiSummaryMessagesForTest(),
+    getCurrentLineContentForTest: () => commitDetailsViewProvider.getCurrentLineContentForTest(),
   };
 }
 

@@ -122,11 +122,11 @@ No telemetry. No analytics. No account.
 
 GitLore is not trying to out-feature GitLens — it's trying to be the free, fast, small part you actually use every day. Honest accounting:
 
-**What GitLore does** — inline blame and hover, status bar, file history, commit graph, commit details with per-file diffs, AI commit summaries, branch comparison, issue linking. All free, forever.
+**What GitLore does** — inline blame and hover, status bar, file history, commit graph, commit details with per-file diffs, AI commit summaries, AI line explanations, branch comparison, issue linking. All free, forever.
 
 **What it deliberately doesn't** — staging, stashing or committing (that's VS Code's own Source Control view, and the graph links you there), and anything behind a sign-in.
 
-**What's missing for now** — AI line explanations (planned, using your own model via VS Code's Language Model API, so no key goes to us), a file-tree view of changed files, and graph auto-refresh. See the [changelog](CHANGELOG.md) for the current list.
+**What's missing for now** — a file-tree view of changed files, and graph auto-refresh. See the [changelog](CHANGELOG.md) for the current list.
 
 ## Contributing
 

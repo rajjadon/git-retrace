@@ -34,7 +34,7 @@ export class BlameHoverProvider implements vscode.HoverProvider {
       const diffStat = entry.isUncommitted ? null : await this.git.getFileDiffStat(doc.uri.fsPath, entry.sha);
       const issueLinking = await resolveIssueLinking(this.git, doc.uri.fsPath);
       const markdown = new vscode.MarkdownString(
-        formatBlameHover(entry, diffStat, doc.uri.fsPath, doc.lineAt(pos.line).text, undefined, issueLinking),
+        formatBlameHover(entry, diffStat, doc.uri.fsPath, doc.lineAt(pos.line).text.slice(0, 500), undefined, issueLinking),
       );
       markdown.isTrusted = { enabledCommands: [COMMANDS.explainLine] };
       return new vscode.Hover(markdown);

@@ -146,6 +146,7 @@ explainBtn.addEventListener('click', () => {
 window.addEventListener('message', (e) => {
   const msg = e.data;
   if (msg.type === 'aiSummaryChunk') {
+    summaryText.hidden = false;
     summaryText.textContent += msg.text;
   } else if (msg.type === 'aiSummaryCached') {
     summaryText.hidden = false;
