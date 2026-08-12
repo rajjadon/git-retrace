@@ -72,3 +72,10 @@ export const SWAP_ICON = icon('<path d="M2.5 5.5h11L10.5 2.5" /><path d="M13.5 1
 
 /** Nothing to show, and that's the good outcome — used by the "up to date" empty state. */
 export const CHECK_ICON = icon('<path d="M3 8.5 6.5 12 13 4.5" />', 'empty-icon', 15);
+
+/** Four-point sparkle — marks AI-generated content. */
+export const AI_ICON = icon(
+  '<path d="M8 2.2 9.1 6 12.9 7 9.1 8 8 11.8 6.9 8 3.1 7 6.9 6Z" /><path d="M12.5 2.4l0.5 1.3 1.3 0.5-1.3 0.5-0.5 1.3-0.5-1.3-1.3-0.5 1.3-0.5Z" />',
+  'action-icon',
+  12,
+);

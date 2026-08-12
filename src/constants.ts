@@ -27,6 +27,9 @@ export const CONFIG = {
   issueLinkingEnabled: 'issueLinking.enabled',
   issueLinkingPattern: 'issueLinking.pattern',
   issueLinkingUrlTemplate: 'issueLinking.urlTemplate',
+  aiEnabled: 'ai.enabled',
+  aiModelFamily: 'ai.modelFamily',
+  aiMaxDiffChars: 'ai.maxDiffChars',
 } as const;
 
 export const VIEWS = {
