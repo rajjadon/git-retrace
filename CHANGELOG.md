@@ -27,6 +27,11 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - Works for any language with a symbol provider installed (uses VS Code's built-in `executeDocumentSymbolProvider` — no new parser).
 - Known limitation: an arrow function assigned to a top-level `const` (e.g. `export const foo = () => {}`) isn't flagged in v1 — TypeScript's language server reports these as `SymbolKind.Variable`, not `Function`, and flagging every Variable would also catch plain data constants as "stale." Named `function` declarations and class methods are unaffected.
 
+**Commit Graph: row tooltip and icon headers**
+
+- Hovering or keyboard-focusing a commit row shows a tooltip with the author, full commit message, age/date/SHA, and diffstat — no more waiting on native browser tooltips split across separate cells.
+- The Author, Changes, Commit Date, and SHA column headers are now compact icons (each still announces its real name to screen readers via `title`/`aria-label`).
+
 ## [0.2.0] - 2026-08-11
 
 First stable release — installs by default, with no need to opt into pre-releases. Same code as the `0.1.0` pre-release, promoted after verification.

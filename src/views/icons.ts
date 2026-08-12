@@ -79,3 +79,20 @@ export const AI_ICON = icon(
   'action-icon',
   12,
 );
+
+/** Author column header — a simple head-and-shoulders glyph. */
+export const AUTHOR_ICON = icon(
+  '<circle cx="8" cy="5.3" r="2.6" /><path d="M3 13.3c0-2.9 2.2-4.6 5-4.6s5 1.7 5 4.6" />',
+  'cell-icon',
+  12,
+);
+
+/** Commit Date column header. */
+export const CLOCK_ICON = icon('<circle cx="8" cy="8" r="5.3" /><path d="M8 5.2v3l2 1.2" />', 'cell-icon', 12);
+
+/** SHA column header — a hash mark, since a git SHA is a hash. */
+export const HASH_ICON = icon(
+  '<path d="M6.2 2.5 4.6 13.5M11.4 2.5 9.8 13.5M3 6.3h10M2.6 9.7h10" />',
+  'cell-icon',
+  12,
+);
