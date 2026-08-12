@@ -13,9 +13,11 @@ import { handleShowFileHistoryCommand, handleCopyShaCommand } from './commands/f
 import { handleShowCommitCommand } from './commands/commitCommands';
 import { handleOpenGraphCommand } from './commands/graphCommands';
 import { handleCompareBranchesCommand } from './commands/branchCommands';
+import { handleExplainCommitCommand } from './commands/aiCommands';
 import { CommitDetailsViewProvider } from './views/CommitDetails/CommitDetailsViewProvider';
 import { CommitGraphViewProvider } from './views/CommitGraph/CommitGraphViewProvider';
 import { BranchComparisonViewProvider } from './views/BranchComparison/BranchComparisonViewProvider';
+import { LanguageModelClient } from './ai/LanguageModelClient';
 
 /** Test-only introspection surface — accessed via `vscode.extensions.getExtension(id).exports` in integration tests. */
 export interface GitLoreTestApi {
@@ -26,6 +28,8 @@ export interface GitLoreTestApi {
   getCommitDetailsHtml: () => string | undefined;
   getCommitGraphHtml: () => string | undefined;
   getBranchComparisonHtml: () => string | undefined;
+  explainCommit: () => Promise<void>;
+  getAiSummaryMessagesForTest: () => unknown[];
 }
 
 export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
@@ -40,13 +44,14 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
   // one lazily), so there's nothing "heavy" to defer here and doing so would only
   // delay command registration past when activate() resolves, racing test/startup code.
   const git = new GitService(logger);
+  const languageModelClient = new LanguageModelClient(logger);
   const blameSource = new BlameSource(git, logger);
   const blameProvider = new BlameDecorationProvider(blameSource);
   const hoverProvider = new BlameHoverProvider(blameSource, git);
   const fileHistoryProvider = new FileHistoryProvider(git);
   const statusBarProvider = new StatusBarProvider(blameProvider);
   const commitGraphViewProvider = new CommitGraphViewProvider(ctx.extensionUri, git);
-  const commitDetailsViewProvider = new CommitDetailsViewProvider(ctx.extensionUri, git);
+  const commitDetailsViewProvider = new CommitDetailsViewProvider(ctx.extensionUri, git, languageModelClient, logger);
   const branchComparisonViewProvider = new BranchComparisonViewProvider(ctx.extensionUri, git);
 
   ctx.subscriptions.push(
@@ -60,6 +65,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     handleShowCommitCommand(commitDetailsViewProvider),
     handleOpenGraphCommand(commitGraphViewProvider),
     handleCompareBranchesCommand(git, branchComparisonViewProvider),
+    handleExplainCommitCommand(commitDetailsViewProvider),
     vscode.languages.registerHoverProvider({ scheme: 'file' }, hoverProvider),
     // Backs the "Open changes" action in the commit-details and branch-comparison panels by
     // serving a file's contents at an arbitrary ref to the native diff editor.
@@ -78,6 +84,8 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     getCommitDetailsHtml: () => commitDetailsViewProvider.getCurrentHtmlForTest(),
     getCommitGraphHtml: () => commitGraphViewProvider.getCurrentHtmlForTest(),
     getBranchComparisonHtml: () => branchComparisonViewProvider.getCurrentHtmlForTest(),
+    explainCommit: () => commitDetailsViewProvider.explainCommit(),
+    getAiSummaryMessagesForTest: () => commitDetailsViewProvider.getAiSummaryMessagesForTest(),
   };
 }
 

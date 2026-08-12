@@ -72,4 +72,54 @@ suite('Commit details webview', () => {
     // Just confirms the command doesn't throw when called with no arguments.
     await vscode.commands.executeCommand(COMMANDS.showCommit);
   });
+
+  async function withAiConfig<T>(enabled: boolean, fn: () => Promise<T>): Promise<T> {
+    const config = vscode.workspace.getConfiguration('gitLore');
+    await config.update('ai.enabled', enabled, vscode.ConfigurationTarget.Global);
+    try {
+      return await fn();
+    } finally {
+      await config.update('ai.enabled', undefined, vscode.ConfigurationTarget.Global);
+    }
+  }
+
+  test('explainCommit prompts to enable AI when gitLore.ai.enabled is false', async () => {
+    const commit = manifest.commits[0];
+    assert.ok(commit);
+    await vscode.commands.executeCommand(COMMANDS.showCommit, manifest.trackedFile, commit.sha);
+    await waitFor(() => (api.getCommitDetailsHtml() ?? '').includes(commit.sha));
+
+    const original = vscode.window.showInformationMessage;
+    let calledWith: string | undefined;
+    (vscode.window as { showInformationMessage: typeof vscode.window.showInformationMessage }).showInformationMessage = ((
+      message: string,
+      ..._rest: unknown[]
+    ) => {
+      calledWith = message;
+      return Promise.resolve(undefined);
+    }) as typeof vscode.window.showInformationMessage;
+
+    try {
+      await withAiConfig(false, () => api.explainCommit());
+    } finally {
+      vscode.window.showInformationMessage = original;
+    }
+
+    assert.equal(calledWith, 'GitLore: AI features are disabled.');
+    assert.deepEqual(api.getAiSummaryMessagesForTest(), [{ type: 'aiSummaryReset' }]);
+  });
+
+  test('explainCommit shows the no-model hint when AI is enabled but no language model is registered', async () => {
+    // The test host never has GitHub Copilot Chat (or any other vscode.lm provider) installed,
+    // so vscode.lm.selectChatModels() reliably resolves to an empty list here — this is the one
+    // "a real model is involved" branch that's actually deterministic in CI.
+    const commit = manifest.commits[0];
+    assert.ok(commit);
+    await vscode.commands.executeCommand(COMMANDS.showCommit, manifest.trackedFile, commit.sha);
+    await waitFor(() => (api.getCommitDetailsHtml() ?? '').includes(commit.sha));
+
+    await withAiConfig(true, () => api.explainCommit());
+
+    assert.deepEqual(api.getAiSummaryMessagesForTest(), [{ type: 'aiSummaryNoModel' }]);
+  });
 });

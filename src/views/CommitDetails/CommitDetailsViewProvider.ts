@@ -7,7 +7,12 @@ import { openFileDiff } from '../../providers/GitContentProvider';
 import { buildCommitUrl, remoteHostLabel } from '../../utils/remoteLinks';
 import { renderPlaceholderHtml } from '../placeholder';
 import { waitForWebviewView } from '../waitForWebviewView';
-import { COMMANDS, MEDIA, VIEWS } from '../../constants';
+import { LruCache } from '../../core/cache/LruCache';
+import type { LanguageModelClient } from '../../ai/LanguageModelClient';
+import type { GitLogger } from '../../core/git/errors';
+import { runCommitSummaryFlow } from '../../core/ai/commitSummaryFlow';
+import { buildCommitSummaryPrompt } from '../../core/ai/prompts';
+import { COMMANDS, CONFIG, MEDIA, VIEWS } from '../../constants';
 import type { CommitDetail } from '../../core/git/types';
 
 function createNonce(): string {
@@ -25,19 +30,35 @@ function shellHtml(bodyHtml: string): string {
 
 /** Docks commit details in the bottom panel (next to Commit Graph), matching GitLens's panel layout, instead of opening a new editor tab per commit. */
 export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
+  [x: string]: any;
   private view: vscode.WebviewView | undefined;
   private currentFilePath: string | undefined;
   private currentCommit: CommitDetail | undefined;
   private currentRemoteUrl: string | undefined;
+  private currentDiff: string | undefined;
+  private aiSummaryCache = new LruCache<string, string>(50);
+  private aiAbortController: AbortController | undefined;
+  private aiMessagesForTest: unknown[] = [];
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly git: GitService,
+    private readonly languageModelClient: LanguageModelClient,
+    private readonly logger: GitLogger,
   ) {}
 
   /** Test-only introspection seam — VS Code's public API doesn't expose a webview's rendered HTML. */
   getCurrentHtmlForTest(): string | undefined {
     return this.view?.webview.html;
+  }
+
+  /** Test-only introspection seam, same spirit as `getCurrentHtmlForTest()` — the AI summary's state lives in postMessage traffic, not in the static webview HTML, so there's nothing else to assert against. */
+  getAiSummaryMessagesForTest(): unknown[] {
+    return this.aiMessagesForTest;
+  }
+
+  hasLoadedCommit(): boolean {
+    return this.currentCommit !== undefined;
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -76,6 +97,8 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     this.currentFilePath = filePath;
+    this.aiAbortController?.abort();
+    this.aiMessagesForTest = [];
     this.view.title = `Commit ${sha.slice(0, 7)}`;
     this.view.webview.html = shellHtml('<p>Loading commit…</p>');
 
@@ -92,6 +115,7 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
         return;
       }
       this.currentCommit = commit;
+      this.currentDiff = diff;
 
       // Only offer "Open on <host>" when we know that host's commit-URL shape — a button that
       // reliably 404s is worse than no button.
@@ -120,6 +144,73 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  async explainCommit(): Promise<void> {
+    if (!this.view || !this.currentCommit || !this.currentFilePath) {
+      return;
+    }
+    this.aiAbortController?.abort();
+    const controller = new AbortController();
+    this.aiAbortController = controller;
+
+    const commit = this.currentCommit;
+    const diff = this.currentDiff ?? '';
+    const filePath = this.currentFilePath;
+    const config = vscode.workspace.getConfiguration(CONFIG.section);
+    const enabled = config.get<boolean>(CONFIG.aiEnabled, false);
+    const modelFamily = config.get<string>(CONFIG.aiModelFamily, 'gpt-4o');
+    const maxDiffChars = config.get<number>(CONFIG.aiMaxDiffChars, 8000);
+
+    const repoRoot = await this.git.getRepoRoot(filePath);
+    const cacheKey = `${repoRoot ?? filePath}:${commit.sha}`;
+    const cached = this.aiSummaryCache.get(cacheKey);
+
+    const flow = runCommitSummaryFlow({
+      enabled,
+      cached,
+      signal: controller.signal,
+      selectModel: () => this.languageModelClient.selectModel(modelFamily),
+      buildPrompt: () => buildCommitSummaryPrompt(commit, diff, maxDiffChars),
+    });
+
+    for await (const event of flow) {
+      if (controller.signal.aborted) {
+        return;
+      }
+      switch (event.type) {
+        case 'disabled':
+          void vscode.window.showInformationMessage('GitLore: AI features are disabled.', 'Open Settings').then((choice) => {
+            if (choice) {
+              void vscode.commands.executeCommand('workbench.action.openSettings', `${CONFIG.section}.${CONFIG.aiEnabled}`);
+            }
+          });
+          this.postAiMessage({ type: 'aiSummaryReset' });
+          break;
+        case 'cached':
+          this.postAiMessage({ type: 'aiSummaryCached', text: event.text });
+          break;
+        case 'noModel':
+          this.postAiMessage({ type: 'aiSummaryNoModel' });
+          break;
+        case 'chunk':
+          this.postAiMessage({ type: 'aiSummaryChunk', text: event.text });
+          break;
+        case 'done':
+          this.aiSummaryCache.set(cacheKey, event.text);
+          this.postAiMessage({ type: 'aiSummaryDone' });
+          break;
+        case 'error':
+          this.logger.error('AI commit summary failed', event.message);
+          this.postAiMessage({ type: 'aiSummaryError', message: event.message });
+          break;
+      }
+    }
+  }
+
+  private postAiMessage(message: { type: string; text?: string; message?: string }): void {
+    this.aiMessagesForTest.push(message);
+    void this.view?.webview.postMessage(message);
+  }
+
   private async handleMessage(message: unknown): Promise<void> {
     if (typeof message !== 'object' || message === null) {
       return;
@@ -138,6 +229,10 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
     }
     if (type === 'openRemote' && this.currentRemoteUrl) {
       await vscode.env.openExternal(vscode.Uri.parse(this.currentRemoteUrl));
+      return;
+    }
+    if (type === 'explainCommit') {
+      await this.explainCommit();
       return;
     }
     if (type === 'openFileDiff' && typeof path === 'string' && commit && this.currentFilePath) {

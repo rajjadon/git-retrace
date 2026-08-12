@@ -30,8 +30,9 @@ const viewIds = new Set(Object.values(views).flat().map((v) => v.id));
  */
 
 test('contributes.commands: every COMMANDS entry that is user-invocable is declared', () => {
-  // explainCommit/explainLine are reserved for Phase 2 and intentionally not contributed yet.
-  const reserved = new Set<string>([COMMANDS.explainCommit, COMMANDS.explainLine]);
+  // explainLine is reserved for a future sub-project and intentionally not contributed yet.
+  // explainCommit is now legitimately contributed (package.json + handleExplainCommitCommand).
+  const reserved = new Set<string>([COMMANDS.explainLine]);
   for (const [key, id] of Object.entries(COMMANDS)) {
     if (reserved.has(id)) {
       assert.ok(!commandIds.has(id), `COMMANDS.${key} is reserved but declared in package.json`);
