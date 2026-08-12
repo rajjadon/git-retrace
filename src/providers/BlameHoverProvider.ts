@@ -3,7 +3,7 @@ import { GitService } from '../core/git/GitService';
 import type { BlameSource } from './BlameSource';
 import { formatBlameHover } from '../utils/format';
 import { resolveIssueLinking } from './issueLinking';
-import { CONFIG } from '../constants';
+import { CONFIG, COMMANDS } from '../constants';
 
 const DEFAULT_MAX_BLAME_FILE_SIZE = 1_048_576;
 
@@ -33,7 +33,11 @@ export class BlameHoverProvider implements vscode.HoverProvider {
 
       const diffStat = entry.isUncommitted ? null : await this.git.getFileDiffStat(doc.uri.fsPath, entry.sha);
       const issueLinking = await resolveIssueLinking(this.git, doc.uri.fsPath);
-      return new vscode.Hover(new vscode.MarkdownString(formatBlameHover(entry, diffStat, undefined, issueLinking)));
+      const markdown = new vscode.MarkdownString(
+        formatBlameHover(entry, diffStat, doc.uri.fsPath, doc.lineAt(pos.line).text, undefined, issueLinking),
+      );
+      markdown.isTrusted = { enabledCommands: [COMMANDS.explainLine] };
+      return new vscode.Hover(markdown);
     } catch {
       // Blame failing on an unsaved/untracked file is expected — stay silent.
       return undefined;

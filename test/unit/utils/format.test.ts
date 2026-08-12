@@ -1,3 +1,4 @@
+// test/unit/utils/format.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { formatBlameHover } from '../../../src/utils/format';
@@ -21,7 +22,7 @@ const entry: BlameLine = {
 const diffStat: FileChange = { path: 'tracked.txt', insertions: 3, deletions: 1, binary: false };
 
 test('formatBlameHover: includes gravatar, author, message, age, date, sha, and diff stat', () => {
-  const md = formatBlameHover(entry, diffStat, now);
+  const md = formatBlameHover(entry, diffStat, 'tracked.txt', 'line three', now);
   assert.match(md, /!\[\]\(https:\/\/www\.gravatar\.com\/avatar\/[0-9a-f]{32}\?s=64&d=identicon\)/);
   assert.match(md, /\*\*Amy Dev\*\*/);
   assert.match(md, /add line three/);
@@ -32,19 +33,20 @@ test('formatBlameHover: includes gravatar, author, message, age, date, sha, and 
 });
 
 test('formatBlameHover: omits the diff stat line when there is none', () => {
-  const md = formatBlameHover(entry, null, now);
+  const md = formatBlameHover(entry, null, 'tracked.txt', 'line three', now);
   assert.doesNotMatch(md, /\+\d+ -\d+/);
 });
 
 test('formatBlameHover: omits the diff stat line for binary files', () => {
-  const md = formatBlameHover(entry, { path: 'image.png', insertions: 0, deletions: 0, binary: true }, now);
+  const md = formatBlameHover(entry, { path: 'image.png', insertions: 0, deletions: 0, binary: true }, 'image.png', 'line three', now);
   assert.doesNotMatch(md, /\+\d+ -\d+/);
 });
 
-test('formatBlameHover: uncommitted lines get a short fixed message, no gravatar', () => {
-  const md = formatBlameHover({ ...entry, isUncommitted: true }, null, now);
+test('formatBlameHover: uncommitted lines get a short fixed message, no gravatar, no AI link', () => {
+  const md = formatBlameHover({ ...entry, isUncommitted: true }, null, 'tracked.txt', 'line three', now);
   assert.match(md, /Uncommitted changes/);
   assert.doesNotMatch(md, /gravatar\.com/);
+  assert.ok(!md.includes('command:gitLore.explainLine'));
 });
 
 test('formatBlameHover: escapes markdown special characters from git-sourced fields', () => {
@@ -53,7 +55,7 @@ test('formatBlameHover: escapes markdown special characters from git-sourced fie
     author: '[Evil](http://evil.com)',
     summary: 'click **here** or [here](http://evil.com)',
   };
-  const md = formatBlameHover(malicious, null, now);
+  const md = formatBlameHover(malicious, null, 'tracked.txt', 'line three', now);
   // The raw unescaped forms must not appear — they'd render as a live link/emphasis.
   assert.ok(!md.includes('[Evil](http://evil.com)'));
   assert.ok(!md.includes('[here](http://evil.com)'));
@@ -64,7 +66,7 @@ test('formatBlameHover: escapes markdown special characters from git-sourced fie
 
 test('formatBlameHover: links an issue reference in the message when issueLinking is provided', () => {
   const withIssue: BlameLine = { ...entry, summary: 'fix #12 crash' };
-  const md = formatBlameHover(withIssue, null, now, {
+  const md = formatBlameHover(withIssue, null, 'tracked.txt', 'line three', now, {
     pattern: '#(\\d+)',
     urlTemplate: 'https://github.com/o/r/issues/{issue}',
   });
@@ -75,7 +77,16 @@ test('formatBlameHover: links an issue reference in the message when issueLinkin
 
 test('formatBlameHover: without issueLinking, "#12" is left as escaped plain text, not a link', () => {
   const withIssue: BlameLine = { ...entry, summary: 'fix #12 crash' };
-  const md = formatBlameHover(withIssue, null, now);
+  const md = formatBlameHover(withIssue, null, 'tracked.txt', 'line three', now);
   assert.ok(!md.includes('issues/12'));
   assert.ok(md.includes('\\#12'));
+});
+
+test('formatBlameHover: appends an "Explain this line with AI" command link for a committed line', () => {
+  const md = formatBlameHover(entry, diffStat, 'tracked.txt', 'line three', now);
+  assert.match(md, /\[Explain this line with AI\]\(command:gitLore\.explainLine\?/);
+  const match = /command:gitLore\.explainLine\?(\S+)\)/.exec(md);
+  assert.ok(match, 'expected an encoded command link');
+  const args = JSON.parse(decodeURIComponent(match[1] ?? '')) as unknown[];
+  assert.deepEqual(args, ['tracked.txt', entry.sha, 'line three']);
 });

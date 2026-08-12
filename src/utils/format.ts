@@ -2,6 +2,7 @@ import type { BlameLine, FileChange } from '../core/git/types';
 import { formatAge, formatAbsolute } from './date';
 import { buildGravatarUrl } from './gravatar';
 import { linkifyIssues, type IssueLinkOptions } from './issueLinks';
+import { COMMANDS } from '../constants';
 
 const MARKDOWN_SPECIAL_RE = /([\\`*_{}[\]()#+\-.!|>~])/g;
 
@@ -26,13 +27,15 @@ function formatMessage(text: string, issueLinking: IssueLinkOptions | null): str
 
 /**
  * Builds the markdown body for the blame hover card. Pure — the caller wraps the result in
- * a `vscode.MarkdownString`. No `isTrusted` is needed since this never emits a `command:` URI
- * — issue links are plain `https://` markdown links, which VS Code renders as clickable
- * without requiring the hover to be trusted.
+ * a `vscode.MarkdownString` and must set `isTrusted = { enabledCommands: [COMMANDS.explainLine] }`
+ * for the "Explain this line with AI" link below to actually be clickable — VS Code ignores
+ * command links in untrusted markdown.
  */
 export function formatBlameHover(
   entry: BlameLine,
   diffStat: FileChange | null,
+  filePath: string,
+  lineContent: string,
   now: Date = new Date(),
   issueLinking: IssueLinkOptions | null = null,
 ): string {
@@ -59,6 +62,9 @@ export function formatBlameHover(
   if (diffStat && !diffStat.binary) {
     lines.push(`+${diffStat.insertions} -${diffStat.deletions}`);
   }
+
+  const linkArgs = encodeURIComponent(JSON.stringify([filePath, entry.sha, lineContent]));
+  lines.push('', `[Explain this line with AI](command:${COMMANDS.explainLine}?${linkArgs})`);
 
   return lines.join('\n');
 }

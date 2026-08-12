@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { MANIFEST_PATH, type FixtureManifest } from '../fixtures/build-fixture-repo';
 import type { GitLoreTestApi } from '../../src/extension';
 import { EXTENSION_ID } from './extensionId';
+import { COMMANDS } from '../../src/constants';
 
 
 function hoverText(hover: vscode.Hover): string {
@@ -38,6 +39,24 @@ suite('Blame hover card', () => {
     assert.match(text, /add line three/);
     assert.match(text, /gravatar\.com\/avatar\//);
     assert.match(text, /\+1 -0/); // this commit only added "line three"
+  });
+
+  test('offers a command link to explain the line with AI, scoped to just that command', async () => {
+    const doc = await vscode.workspace.openTextDocument(manifest.trackedFile);
+    await vscode.window.showTextDocument(doc);
+
+    const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+      'vscode.executeHoverProvider',
+      doc.uri,
+      new vscode.Position(2, 0),
+    );
+
+    assert.ok(hovers && hovers.length > 0, 'expected at least one hover');
+    const hover = hovers[0];
+    assert.ok(hover, 'expected at least one hover');
+    const content = hover.contents[0] as vscode.MarkdownString;
+    assert.match(content.value, new RegExp(`command:${COMMANDS.explainLine}\\?`));
+    assert.deepEqual(content.isTrusted, { enabledCommands: [COMMANDS.explainLine] });
   });
 
   test('shows no hover for an untracked file', async () => {
