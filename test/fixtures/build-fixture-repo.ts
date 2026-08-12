@@ -186,3 +186,31 @@ export function buildStaleFixtureRepo(): StaleFixtureManifest {
 
   return { repoRoot, staleFile, staleSha };
 }
+
+export interface OwnershipFixtureManifest {
+  repoRoot: string;
+  trackedFile: string;
+}
+
+/**
+ * One file, two authors: Alice writes both lines first (older commit), Bob adds a third line
+ * later (newer commit) — gives the ownership tests a real recency-vs-line-count tension (Alice
+ * has more raw lines, Bob's line is more recent) without needing an injectable "now".
+ */
+export function buildOwnershipFixtureRepo(): OwnershipFixtureManifest {
+  const repoRoot = mkdtempSync(join(tmpdir(), 'gitlore-ownership-fixture-'));
+  git(repoRoot, ['init', '-q', '-b', 'main']);
+  git(repoRoot, ['config', 'user.name', 'Raj Jadon']);
+  git(repoRoot, ['config', 'user.email', 'raj@example.com']);
+
+  const trackedFile = join(repoRoot, 'ownership.txt');
+  writeFileSync(trackedFile, 'alice line one\nalice line two\n');
+  git(repoRoot, ['add', 'ownership.txt']);
+  git(repoRoot, ['commit', '-q', '-m', 'alice adds two lines'], commitEnv('Alice Dev', 'alice@example.com', '2024-01-01T10:00:00'));
+
+  writeFileSync(trackedFile, 'alice line one\nalice line two\nbob line three\n');
+  git(repoRoot, ['add', 'ownership.txt']);
+  git(repoRoot, ['commit', '-q', '-m', 'bob adds a line'], commitEnv('Bob Smith', 'bob@example.com', '2024-02-01T10:00:00'));
+
+  return { repoRoot, trackedFile };
+}

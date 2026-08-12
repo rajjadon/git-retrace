@@ -32,6 +32,12 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - Hovering or keyboard-focusing a commit row shows a tooltip with the author, full commit message, age/date/SHA, and diffstat — no more waiting on native browser tooltips split across separate cells.
 - The Author, Changes, Commit Date, and SHA column headers are now compact icons (each still announces its real name to screen readers via `title`/`aria-label`).
 
+**Author ownership heatmap** — closes out Phase 2 of the roadmap
+
+- Turn on `gitLore.ownership.enabled` for a colored mark in the overview ruler for every line, colored by that line's author (from a 7-color palette shared with the commit graph — with more than 7 authors, colors repeat), so you can see at a glance who owns which regions of a file.
+- **GitLore: Show File Ownership** lists every author on the current file, weighted by recency (a line touched last week counts for more than one untouched for years) rather than raw line count, most-recently-active author first — with their share, line count, and last-active age.
+- Off by default (the ruler marks); the command works regardless. Respects `gitLore.maxBlameFileSize` and `gitLore.blame.ignoreWhitespace` like the rest of blame.
+
 ## [0.2.0] - 2026-08-11
 
 First stable release — installs by default, with no need to opt into pre-releases. Same code as the `0.1.0` pre-release, promoted after verification.

@@ -9,12 +9,14 @@ import { FileHistoryProvider } from './providers/FileHistoryProvider';
 import { StatusBarProvider } from './providers/StatusBarProvider';
 import { GitContentProvider } from './providers/GitContentProvider';
 import { StaleCodeLensProvider } from './providers/CodeLensProvider';
+import { OwnershipDecorationProvider } from './providers/OwnershipDecorationProvider';
 import { handleToggleBlameCommand } from './commands/blameCommands';
 import { handleShowFileHistoryCommand, handleCopyShaCommand } from './commands/fileHistoryCommands';
 import { handleShowCommitCommand } from './commands/commitCommands';
 import { handleOpenGraphCommand } from './commands/graphCommands';
 import { handleCompareBranchesCommand } from './commands/branchCommands';
 import { handleExplainCommitCommand, handleExplainLineCommand } from './commands/aiCommands';
+import { handleShowFileOwnershipCommand, buildOwnershipQuickPickItems } from './commands/ownershipCommands';
 import { CommitDetailsViewProvider } from './views/CommitDetails/CommitDetailsViewProvider';
 import { CommitGraphViewProvider } from './views/CommitGraph/CommitGraphViewProvider';
 import { BranchComparisonViewProvider } from './views/BranchComparison/BranchComparisonViewProvider';
@@ -28,6 +30,7 @@ export interface GitLoreTestApi {
   blameProvider: BlameDecorationProvider;
   fileHistoryProvider: FileHistoryProvider;
   statusBarProvider: StatusBarProvider;
+  ownershipProvider: OwnershipDecorationProvider;
   git: GitService;
   getCommitDetailsHtml: () => string | undefined;
   getCommitGraphHtml: () => string | undefined;
@@ -35,6 +38,7 @@ export interface GitLoreTestApi {
   explainCommit: () => Promise<void>;
   getAiSummaryMessagesForTest: () => unknown[];
   getLineExplanationStateForTest: (filePath: string, sha: string, lineContent: string) => Promise<LineExplanationState | undefined>;
+  getOwnershipItemsForTest: (filePath: string) => Promise<vscode.QuickPickItem[] | null>;
 }
 
 export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
@@ -56,6 +60,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
   const blameProvider = new BlameDecorationProvider(blameSource);
   const hoverProvider = new BlameHoverProvider(blameSource, git, lineExplanationStore);
   const staleCodeLensProvider = new StaleCodeLensProvider(blameSource);
+  const ownershipProvider = new OwnershipDecorationProvider(blameSource);
   const fileHistoryProvider = new FileHistoryProvider(git);
   const statusBarProvider = new StatusBarProvider(blameProvider);
   const commitGraphViewProvider = new CommitGraphViewProvider(ctx.extensionUri, git);
@@ -68,6 +73,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     fileHistoryProvider,
     statusBarProvider,
     staleCodeLensProvider,
+    ownershipProvider,
     handleToggleBlameCommand(blameProvider),
     handleShowFileHistoryCommand(fileHistoryProvider),
     handleCopyShaCommand(),
@@ -76,6 +82,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     handleCompareBranchesCommand(git, branchComparisonViewProvider),
     handleExplainCommitCommand(commitDetailsViewProvider),
     handleExplainLineCommand(lineExplanationService),
+    handleShowFileOwnershipCommand(blameSource),
     vscode.languages.registerHoverProvider({ scheme: 'file' }, hoverProvider),
     vscode.languages.registerCodeLensProvider({ scheme: 'file' }, staleCodeLensProvider),
     // Backs the "Open changes" action in the commit-details and branch-comparison panels by
@@ -91,6 +98,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     blameProvider,
     fileHistoryProvider,
     statusBarProvider,
+    ownershipProvider,
     git,
     getCommitDetailsHtml: () => commitDetailsViewProvider.getCurrentHtmlForTest(),
     getCommitGraphHtml: () => commitGraphViewProvider.getCurrentHtmlForTest(),
@@ -99,6 +107,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     getAiSummaryMessagesForTest: () => commitDetailsViewProvider.getAiSummaryMessagesForTest(),
     getLineExplanationStateForTest: (filePath, sha, lineContent) =>
       lineExplanationService.getState(filePath, sha, lineContent),
+    getOwnershipItemsForTest: (filePath: string) => buildOwnershipQuickPickItems(blameSource, filePath),
   };
 }
 

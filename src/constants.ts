@@ -14,6 +14,7 @@ export const COMMANDS = {
   compareBranches: 'gitLore.compareBranches',
   explainCommit: 'gitLore.explainCommit',
   explainLine: 'gitLore.explainLine',
+  showFileOwnership: 'gitLore.showFileOwnership',
 } as const;
 
 export const CONFIG = {
@@ -28,6 +29,7 @@ export const CONFIG = {
   dateFormat: 'dateFormat',
   staleCodeEnabled: 'staleCode.enabled',
   staleThresholdDays: 'staleThresholdDays',
+  ownershipEnabled: 'ownership.enabled',
   issueLinkingEnabled: 'issueLinking.enabled',
   issueLinkingPattern: 'issueLinking.pattern',
   issueLinkingUrlTemplate: 'issueLinking.urlTemplate',

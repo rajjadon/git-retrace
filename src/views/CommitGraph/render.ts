@@ -3,6 +3,7 @@ import type { BranchInfo, Ref, WorkingChanges } from '../../core/git/types';
 import { formatAge, formatAbsolute } from '../../utils/date';
 import { escapeHtml } from '../escapeHtml';
 import { buildGravatarUrl } from '../../utils/gravatar';
+import { chartCssVarForIndex } from '../../utils/colors';
 import {
   AUTHOR_ICON,
   BRANCH_ICON,
@@ -43,21 +44,8 @@ const AVATAR_RADIUS = 6;
 // and both truncated to noise ("m…", "origi…"). The `+N` badge's tooltip still names the rest.
 const MAX_VISIBLE_REFS = 1;
 
-// VS Code's own categorical palette (Settings UI, extension charts) — theme-aware for free,
-// unlike a hardcoded hex list that could clash on a light theme or a high-contrast theme.
-const LANE_COLOR_VARS = [
-  '--vscode-charts-blue',
-  '--vscode-charts-orange',
-  '--vscode-charts-green',
-  '--vscode-charts-purple',
-  '--vscode-charts-red',
-  '--vscode-charts-yellow',
-  '--vscode-charts-foreground',
-];
-
 function laneColor(lane: number): string {
-  const name = LANE_COLOR_VARS[lane % LANE_COLOR_VARS.length] ?? LANE_COLOR_VARS[0] ?? '--vscode-charts-foreground';
-  return `var(${name})`;
+  return chartCssVarForIndex(lane);
 }
 
 function laneX(lane: number): number {

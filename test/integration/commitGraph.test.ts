@@ -49,14 +49,20 @@ suite('Commit graph webview', () => {
     assert.ok(!html.includes('unsafe-inline'));
   });
 
-  test('renders the toolbar, the seven columns, and a scrollable grid', async () => {
+  test('renders the toolbar, the column headers (2 text, 4 icon-only), and a scrollable grid', async () => {
     const html = await openGraph();
     assert.match(html, /id="ref-filter"/);
     assert.match(html, /id="search"/);
     assert.match(html, /id="refresh"/);
     assert.match(html, /role="grid"/);
-    for (const header of ['Branch / Tag', 'Commit Message', 'Author', 'Changes', 'Commit Date', 'SHA']) {
+    for (const header of ['Branch / Tag', 'Commit Message']) {
       assert.ok(html.includes(`role="columnheader">${header}<`), `missing column header: ${header}`);
+    }
+    for (const header of ['Author', 'Changes', 'Commit Date', 'SHA']) {
+      assert.ok(
+        html.includes(`role="columnheader" title="${header}" aria-label="${header}"><svg`),
+        `missing icon-only column header: ${header}`,
+      );
     }
     // A page heading inside a 250px-tall panel is pure overhead — the toolbar replaced it.
     assert.ok(!html.includes('<h1>Commit Graph</h1>'));

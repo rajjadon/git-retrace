@@ -58,6 +58,11 @@
         "command": "gitLore.explainLine",
         "title": "GitLore: Explain This Line's History",
         "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitLore.showFileOwnership",
+        "title": "GitLore: Show File Ownership",
+        "icon": "$(person)"
       }
     ],
     "viewsContainers": {
@@ -202,6 +207,11 @@
           "type": "number",
           "default": 180,
           "description": "Days since a function's or method's last change before it's flagged as stale."
+        },
+        "gitLore.ownership.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show a color mark per line in the editor's overview ruler for that line's author. A more opinionated visual than inline blame, so it's off by default."
         },
         "gitLore.issueLinking.enabled": {
           "type": "boolean",
