@@ -91,12 +91,14 @@
         {
           "type": "webview",
           "id": "gitLore.commitDetails",
-          "name": "Commit Details"
+          "name": "Commit Details",
+          "visibility": "collapsed"
         },
         {
           "type": "webview",
           "id": "gitLore.branchComparison",
-          "name": "Branch Comparison"
+          "name": "Branch Comparison",
+          "visibility": "collapsed"
         }
       ]
     },

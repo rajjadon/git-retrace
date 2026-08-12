@@ -38,6 +38,10 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **GitLore: Show File Ownership** lists every author on the current file, weighted by recency (a line touched last week counts for more than one untouched for years) rather than raw line count, most-recently-active author first — with their share, line count, and last-active age.
 - Off by default (the ruler marks); the command works regardless. Respects `gitLore.maxBlameFileSize` and `gitLore.blame.ignoreWhitespace` like the rest of blame.
 
+### Changed
+
+- Commit Details and Branch Comparison now start collapsed beside the commit graph instead of sitting open and empty. Clicking a commit row expands Commit Details; the compare-branches button expands Branch Comparison. (Only affects workspaces opening the GitLore panel for the first time — VS Code remembers your own manual layout choices after that.)
+
 ## [0.2.0] - 2026-08-11
 
 First stable release — installs by default, with no need to opt into pre-releases. Same code as the `0.1.0` pre-release, promoted after verification.
