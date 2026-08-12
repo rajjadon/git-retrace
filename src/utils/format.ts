@@ -99,8 +99,15 @@ export function formatBlameHover(
   const absoluteDate = formatAbsolute(date, 'yyyy-MM-dd HH:mm');
   const shortSha = entry.sha.slice(0, 7);
 
+  // A bare `![](url) **name**` paragraph baseline-aligns the image with the text, so the avatar
+  // hangs noticeably above the name — confirmed against VS Code's own sanitizer allowlist
+  // (github.com/microsoft/vscode markdownRenderer.ts): `img` may not carry `style` or `class`, so
+  // there is no markdown/HTML way to set `vertical-align` on it directly. A borderless two-cell
+  // table sidesteps this: `td`/`th` default to `vertical-align: middle` in every browser, which
+  // centers the avatar against the name regardless of the image's own inline alignment.
   const lines = [
-    `![](${avatarUrl}) **${author}**`,
+    `| ![](${avatarUrl}) | **${author}** |`,
+    '| :--- | :--- |',
     '',
     message,
     '',

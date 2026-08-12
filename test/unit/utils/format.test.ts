@@ -32,6 +32,16 @@ test('formatBlameHover: includes gravatar, author, message, age, date, sha, and 
   assert.match(md, /\+3 -1/);
 });
 
+test('formatBlameHover: puts the avatar and name in a two-cell table row, not a bare paragraph', () => {
+  // Regression: `![](url) **name**` baseline-aligns the image with the text, leaving the avatar
+  // visibly floating above the name. A table's cells default to vertical-align: middle, which a
+  // bare paragraph can never get for a plain <img> under VS Code's hover sanitizer (no style/class
+  // allowed on <img>). This locks in the table so the fix can't quietly regress back to a paragraph.
+  const md = formatBlameHover(entry, diffStat, 'tracked.txt', 'line three', undefined, now);
+  assert.match(md, /^\| !\[\]\(https:\/\/www\.gravatar\.com\/avatar\/[0-9a-f]{32}\?s=20&d=identicon\) \| \*\*Amy Dev\*\* \|$/m);
+  assert.match(md, /^\| :--- \| :--- \|$/m);
+});
+
 test('formatBlameHover: omits the diff stat line when there is none', () => {
   const md = formatBlameHover(entry, null, 'tracked.txt', 'line three', undefined, now);
   assert.doesNotMatch(md, /\+\d+ -\d+/);
