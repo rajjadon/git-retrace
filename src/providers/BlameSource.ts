@@ -93,8 +93,13 @@ export class BlameSource implements vscode.Disposable {
     this.fileWatchersByPath.delete(filePath);
   }
 
-  /** One shared HEAD/refs watcher per repo root — a branch switch affects every file in that repo. */
-  private watchHeadFor(repoRoot: string): void {
+  /**
+   * One shared HEAD/refs watcher per repo root — a branch switch affects every file in that
+   * repo. Public (not just called internally from `getBlameLines`) so a consumer that has no
+   * reason to blame a file itself — the commit graph, watching for external pulls/pushes to
+   * auto-refresh — can still ensure this repo's watcher exists and subscribe via `onInvalidate`.
+   */
+  watchHeadFor(repoRoot: string): void {
     if (this.headWatchersByRoot.has(repoRoot)) {
       return;
     }

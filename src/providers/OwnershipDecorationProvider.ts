@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { CONFIG, DEFAULT_MAX_BLAME_FILE_SIZE } from '../constants';
 import { computeLineColors } from '../core/git/ownership';
 import { CHART_THEME_COLOR_IDS, chartThemeColorIdForIndex } from '../utils/colors';
+import { coalesceLineRanges } from '../utils/ranges';
 import type { BlameSource } from './BlameSource';
 
 /**
@@ -89,7 +90,8 @@ export class OwnershipDecorationProvider implements vscode.Disposable {
     }
 
     this.decorationTypes.forEach((type, index) => {
-      editor.setDecorations(type, OwnershipDecorationProvider.toCoalescedRanges(linesByColorIndex[index] ?? []));
+      const ranges = coalesceLineRanges(linesByColorIndex[index] ?? []).map((r) => new vscode.Range(r.start, 0, r.end, 0));
+      editor.setDecorations(type, ranges);
     });
     this.lastRanges = { uri: editor.document.uri.toString(), ranges: linesByColorIndex };
   }
@@ -104,26 +106,6 @@ export class OwnershipDecorationProvider implements vscode.Disposable {
   /** Test-only introspection seam — VS Code's public API doesn't expose applied decorations. Index = color index into `CHART_THEME_COLOR_IDS`; value = the 0-based line numbers marked with that color. */
   getOwnershipRangesForTest(uri: vscode.Uri): number[][] {
     return this.lastRanges?.uri === uri.toString() ? this.lastRanges.ranges : [];
-  }
-
-  /** Coalesces a sorted list of line numbers into contiguous ranges, e.g. [0,1,2,5] -> [0-2, 5-5]. */
-  private static toCoalescedRanges(lines: number[]): vscode.Range[] {
-    const ranges: vscode.Range[] = [];
-    let start: number | undefined;
-    let prev: number | undefined;
-    for (const line of lines) {
-      if (start === undefined) {
-        start = line;
-      } else if (prev !== undefined && line !== prev + 1) {
-        ranges.push(new vscode.Range(start, 0, prev, 0));
-        start = line;
-      }
-      prev = line;
-    }
-    if (start !== undefined && prev !== undefined) {
-      ranges.push(new vscode.Range(start, 0, prev, 0));
-    }
-    return ranges;
   }
 
   private getConfig<T>(key: string, fallback: T): T {

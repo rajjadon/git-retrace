@@ -1,0 +1,151 @@
+/*
+ * Launchpad occupies a full editor tab, like Rebase Editor — a 6-column board needs real width,
+ * not a narrow docked-panel sliver competing with two other views.
+ */
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-editor-background);
+}
+
+.toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 0.6rem 1rem;
+  border-bottom: 2px solid;
+  border-image: var(--gitlore-accent-gradient) 1;
+}
+
+.title {
+  font-weight: 600;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.errors {
+  flex: 0 0 auto;
+  padding: 0.4rem 1rem;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.error-row {
+  margin: 0.15rem 0;
+  color: var(--vscode-errorForeground, var(--vscode-descriptionForeground));
+}
+
+.empty {
+  margin: 1rem;
+  color: var(--vscode-descriptionForeground);
+}
+
+.board {
+  flex: 1 1 auto;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.column {
+  flex: 1 1 0;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--vscode-sideBar-background, var(--vscode-panel-background));
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--gitlore-radius-lg);
+  max-height: 100%;
+}
+
+.column-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  font-weight: 600;
+}
+
+.column-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.column-empty {
+  margin: 0.5rem 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.92em;
+}
+
+.pr-card {
+  position: relative;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background-color: var(--vscode-editor-background);
+  cursor: pointer;
+}
+
+.pr-card:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.pr-card:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.pr-card-repo {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+  margin-bottom: 0.2rem;
+}
+
+.pr-card-title {
+  font-weight: 500;
+  margin-bottom: 0.3rem;
+  /* Long titles wrap, not truncate — a card has room, unlike a docked panel's row grid. */
+  overflow-wrap: anywhere;
+}
+
+.pr-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+.pr-card-meta > svg {
+  opacity: 0.8;
+}
+
+.pr-card-age {
+  margin-left: auto;
+}
+
+.pr-card-snooze {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+}

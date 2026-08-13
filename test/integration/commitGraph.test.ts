@@ -1,7 +1,8 @@
 import * as assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import * as vscode from 'vscode';
-import { MANIFEST_PATH, type FixtureManifest } from '../fixtures/build-fixture-repo';
+import { MANIFEST_PATH, type FixtureManifest, buildSyncFixtureRepo } from '../fixtures/build-fixture-repo';
 import type { GitLoreTestApi } from '../../src/extension';
 import { COMMANDS } from '../../src/constants';
 import { resolveRepoContextPath } from '../../src/views/CommitGraph/CommitGraphViewProvider';
@@ -104,5 +105,37 @@ suite('Commit graph webview', () => {
 
     // And the command itself stays quiet rather than throwing.
     await vscode.commands.executeCommand(COMMANDS.openGraph);
+  });
+
+  test('shows pull/push buttons badged with the real ahead/behind counts against the upstream', async () => {
+    const fixture = buildSyncFixtureRepo();
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand(COMMANDS.openGraph);
+    await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('ahead commit 1'));
+
+    const html = api.getCommitGraphHtml() ?? '';
+    assert.match(html, new RegExp(`id="pull"[^>]*title="Pull ${fixture.behind} commits"`));
+    assert.match(html, new RegExp(`id="push"[^>]*title="Push ${fixture.ahead} commits"`));
+    assert.match(html, new RegExp(`id="pull"[\\s\\S]*?class="sync-badge">${fixture.behind}<`));
+    assert.match(html, new RegExp(`id="push"[\\s\\S]*?class="sync-badge">${fixture.ahead}<`));
+  });
+
+  test('auto-refreshes when HEAD/refs change on disk, without an explicit refresh message', async () => {
+    // Regression: the graph previously only reloaded on an explicit "refresh" click or a ref-picker
+    // change — a pull/checkout done in a terminal, another tool, or (once shipped) the graph's own
+    // pull/push buttons left it showing stale data until the user remembered to click refresh.
+    const fixture = buildSyncFixtureRepo();
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand(COMMANDS.openGraph);
+    await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('ahead commit 1'));
+    assert.match(api.getCommitGraphHtml() ?? '', /ref-head" title="main \(current\)"/);
+
+    // External change to HEAD/refs — exactly what `git checkout` (from a terminal, another tool,
+    // or a real pull) does, without going through GitLore or posting any message to the webview.
+    execFileSync('git', ['checkout', '-q', 'pretend-origin-main'], { cwd: fixture.repoRoot });
+
+    await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('ref-head" title="pretend-origin-main (current)"'));
   });
 });

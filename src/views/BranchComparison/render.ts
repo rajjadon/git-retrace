@@ -3,7 +3,24 @@ import { formatAge, formatAbsolute } from '../../utils/date';
 import { escapeHtml } from '../escapeHtml';
 import { renderFileSections } from '../diffRender';
 import { buildGravatarUrl } from '../../utils/gravatar';
-import { BRANCH_ICON, CHECK_ICON, FILES_ICON, REFRESH_ICON, SEARCH_ICON, SWAP_ICON, WRAP_ICON } from '../icons';
+import {
+  BRANCH_ICON,
+  CHECK_ICON,
+  EXTERNAL_ICON,
+  FILES_ICON,
+  OPEN_CHANGES_ICON,
+  REFRESH_ICON,
+  SEARCH_ICON,
+  SWAP_ICON,
+  WRAP_ICON,
+} from '../icons';
+
+/** Where "Create PR" should send the user, when the repo has a remote we know the compare/PR URL shape for. */
+export interface PrTarget {
+  /** Display name of the hosting service, e.g. "GitHub". */
+  label: string;
+  url: string;
+}
 
 export interface RenderBranchComparisonOptions {
   nonce: string;
@@ -11,6 +28,7 @@ export interface RenderBranchComparisonOptions {
   /** Stylesheets to link, in order. Shared diff rules first, then the panel's own. */
   styleUris: string[];
   editorFontFamily: string;
+  createPr?: PrTarget | null;
 }
 
 export interface BranchComparisonData {
@@ -94,18 +112,28 @@ export function renderBranchComparisonHtml(
 
   // Not renderEmptyState: that carries a checkmark, and a green tick next to an instruction reads
   // as "done" when the user hasn't done anything yet.
+  const openAllBtn =
+    files.length > 0
+      ? `<button class="icon-btn" id="open-all" type="button" title="Open all changes, diffed against the common base" aria-label="Open all changes, diffed against the common base">${OPEN_CHANGES_ICON}</button>`
+      : '';
+
   const filesBody = sameRef
     ? '<p class="empty">Pick two different refs to compare.</p>'
     : `<div class="section-head">
 ${FILES_ICON}<span class="section-title">Files changed</span><span class="badge">${files.length}</span>
 <span class="totals"><span class="stat-add">+${insertions}</span><span class="stat-del">&minus;${deletions}</span></span>
 <span class="search">${SEARCH_ICON}<input id="file-filter" type="search" placeholder="Filter files…" aria-label="Filter changed files by path" autocomplete="off" spellcheck="false" /></span>
+${openAllBtn}
 <button class="icon-btn" id="wrap" type="button" aria-pressed="false" title="Wrap long lines" aria-label="Wrap long lines">${WRAP_ICON}</button>
 </div>
 <div class="files" id="files">
 ${renderFileSections(files, diff)}
 </div>
 <p class="empty" id="no-match" hidden>No files match that filter.</p>`;
+
+  const createPrBtn = opts.createPr
+    ? `<button class="icon-btn" id="create-pr" type="button" title="Create a PR on ${escapeHtml(opts.createPr.label)}" aria-label="Create a PR on ${escapeHtml(opts.createPr.label)}">${EXTERNAL_ICON}</button>`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -122,6 +150,7 @@ ${renderRefPicker('base', base, branches, 'Base ref — the side changes are mea
 <button class="icon-btn" id="swap" type="button" title="Swap base and compare" aria-label="Swap base and compare">${SWAP_ICON}</button>
 ${renderRefPicker('compare', compare, branches, 'Compare ref — the side changes are measured to')}
 <span class="refbar-spacer"></span>
+${createPrBtn}
 <button class="icon-btn" id="refresh" type="button" title="Refresh" aria-label="Refresh the comparison">${REFRESH_ICON}</button>
 </div>
 <div class="tabs" role="tablist" aria-label="Comparison views">
@@ -188,6 +217,20 @@ document.getElementById('swap').addEventListener('click', () => {
 document.getElementById('refresh').addEventListener('click', () => {
   vscode.postMessage({ type: 'refresh' });
 });
+
+const createPrBtnEl = document.getElementById('create-pr');
+if (createPrBtnEl) {
+  createPrBtnEl.addEventListener('click', () => {
+    vscode.postMessage({ type: 'createPr' });
+  });
+}
+
+const openAllBtnEl = document.getElementById('open-all');
+if (openAllBtnEl) {
+  openAllBtnEl.addEventListener('click', () => {
+    vscode.postMessage({ type: 'openAllChanges' });
+  });
+}
 
 for (const btn of document.querySelectorAll('.row-btn')) {
   btn.addEventListener('click', (e) => {

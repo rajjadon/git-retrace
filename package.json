@@ -2,7 +2,7 @@
   "name": "gitlore",
   "displayName": "GitLore — git blame, history & commit graph",
   "description": "The story behind every line. Free, local-first git blame, history, commit graph and branch comparison — no account, no telemetry.",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "publisher": "RajpratapsinghJadon",
   "license": "MIT",
   "engines": {
@@ -45,6 +45,11 @@
         "icon": "$(type-hierarchy)"
       },
       {
+        "command": "gitLore.showVisualFileHistory",
+        "title": "GitLore: Show Visual File History",
+        "icon": "$(graph-line)"
+      },
+      {
         "command": "gitLore.compareBranches",
         "title": "GitLore: Compare Branches",
         "icon": "$(git-compare)"
@@ -63,12 +68,64 @@
         "command": "gitLore.showFileOwnership",
         "title": "GitLore: Show File Ownership",
         "icon": "$(person)"
+      },
+      {
+        "command": "gitLore.rebaseInteractively",
+        "title": "GitLore: Rebase Branch Interactively...",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "gitLore.checkoutBranch",
+        "title": "GitLore: Checkout Branch",
+        "icon": "$(check)"
+      },
+      {
+        "command": "gitLore.compareBranchFromExplorer",
+        "title": "GitLore: Compare with Current Branch",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "gitLore.openRemote",
+        "title": "GitLore: Open Remote in Browser",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "gitLore.applyStash",
+        "title": "GitLore: Apply Stash",
+        "icon": "$(check)"
+      },
+      {
+        "command": "gitLore.dropStash",
+        "title": "GitLore: Drop Stash",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "gitLore.stepLineHistory",
+        "title": "GitLore: Step Through This Line's History",
+        "icon": "$(chevron-left)"
+      },
+      {
+        "command": "gitLore.toggleFullFileBlame",
+        "title": "GitLore: Toggle Full-File Blame Heatmap",
+        "icon": "$(flame)"
+      },
+      {
+        "command": "gitLore.openLaunchpad",
+        "title": "GitLore: Open Launchpad",
+        "icon": "$(rocket)"
       }
     ],
     "viewsContainers": {
       "panel": [
         {
           "id": "gitLore",
+          "title": "GitLore",
+          "icon": "media/panel-icon.svg"
+        }
+      ],
+      "activitybar": [
+        {
+          "id": "gitLoreExplorer",
           "title": "GitLore",
           "icon": "media/panel-icon.svg"
         }
@@ -80,6 +137,12 @@
           "id": "gitLore.fileHistory",
           "name": "File History",
           "when": "gitLore.fileHistory.hasContent"
+        }
+      ],
+      "gitLoreExplorer": [
+        {
+          "id": "gitLore.explorer",
+          "name": "Explorer"
         }
       ],
       "gitLore": [
@@ -99,14 +162,55 @@
           "id": "gitLore.branchComparison",
           "name": "Branch Comparison",
           "visibility": "collapsed"
+        },
+        {
+          "type": "webview",
+          "id": "gitLore.visualFileHistory",
+          "name": "Visual File History",
+          "visibility": "collapsed"
         }
       ]
     },
+    "customEditors": [
+      {
+        "viewType": "gitLore.rebaseEditor",
+        "displayName": "GitLore Interactive Rebase",
+        "selector": [
+          {
+            "filenamePattern": "**/{rebase-merge,rebase-apply}/git-rebase-todo"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
     "menus": {
       "view/item/context": [
         {
           "command": "gitLore.copySha",
           "when": "view == gitLore.fileHistory && viewItem == gitLore.commit"
+        },
+        {
+          "command": "gitLore.checkoutBranch",
+          "when": "view == gitLore.explorer && (viewItem == gitLore.branch || viewItem == gitLore.branch.remote)",
+          "group": "inline"
+        },
+        {
+          "command": "gitLore.compareBranchFromExplorer",
+          "when": "view == gitLore.explorer && (viewItem == gitLore.branch || viewItem == gitLore.branch.remote)"
+        },
+        {
+          "command": "gitLore.openRemote",
+          "when": "view == gitLore.explorer && viewItem == gitLore.remote",
+          "group": "inline"
+        },
+        {
+          "command": "gitLore.applyStash",
+          "when": "view == gitLore.explorer && viewItem == gitLore.stash",
+          "group": "inline"
+        },
+        {
+          "command": "gitLore.dropStash",
+          "when": "view == gitLore.explorer && viewItem == gitLore.stash"
         }
       ],
       "view/title": [
@@ -129,6 +233,16 @@
           "command": "gitLore.openGraph",
           "when": "view == gitLore.commitGraph",
           "group": "navigation@4"
+        },
+        {
+          "command": "gitLore.showVisualFileHistory",
+          "when": "view == gitLore.commitGraph",
+          "group": "navigation@5"
+        },
+        {
+          "command": "gitLore.openLaunchpad",
+          "when": "view == gitLore.commitGraph",
+          "group": "navigation@6"
         },
         {
           "command": "gitLore.compareBranches",
@@ -158,6 +272,30 @@
         },
         {
           "command": "gitLore.explainLine",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.checkoutBranch",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.compareBranchFromExplorer",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.openRemote",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.applyStash",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.dropStash",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.stepLineHistory",
           "when": "false"
         }
       ]
@@ -215,6 +353,11 @@
           "default": false,
           "description": "Show a color mark per line in the editor's overview ruler for that line's author. A more opinionated visual than inline blame, so it's off by default."
         },
+        "gitLore.fullFileBlame.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show a hot-to-cold recency gradient as a left-edge mark per line, across the whole file. A more opinionated visual than inline blame, so it's off by default."
+        },
         "gitLore.issueLinking.enabled": {
           "type": "boolean",
           "default": true,
@@ -244,6 +387,49 @@
           "type": "number",
           "default": 8000,
           "description": "Max diff size, in characters, sent to the model for a commit summary. Longer diffs are truncated."
+        },
+        "gitLore.rebaseEditor.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use GitLore's Interactive Rebase Editor for git-rebase-todo files. When disabled, they open in the default text editor."
+        },
+        "gitLore.launchpad.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Launchpad, the cross-repo PR triage board. Off by default — it's the only GitLore feature that calls out to a remote host (GitHub, GitLab, Bitbucket, Azure DevOps, or a configured custom instance) rather than working entirely from your local .git."
+        },
+        "gitLore.launchpad.customHosts": {
+          "type": "array",
+          "default": [],
+          "description": "Self-hosted or custom git-forge instances Launchpad can't recognize by hostname alone (GitHub Enterprise Server, Gitea, Forgejo, self-hosted GitLab, etc). Each entry maps a hostname to which of the four API shapes it speaks and its API base URL.",
+          "items": {
+            "type": "object",
+            "required": [
+              "hostname",
+              "flavor",
+              "apiBaseUrl"
+            ],
+            "properties": {
+              "hostname": {
+                "type": "string",
+                "description": "The git remote's hostname, e.g. \"github.acme.com\"."
+              },
+              "flavor": {
+                "type": "string",
+                "enum": [
+                  "github",
+                  "gitlab",
+                  "bitbucket",
+                  "azureDevOps"
+                ],
+                "description": "Which API shape this host speaks. Gitea/Forgejo are API-compatible with GitHub, so use \"github\" for those."
+              },
+              "apiBaseUrl": {
+                "type": "string",
+                "description": "The API base URL, e.g. \"https://github.acme.com/api/v3\" or \"https://gitlab.acme.com/api/v4\"."
+              }
+            }
+          }
         }
       }
     }
@@ -258,6 +444,7 @@
     "lint": "eslint --no-error-on-unmatched-pattern src test && tsc --noEmit -p .",
     "icon": "rsvg-convert -w 256 -h 256 media/icon.svg -o media/icon.png",
     "shots": "tsx scripts/shoot-screenshots.ts",
+    "shots:native": "tsx scripts/shoot-native-screenshots.ts",
     "package": "vsce package",
     "package:pre": "vsce package --pre-release",
     "publish": "vsce publish",
@@ -270,6 +457,7 @@
     "simple-git": "^3.27.0"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.9",
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^8.15.0",
@@ -279,8 +467,8 @@
     "esbuild": "^0.24.0",
     "eslint": "^9.15.0",
     "mocha": "^10.7.3",
-    "@types/mocha": "^10.0.9",
     "ovsx": "^0.10.12",
+    "playwright": "1.62.1",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   },

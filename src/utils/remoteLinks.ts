@@ -42,3 +42,33 @@ export function buildCommitUrl(remote: RemoteInfo, sha: string): string | null {
       return null;
   }
 }
+
+/**
+ * The repo's own web home page. Unlike a commit URL, this doesn't vary by host — GitHub, GitLab,
+ * Bitbucket, and virtually every self-hosted forge (Gitea, Forgejo, etc.) all serve the repo's
+ * landing page at `/<owner>/<repo>`, so this never needs to hide behind a host check.
+ */
+export function buildRepoUrl(remote: RemoteInfo): string {
+  return `https://${remote.host}/${remote.owner}/${remote.repo}`;
+}
+
+/**
+ * The "start a PR/MR between these two branches" URL — each host's compare-and-create page has
+ * its own shape (GitHub's `/compare/base...compare`, GitLab's `/-/merge_requests/new` with query
+ * params, Bitbucket's `/pull-requests/new` with query params), so this returns null for any other
+ * host rather than guessing — same policy as `buildCommitUrl`, and for the same reason: a button
+ * that reliably 404s is worse than no button.
+ */
+export function buildCreatePrUrl(remote: RemoteInfo, base: string, compare: string): string | null {
+  const path = `${remote.owner}/${remote.repo}`;
+  switch (remoteHostLabel(remote)) {
+    case 'GitHub':
+      return `https://${remote.host}/${path}/compare/${encodeURIComponent(base)}...${encodeURIComponent(compare)}?expand=1`;
+    case 'GitLab':
+      return `https://${remote.host}/${path}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${encodeURIComponent(compare)}&merge_request%5Btarget_branch%5D=${encodeURIComponent(base)}`;
+    case 'Bitbucket':
+      return `https://${remote.host}/${path}/pull-requests/new?source=${encodeURIComponent(compare)}&dest=${encodeURIComponent(`${path}::${base}`)}`;
+    default:
+      return null;
+  }
+}

@@ -117,25 +117,44 @@ Never let a `vscode` import leak into `core/`. If you're tempted, the logic belo
 
 ## 7. Feature roadmap (build in this order)
 
-### Phase 1 — Core (MVP, ship first)
-- [ ] **Inline blame** — current-line blame as a muted, right-aligned editor decoration
-- [ ] **Blame hover card** — hover → rich card: author (Gravatar), full message, relative + absolute date, diff stat, "Open commit" link
-- [ ] **File history** — TreeView of every commit touching the current file, newest first
-- [ ] **Commit details** — Webview: message, author, full diff, files changed, copy-SHA button
-- [ ] **Status bar** — current line's last author + age (e.g. `Raj, 3 days ago`), click → commit details
+### Phase 1 — Core (MVP, ship first) — shipped 0.1.0
+- [x] **Inline blame** — current-line blame as a muted, right-aligned editor decoration
+- [x] **Blame hover card** — hover → rich card: author (Gravatar), full message, relative + absolute date, diff stat, "Open commit" link
+- [x] **File history** — TreeView of every commit touching the current file, newest first
+- [x] **Commit details** — Webview: message, author, full diff, files changed, copy-SHA button
+- [x] **Status bar** — current line's last author + age (e.g. `Raj, 3 days ago`), click → commit details
 
-### Phase 2 — Intelligence (the "Sense" in GitLore)
-- [ ] **AI commit summary** — `vscode.lm` turns a commit + diff into a plain-English summary
-- [ ] **AI line explanation** — "Why does this line exist?" → LLM answers using the line's blame + diff history
-- [ ] **Stale-code detector** — flag files/functions untouched for > `staleThresholdDays`, shown as a subtle CodeLens
-- [ ] **Author ownership** — per-file heatmap: who owns which regions, by line count and recency
+### Phase 2 — Intelligence (the "Sense" in GitLore) — shipped 0.3.0
+- [x] **AI commit summary** — `vscode.lm` turns a commit + diff into a plain-English summary
+- [x] **AI line explanation** — "Why does this line exist?" → LLM answers using the line's blame + diff history
+- [x] **Stale-code detector** — flag files/functions untouched for > `staleThresholdDays`, shown as a subtle CodeLens
+- [x] **Author ownership** — per-file heatmap: who owns which regions, by line count and recency
 
-### Phase 3 — Graph & collaboration
-- [ ] **Commit graph** — interactive DAG in a Webview
-- [ ] **Branch comparison** — two branches side-by-side
-- [ ] **Issue/PR linking** — auto-link commit messages to GitHub/GitLab issues via configurable regex
+### Phase 3 — Graph & collaboration — shipped 0.1.0–0.2.0 (built ahead of Phase 2)
+- [x] **Commit graph** — interactive DAG in a Webview
+- [x] **Branch comparison** — two branches side-by-side
+- [x] **Issue/PR linking** — auto-link commit messages to GitHub/GitLab issues via configurable regex
+
+### Phase 4 — Editor surface depth
+Extends existing hover/decoration/webview code already in the repo — no new view containers.
+- [x] **Hover quick-actions + revision nav** — Compare / File History / Copy SHA buttons in the blame hover card, plus ◀ prev/next ▶ stepping through a line's blame history without leaving the hover
+- [x] **Branch Compare polish** — per-file diffstat bars, "Create PR" button (opens the remote's compare/PR URL), "Open all changes with common base"
+- [x] **Full-file gutter blame + heatmap toggle** — whole-file blame overlay in the gutter (distinct from the current-line decoration and the ownership ruler), with a hot→cold recency gradient edge
+
+### Phase 5 — Repository views
+- [x] **Sidebar explorer tree** — one view container: Branches, Remotes, Tags, Stashes, Worktrees, Contributors, with ahead/behind status and right-click actions
+
+### Phase 6 — Visual history & rebase
+- [x] **Visual File History** — author-swimlane bubble timeline (additions/deletions over time), as an alternative to the existing tree-based File History
+- [x] **Interactive rebase editor** — custom editor webview replacing the `git rebase -i` todo file: drag-reorder, pick/squash/fixup/drop/reword/edit, Start/Abort (conflict list deferred — points at Source Control instead, per the design spec's scope cut)
+
+### Phase 7 — Launchpad (optional, last)
+The only feature that reaches beyond the local repo — needs PR/CI status, not just `git`. Not GitHub-only: GitHub, GitLab, Bitbucket, and Azure DevOps are all supported (each via its own `core/forge/*Client.ts`, the only place that touches that host's API), plus self-hosted/custom instances via `gitLore.launchpad.customHosts`. GitHub uses VS Code's built-in authentication session (`vscode.authentication.getSession('github', …)`); every other host needs a Personal Access Token stored in `context.secrets`. Never a GitLore backend or proxied key, for any host. Off by default (`gitLore.launchpad.enabled`) — the only feature that calls out to a remote host at all.
+- [x] **PR triage board** — Needs Review / Ready to Merge / Waiting / Blocked / Drafts / Snoozed, across the workspace's repos
 
 Do not start a phase until the previous phase is tested and merged.
+
+**Naming:** whatever inspires a phase, GitLore ships under its own name only — no competitor product or company names in code, comments, settings, commands, or docs.
 
 ---
 
@@ -151,6 +170,16 @@ Do not start a phase until the previous phase is tested and merged.
 | `gitLore.explainLine` | GitLore: Explain This Line's History |
 | `gitLore.copySha` | GitLore: Copy Commit SHA |
 | `gitLore.openGraph` | GitLore: Open Commit Graph |
+| `gitLore.showVisualFileHistory` | GitLore: Show Visual File History |
+| `gitLore.rebaseInteractively` | GitLore: Rebase Branch Interactively... |
+| `gitLore.checkoutBranch` | GitLore: Checkout Branch |
+| `gitLore.compareBranchFromExplorer` | GitLore: Compare with Current Branch |
+| `gitLore.openRemote` | GitLore: Open Remote in Browser |
+| `gitLore.applyStash` | GitLore: Apply Stash |
+| `gitLore.dropStash` | GitLore: Drop Stash |
+| `gitLore.stepLineHistory` | GitLore: Step Through This Line's History |
+| `gitLore.toggleFullFileBlame` | GitLore: Toggle Full-File Blame Heatmap |
+| `gitLore.openLaunchpad` | GitLore: Open Launchpad |
 
 ### Settings (all under `gitLore.*`)
 | Setting | Type | Default | Description |
@@ -166,6 +195,9 @@ Do not start a phase until the previous phase is tested and merged.
 | `gitLore.maxHistoryItems` | number | `200` | Max commits loaded per file history |
 | `gitLore.maxBlameFileSize` | number | `1048576` | Skip blame for files larger than this (bytes) |
 | `gitLore.dateFormat` | string | `"relative"` | `relative` or an absolute date-fns pattern |
+| `gitLore.fullFileBlame.enabled` | boolean | `false` | Show a hot-to-cold recency gradient as a left-edge mark per line, across the whole file |
+| `gitLore.launchpad.enabled` | boolean | `false` | Enable Launchpad, the cross-repo PR triage board — the only setting that makes GitLore call out to a remote host |
+| `gitLore.launchpad.customHosts` | array | `[]` | Self-hosted/custom forge instances Launchpad can't recognize by hostname alone: `{ hostname, flavor, apiBaseUrl }[]` |
 
 ### Views
 Register a TreeView **only when it has content**. Contributed view: `gitLore.fileHistory` in the SCM or Explorer container (decide via config, default Explorer).

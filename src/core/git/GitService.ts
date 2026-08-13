@@ -8,23 +8,37 @@ import {
   parseLog,
   parseCommitDetail,
   parseGraphLog,
+  parseFileHistoryLog,
   parseBranches,
+  parseRemotes,
+  parseTags,
+  parseStashes,
+  parseWorktrees,
+  parseContributors,
   parseRemoteUrl,
   parseStatusPorcelain,
+  parseLineHistoryLog,
   LOG_FORMAT,
   COMMIT_DETAIL_FORMAT,
   GRAPH_LOG_FORMAT,
   BRANCH_FORMAT,
+  LINE_HISTORY_FORMAT,
 } from './parsers';
 import type {
   BlameLine,
   BranchInfo,
   Commit,
   CommitDetail,
+  ContributorInfo,
   FileChange,
+  FileHistoryEntry,
+  GitRemote,
   GraphCommit,
   RemoteInfo,
+  StashInfo,
+  TagInfo,
   WorkingChanges,
+  WorktreeInfo,
 } from './types';
 import { GitCommandError, type GitLogger } from './errors';
 import { toRepoRelativePath } from '../../utils/path';
@@ -43,9 +57,6 @@ export class GitService {
   // A directory's repo root never changes for the lifetime of the process — safe to memoize
   // indefinitely, and worth it since decoration updates call getRepoRoot on every line move.
   private readonly repoRootByDir = new Map<string, string | null>();
-  // Remotes essentially never change mid-session — worth caching since issue linking
-  // resolves this on every hover/commit-details render.
-  private readonly remoteUrlByRoot = new Map<string, string | null>();
 
   constructor(private readonly logger?: GitLogger) {}
 
@@ -165,6 +176,65 @@ export class GitService {
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err);
       this.logger?.error(`git log failed for ${filePath}`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /**
+   * Every commit that changed this exact line, newest first, via git's own line-tracking (`-L`)
+   * rather than a naive "which commits touched this file" scan — the blame hover's prev/next
+   * stepper walks this list. `line` is 0-based (matching `BlameLine.line`); git's `-L` is 1-based.
+   *
+   * Doesn't pass `--follow`: combining it with `-L` has been unreliable across git versions, and
+   * stepping through one file's own history is enough for this feature.
+   */
+  async getLineHistory(filePath: string, line: number): Promise<Commit[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    const git = this.gitFor(repoRoot);
+    const rel = toRepoRelativePath(repoRoot, this.toCanonicalPath(filePath));
+    const gitLine = line + 1;
+    const args = ['log', `--format=${LINE_HISTORY_FORMAT}`, '-L', `${gitLine},${gitLine}:${rel}`];
+    try {
+      const raw = await git.raw(args);
+      return parseLineHistoryLog(raw);
+    } catch {
+      // Line out of range, file deleted, or an unborn HEAD — nothing to step through, not an error.
+      return [];
+    }
+  }
+
+  /** Every commit that touched this file, newest first, each with its own insertions/deletions — used by the Visual File History timeline. One call: `--numstat` scoped to `filePath` rides along with the same `git log` that fetches history. */
+  async getFileHistoryStats(filePath: string, maxCount: number): Promise<FileHistoryEntry[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    if (!(await this.isTracked(filePath))) {
+      return [];
+    }
+
+    const git = this.gitFor(repoRoot);
+    const rel = toRepoRelativePath(repoRoot, this.toCanonicalPath(filePath));
+    const args = [
+      'log',
+      '--follow',
+      '--numstat',
+      '-n',
+      String(maxCount),
+      `--pretty=tformat:${LOG_FORMAT}`,
+      '--',
+      rel,
+    ];
+
+    try {
+      const raw = await git.raw(args);
+      return parseFileHistoryLog(raw);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git log --numstat failed for ${filePath}`, err);
       throw new GitCommandError(args.join(' '), stderr);
     }
   }
@@ -335,6 +405,92 @@ export class GitService {
     }
   }
 
+  /** Every configured remote's name and URL, for the Sidebar Explorer. Not scoped to `filePath` beyond resolving which repo. */
+  async getRemotes(filePath: string): Promise<GitRemote[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    try {
+      const raw = await this.gitFor(repoRoot).raw(['config', '--get-regexp', String.raw`remote\..*\.url`]);
+      return parseRemotes(raw);
+    } catch {
+      // No remotes configured at all is the expected shape for `git config --get-regexp` — not an error.
+      return [];
+    }
+  }
+
+  /** Every tag, for the Sidebar Explorer. */
+  async getTags(filePath: string): Promise<TagInfo[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    const git = this.gitFor(repoRoot);
+    const args = ['for-each-ref', 'refs/tags', '--format=%(refname:short)'];
+    try {
+      const raw = await git.raw(args);
+      return parseTags(raw);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error('git for-each-ref refs/tags failed', err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Every stash entry, newest first (git's own default order), for the Sidebar Explorer. */
+  async getStashes(filePath: string): Promise<StashInfo[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    try {
+      const raw = await this.gitFor(repoRoot).raw(['stash', 'list', '--format=%gd\x1f%s']);
+      return parseStashes(raw);
+    } catch {
+      // An empty stash list exits non-zero in some git versions — no stashes, not an error.
+      return [];
+    }
+  }
+
+  /** Every worktree (the main checkout plus any linked ones), for the Sidebar Explorer. */
+  async getWorktrees(filePath: string): Promise<WorktreeInfo[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    const git = this.gitFor(repoRoot);
+    const args = ['worktree', 'list', '--porcelain'];
+    try {
+      const raw = await git.raw(args);
+      return parseWorktrees(raw);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error('git worktree list failed', err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /**
+   * Every contributor across every branch, ranked by commit count, for the Sidebar Explorer.
+   * Scoped to `--all` rather than `HEAD` — a repo-wide roster is what "Contributors" promises,
+   * and scoping to just the checked-out branch would silently drop anyone whose commits only
+   * live on a branch that isn't currently checked out.
+   */
+  async getContributors(filePath: string): Promise<ContributorInfo[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    try {
+      const raw = await this.gitFor(repoRoot).raw(['shortlog', '-sne', '--all']);
+      return parseContributors(raw);
+    } catch {
+      // An empty repo (no commits yet) fails `shortlog --all` — no contributors, not an error.
+      return [];
+    }
+  }
+
   /** Commits reachable from `to` but not from `from` — e.g. what `compare` has that `base` doesn't. */
   async getCommitsBetween(filePath: string, from: string, to: string): Promise<Commit[]> {
     const repoRoot = await this.getRepoRoot(filePath);
@@ -413,20 +569,61 @@ export class GitService {
     if (!repoRoot) {
       return null;
     }
-    const cacheKey = `${repoRoot}:${remoteName}`;
-    if (this.remoteUrlByRoot.has(cacheKey)) {
-      return this.remoteUrlByRoot.get(cacheKey) ?? null;
-    }
-    let url: string | null;
     try {
       const git = this.gitFor(repoRoot);
-      url = (await git.raw(['remote', 'get-url', remoteName])).trim() || null;
+      return (await git.raw(['remote', 'get-url', remoteName])).trim() || null;
     } catch {
       // Expected when there's no such remote — silent, not an error.
-      url = null;
+      return null;
     }
-    this.remoteUrlByRoot.set(cacheKey, url);
-    return url;
+  }
+
+  /** Checks out a local branch, for the Sidebar Explorer's "Checkout" action. Throws on conflicts (e.g. dirty working tree) — the caller surfaces the message, GitLore doesn't force or stash on the user's behalf. */
+  async checkoutBranch(filePath: string, branchName: string): Promise<void> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    const args = ['checkout', branchName];
+    try {
+      await this.gitFor(repoRoot).raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git checkout ${branchName} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Applies `stash@{index}` without dropping it, for the Sidebar Explorer's "Apply" action. Throws on conflicts. */
+  async applyStash(filePath: string, index: number): Promise<void> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    const args = ['stash', 'apply', `stash@{${index}}`];
+    try {
+      await this.gitFor(repoRoot).raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git stash apply stash@{${index}} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Permanently deletes `stash@{index}`, for the Sidebar Explorer's "Drop" action. Caller confirms first — this is destructive and irreversible. */
+  async dropStash(filePath: string, index: number): Promise<void> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    const args = ['stash', 'drop', `stash@{${index}}`];
+    try {
+      await this.gitFor(repoRoot).raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git stash drop stash@{${index}} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
   }
 
   /**

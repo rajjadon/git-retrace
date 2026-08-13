@@ -1,0 +1,170 @@
+/*
+ * Panel-docked bubble timeline. The SVG's viewBox starts at a negative x (see render.ts) so lane
+ * labels can sit to the left of x=0 without a separate fixed sidebar element to keep in sync with
+ * the scrolling chart.
+ */
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--vscode-font-family);
+  font-size: calc(var(--vscode-font-size, 13px) - 1px);
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-panel-background, var(--vscode-editor-background));
+  /* Every GitLore webview draws its own left edge — docked sibling views in the same panel
+     container share one flat background with no native seam between them, so without this, two
+     panels open side by side visually merge into one. */
+  border-left: 1px solid var(--vscode-panel-border);
+}
+
+.fh-legend {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  /* GitLore's signature accent (shared.css) marks every panel's header — quiet everywhere else, present here. */
+  border-bottom: 2px solid;
+  border-image: var(--gitlore-accent-gradient) 1;
+}
+
+.fh-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.fh-legend-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.fh-legend-add {
+  background-color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+
+.fh-legend-del {
+  background-color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
+.fh-legend-hint {
+  color: var(--vscode-descriptionForeground);
+  margin-left: auto;
+}
+
+/*
+ * flex: 0 0 auto (not 1 1 auto) deliberately — the chart's height is fixed by its content (lane
+ * count), not by the panel. Stretching this to fill a tall/maximized panel left a large empty
+ * scroll region below the last lane that read as broken rather than as "no more content."
+ */
+.fh-scroll {
+  flex: 0 0 auto;
+  max-height: 100%;
+  overflow: auto;
+  padding: 0.5rem 0;
+}
+
+.fh-chart {
+  display: block;
+}
+
+.fh-lane-guide {
+  stroke: var(--vscode-panel-border);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+.fh-axis-line,
+.fh-baseline {
+  stroke: var(--vscode-panel-border);
+  stroke-width: 1;
+}
+
+.fh-lane-label {
+  fill: var(--vscode-foreground);
+  font-size: 1em;
+}
+
+.fh-axis-label {
+  fill: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+.fh-point {
+  cursor: pointer;
+}
+
+.fh-point:focus-visible .fh-bubble,
+.fh-point:hover .fh-bubble {
+  stroke: var(--vscode-focusBorder);
+  stroke-width: 2;
+}
+
+.fh-tooltip {
+  position: fixed;
+  z-index: 10;
+  width: 260px;
+  padding: 0.7rem 0.8rem;
+  border-radius: var(--gitlore-radius-lg);
+  /*
+   * `border-image` ignores `border-radius` (it paints square corners regardless), so a rounded
+   * gradient border needs this two-layer trick instead: a flat "gradient" (same color twice) fills
+   * the padding box, the real gradient fills the border box, and a transparent border reserves the
+   * ring between them for it to show through.
+   */
+  background:
+    linear-gradient(
+        var(--vscode-editorWidget-background, var(--vscode-editor-background)),
+        var(--vscode-editorWidget-background, var(--vscode-editor-background))
+      )
+      padding-box,
+    var(--gitlore-accent-gradient-diag) border-box;
+  border: 1px solid transparent;
+  color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  font-size: 0.9em;
+  pointer-events: none;
+}
+
+.fh-tooltip-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.fh-tooltip-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.fh-tooltip-author {
+  font-weight: 600;
+}
+
+.fh-tooltip-message {
+  margin-bottom: 0.3rem;
+  line-height: 1.4;
+}
+
+.fh-tooltip-meta {
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 0.3rem;
+}
+
+.fh-tooltip-stat {
+  display: flex;
+  gap: 0.6rem;
+  font-weight: 600;
+}

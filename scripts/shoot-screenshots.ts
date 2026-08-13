@@ -12,8 +12,9 @@
  *   2. There is no surrounding VS Code chrome (panel tab bar, title). Each image is the panel's
  *      content only.
  *
- * `media/screenshots/inline-blame.png` cannot be produced here at all: an editor decoration is not
- * a webview, so no HTML exists to render. That one has to be captured by hand.
+ * Native VS Code UI (editor decorations, CodeLenses, TreeViews, overview-ruler marks) has no HTML
+ * to render this way at all — see `scripts/shoot-native-screenshots.ts` (`npm run shots:native`)
+ * for those, which drives a real VS Code window instead.
  */
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
@@ -21,9 +22,14 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { GitService } from '../src/core/git/GitService';
 import { layoutGraph } from '../src/core/graph/layout';
+import { layoutFileHistory } from '../src/core/graph/fileHistoryLayout';
+import type { ForgeRepoRef, PullRequestSummary } from '../src/core/forge/types';
 import { renderGraphHtml } from '../src/views/CommitGraph/render';
 import { renderCommitDetailsHtml } from '../src/views/CommitDetails/render';
 import { renderBranchComparisonHtml } from '../src/views/BranchComparison/render';
+import { renderFileHistoryHtml } from '../src/views/VisualFileHistory/render';
+import { renderRebaseEditorHtml } from '../src/views/RebaseEditor/render';
+import { renderLaunchpadHtml } from '../src/views/Launchpad/render';
 
 const REPO = resolve(__dirname, '..');
 const MEDIA = join(REPO, 'media');
@@ -96,13 +102,19 @@ async function main(): Promise<void> {
   const editorFontFamily = 'Menlo';
 
   const commits = await git.getGraphCommits(REPO, 14);
-  const [branches, workingChanges] = await Promise.all([git.getBranches(REPO), git.getWorkingChanges(REPO)]);
+  const [rawBranches, workingChanges] = await Promise.all([git.getBranches(REPO), git.getWorkingChanges(REPO)]);
+  // This repo's own checked-out branch happens to be perfectly in sync with its upstream right
+  // now (0 ahead, 0 behind) — git's `%(upstream:track)` renders that as an empty string, which is
+  // indistinguishable from "no upstream at all", so the real ahead/behind would correctly render
+  // no sync buttons at all. Synthesize plausible non-zero counts for the current branch here, for
+  // this screenshot only, so the pull/push buttons the feature actually has are visible.
+  const branches = rawBranches.map((b) => (b.isCurrent && !b.isRemote ? { ...b, ahead: 3, behind: 5 } : b));
   writeFileSync(
     join(dir, 'commit-graph.html'),
     forBrowser(
       renderGraphHtml(
         { nodes: layoutGraph(commits), branches, workingChanges, selectedSha: commits[1]?.sha },
-        { ...base, styleUri: cssUrl('commitGraph.css') },
+        { ...base, styleUris: [cssUrl('shared.css'), cssUrl('commitGraph.css')] },
       ),
     ),
   );
@@ -151,11 +163,102 @@ async function main(): Promise<void> {
     forBrowser(
       renderBranchComparisonHtml(
         { base: cmpBase, compare: cmp, aheadCommits, behindCommits, files: cmpFiles, diff: cmpDiff, branches },
-        { ...base, styleUris: [cssUrl('shared.css'), cssUrl('branchComparison.css')], editorFontFamily },
+        {
+          ...base,
+          styleUris: [cssUrl('shared.css'), cssUrl('branchComparison.css')],
+          editorFontFamily,
+          createPr: { label: 'GitHub', url: `https://github.com/rajjadon/gitlore/compare/${cmpBase}...${cmp}` },
+        },
       ),
     ),
   );
   shoot(dir, 'branch-comparison', 680, 330);
+
+  const fileHistoryEntries = await git.getFileHistoryStats(join(REPO, 'CHANGELOG.md'), 20);
+  writeFileSync(
+    join(dir, 'visual-file-history.html'),
+    forBrowser(
+      renderFileHistoryHtml(
+        { points: layoutFileHistory(fileHistoryEntries, new Date()) },
+        { ...base, styleUris: [cssUrl('shared.css'), cssUrl('visualFileHistory.css')] },
+      ),
+    ),
+  );
+  shoot(dir, 'visual-file-history', 1100, 420);
+
+  // A handful of this repo's own real commits, given a mixed set of rebase actions — real data,
+  // synthetic *plan*, since there's no actual `git rebase -i` in progress to read one from.
+  const rebaseLog = execFileSync('git', ['log', '-6', '--format=%h|%s'], { cwd: REPO }).toString().trim();
+  const rebaseCommands = ['pick', 'squash', 'squash', 'pick', 'reword', 'fixup'];
+  const rebaseEntries = rebaseLog.split('\n').map((line, i) => {
+    const [sha, message] = line.split('|');
+    const command = rebaseCommands[i] ?? 'pick';
+    return { editable: true, command, sha: sha ?? '', message: message ?? '', raw: `${command} ${sha} ${message}` };
+  });
+  writeFileSync(
+    join(dir, 'rebase-editor.html'),
+    forBrowser(
+      renderRebaseEditorHtml({ entries: rebaseEntries }, { ...base, styleUris: [cssUrl('shared.css'), cssUrl('rebaseEditor.css')] }),
+    ),
+  );
+  shoot(dir, 'rebase-editor', 680, 360);
+
+  // Launchpad pools PRs from real, authenticated remote hosts — nothing to render here without a
+  // network call, so this is the one screenshot built from realistic sample data instead of this
+  // repo's own history.
+  const repo = (label: string): ForgeRepoRef => ({ host: 'github', identity: label, label });
+  const pr = (overrides: Partial<PullRequestSummary> & Pick<PullRequestSummary, 'repo' | 'number' | 'title'>): PullRequestSummary => ({
+    authorLogin: 'maya-chen',
+    url: `https://github.com/${overrides.repo.identity}/pull/${overrides.number}`,
+    isDraft: false,
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    requestedReviewers: [],
+    checkStatus: 'passing',
+    reviewDecision: 'none',
+    hasConflicts: false,
+    ...overrides,
+  });
+  const acme = repo('acme/storefront');
+  const mobile = repo('acme/mobile-app');
+  writeFileSync(
+    join(dir, 'launchpad.html'),
+    forBrowser(
+      renderLaunchpadHtml(
+        {
+          categorized: [
+            {
+              bucket: 'needsReview',
+              pr: pr({ repo: acme, number: 482, title: 'Add checkout retry on payment timeout', requestedReviewers: ['you'], reviewDecision: 'reviewRequired' }),
+            },
+            {
+              bucket: 'needsReview',
+              pr: pr({ repo: mobile, number: 118, title: 'Migrate push notifications to new provider', authorLogin: 'sam-okafor', requestedReviewers: ['you'] }),
+            },
+            {
+              bucket: 'readyToMerge',
+              pr: pr({ repo: acme, number: 479, title: 'Cache product search results for 5 minutes', reviewDecision: 'approved' }),
+            },
+            {
+              bucket: 'waiting',
+              pr: pr({ repo: mobile, number: 121, title: 'Bump SDK to v14 and fix breaking API calls', checkStatus: 'pending', reviewDecision: 'reviewRequired', requestedReviewers: ['diego-alvarez'] }),
+            },
+            {
+              bucket: 'blocked',
+              pr: pr({ repo: acme, number: 475, title: 'Rework tax calculation for EU orders', checkStatus: 'failing', reviewDecision: 'changesRequested' }),
+            },
+            {
+              bucket: 'drafts',
+              pr: pr({ repo: acme, number: 485, title: 'WIP: dark mode for the storefront theme', isDraft: true }),
+            },
+          ],
+          errors: [],
+        },
+        { ...base, styleUris: [cssUrl('shared.css'), cssUrl('launchpad.css')] },
+      ),
+    ),
+  );
+  shoot(dir, 'launchpad', 1400, 460);
 }
 
 void main();

@@ -1,4 +1,5 @@
 import * as assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import * as vscode from 'vscode';
 import { buildBranchFixtureRepo } from '../fixtures/build-fixture-repo';
 import type { GitLoreTestApi } from '../../src/extension';
@@ -35,6 +36,27 @@ suite('Branch comparison webview', () => {
     await waitFor(() => (api.getBranchComparisonHtml() ?? '').includes('add feature line'));
     return api.getBranchComparisonHtml() ?? '';
   }
+
+  test('an explicit show(base, compare) always wins over the panel\'s own default-ref guess, even on its first-ever reveal', async () => {
+    // Regression test for a real race: focusing the panel for the first time in a session
+    // synchronously triggers resolveWebviewView -> loadDefault(), an independent, unawaited
+    // fetch-and-render chain racing this command's own explicit one. `pickDefaultRefs` would
+    // naturally pick the *current* branch ('main', since the fixture checks it out) as `compare`
+    // — this test deliberately requests the opposite pairing (`main` as base) so a lost race is
+    // visibly wrong, not accidentally the same answer.
+    const fixture = buildBranchFixtureRepo();
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+
+    await vscode.commands.executeCommand(COMMANDS.compareBranches, fixture.baseBranch, fixture.featureBranch);
+    await waitFor(() => (api.getBranchComparisonHtml() ?? '').includes('add feature line'));
+
+    const html = api.getBranchComparisonHtml() ?? '';
+    assert.match(html, /<option value="main" selected>main<\/option>/);
+    assert.match(html, /<option value="feature-x" selected>feature-x<\/option>/);
+    assert.match(html, /class="ref-pick ref-base">[\s\S]*?value="main" selected/);
+    assert.match(html, /class="ref-pick ref-compare">[\s\S]*?value="feature-x" selected/);
+  });
 
   test('shows ahead commits, files changed, and diff between two branches', async () => {
     const html = await openComparison();
@@ -74,5 +96,30 @@ suite('Branch comparison webview', () => {
     // nothing to compare it against, so the command reports that and stops.
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     await vscode.commands.executeCommand(COMMANDS.compareBranches);
+  });
+
+  test('shows an Open all changes button alongside the per-file diff actions', async () => {
+    const html = await openComparison();
+    assert.match(html, /id="open-all"/);
+  });
+
+  test('no Create PR button when the repo has no remote configured', async () => {
+    const html = await openComparison();
+    assert.ok(!html.includes('id="create-pr"'));
+  });
+
+  test('shows a Create PR button pointed at the compare URL when the repo has a recognized-host remote', async () => {
+    const fixture = buildBranchFixtureRepo();
+    execFileSync('git', ['remote', 'add', 'origin', 'https://github.com/acme/widgets.git'], { cwd: fixture.repoRoot });
+
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand(COMMANDS.compareBranches, fixture.baseBranch, fixture.featureBranch);
+    await waitFor(() => (api.getBranchComparisonHtml() ?? '').includes('add feature line'));
+
+    const html = api.getBranchComparisonHtml() ?? '';
+    assert.match(html, /id="create-pr"/);
+    assert.match(html, /Create a PR on GitHub/);
+    assert.match(html, /type: 'createPr'/);
   });
 });

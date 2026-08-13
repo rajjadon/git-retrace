@@ -5,6 +5,9 @@ import { renderGraphHtml } from './render';
 import { escapeHtml } from '../escapeHtml';
 import { waitForWebviewView } from '../waitForWebviewView';
 import { COMMANDS, CONFIG, MEDIA, VIEWS } from '../../constants';
+import type { BlameSource } from '../../providers/BlameSource';
+
+const SYNC_TERMINAL_NAME = 'GitLore: Git Sync';
 
 const DEFAULT_MAX_GRAPH_ITEMS = 200;
 
@@ -37,17 +40,37 @@ export function readMaxGraphItems(): number {
 }
 
 /** Docks the commit graph in the bottom panel (next to Terminal/Debug Console/Output), instead of taking over an editor tab. */
-export class CommitGraphViewProvider implements vscode.WebviewViewProvider {
+export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   private view: vscode.WebviewView | undefined;
   private currentFilePath: string | undefined;
+  private currentRepoRoot: string | undefined;
   /** Ref the graph is scoped to; empty string means every ref (`--all`). */
   private currentRef = '';
   private selectedSha: string | undefined;
+  private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly git: GitService,
-  ) {}
+    private readonly blameSource: BlameSource,
+  ) {
+    // Reuses BlameSource's existing `.git/{HEAD,refs/**}` watcher rather than standing up a
+    // second one — a pull, push, checkout, or merge (from this graph's own buttons, a terminal,
+    // or any other tool) all show up here the same way blame invalidation already does.
+    this.disposables.push(
+      this.blameSource.onInvalidate((repoRoot) => {
+        if (repoRoot === this.currentRepoRoot) {
+          void this.reload();
+        }
+      }),
+    );
+  }
+
+  dispose(): void {
+    for (const d of this.disposables) {
+      d.dispose();
+    }
+  }
 
   /** Test-only introspection seam — VS Code's public API doesn't expose a webview's rendered HTML. */
   getCurrentHtmlForTest(): string | undefined {
@@ -93,6 +116,12 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider {
     this.view.webview.html = shellHtml('<p>Loading commit graph…</p>');
 
     try {
+      const repoRoot = await this.git.getRepoRoot(filePath);
+      this.currentRepoRoot = repoRoot ?? undefined;
+      if (repoRoot) {
+        this.blameSource.watchHeadFor(repoRoot);
+      }
+
       // One round of parallel git calls, not a waterfall — the graph log dominates, so the
       // branch list and working-tree status ride alongside it for free.
       const [commits, branches, workingChanges] = await Promise.all([
@@ -153,6 +182,19 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider {
     }
     if (type === 'refresh') {
       await this.reload();
+      return;
+    }
+    if ((type === 'pull' || type === 'push') && this.currentRepoRoot) {
+      // Runs in a real terminal, not via simple-git — pull/push can need interactive auth (an SSH
+      // passphrase, a credential-manager prompt) or land a merge conflict on pull, and a terminal
+      // is where the user can actually see and handle either. The graph doesn't need its own
+      // "did it finish" tracking either: the HEAD/refs watcher wired in the constructor picks up
+      // the result the moment the command actually changes something.
+      const terminal =
+        vscode.window.terminals.find((t) => t.name === SYNC_TERMINAL_NAME) ??
+        vscode.window.createTerminal({ name: SYNC_TERMINAL_NAME, cwd: this.currentRepoRoot });
+      terminal.show();
+      terminal.sendText(type === 'pull' ? 'git pull' : 'git push');
     }
   }
 }

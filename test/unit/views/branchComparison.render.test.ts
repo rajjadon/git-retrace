@@ -168,6 +168,33 @@ test('renderBranchComparisonHtml: CSP uses the provided nonce and cspSource, no 
   assert.ok(!html.includes('unsafe-inline'));
 });
 
+test('renderBranchComparisonHtml: no Create PR button when there is no createPr target', () => {
+  const html = render();
+  assert.ok(!html.includes('id="create-pr"'));
+});
+
+test('renderBranchComparisonHtml: renders a Create PR button when a createPr target is given', () => {
+  const html = renderBranchComparisonHtml(
+    { ...base, aheadCommits: ahead, behindCommits: behind },
+    { ...opts, createPr: { label: 'GitHub', url: 'https://github.com/o/r/compare/main...feature-x?expand=1' } },
+  );
+  assert.match(html, /id="create-pr"/);
+  assert.match(html, /Create a PR on GitHub/);
+  assert.match(html, /getElementById\('create-pr'\)/);
+  assert.match(html, /type: 'createPr'/);
+});
+
+test('renderBranchComparisonHtml: the Open all changes button posts openAllChanges when there are files', () => {
+  const html = render();
+  assert.match(html, /id="open-all"/);
+  assert.match(html, /type: 'openAllChanges'/);
+});
+
+test('renderBranchComparisonHtml: no Open all changes button when there are no files to open', () => {
+  const html = render({ base: 'main', compare: 'main', files: [], diff: '' });
+  assert.ok(!html.includes('id="open-all"'));
+});
+
 test('renderBranchComparisonHtml: escapes ref names, commit messages and authors', () => {
   const evil = '<script>alert(1)</script>';
   const html = renderBranchComparisonHtml(

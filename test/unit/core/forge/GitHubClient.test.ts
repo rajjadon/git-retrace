@@ -1,0 +1,250 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { GitHubClient } from '../../../../src/core/forge/GitHubClient';
+import type { ForgeRepoRef } from '../../../../src/core/forge/types';
+
+const REPO: ForgeRepoRef = { host: 'github', identity: 'acme/widgets', label: 'acme/widgets' };
+const BASE = 'https://api.github.com';
+
+function jsonResponse(body: unknown, ok = true): Response {
+  return { ok, status: ok ? 200 : 401, statusText: ok ? 'OK' : 'Unauthorized', json: async () => body } as unknown as Response;
+}
+
+/** Routes a fake fetch by matching against the tail of the requested URL, so each test only wires up the endpoints it actually needs. */
+function fakeFetch(routes: Record<string, unknown>): typeof fetch {
+  return (async (url: string) => {
+    for (const [suffix, body] of Object.entries(routes)) {
+      if (url.endsWith(suffix)) {
+        return jsonResponse(body);
+      }
+    }
+    throw new Error(`unmocked request: ${url}`);
+  }) as typeof fetch;
+}
+
+test('getAuthenticatedLogin: returns the login from GET /user', async () => {
+  const client = new GitHubClient(BASE, 'tok', fakeFetch({ '/user': { login: 'raj' } }));
+  assert.equal(await client.getAuthenticatedLogin(), 'raj');
+});
+
+test('getAuthenticatedLogin: a failed request (bad/expired token) throws with the real HTTP status, not a generic message', async () => {
+  const client = new GitHubClient(BASE, 'bad-tok', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  await assert.rejects(() => client.getAuthenticatedLogin(), /401 Unauthorized from api\.github\.com/);
+});
+
+test('listOpenPullRequests: normalizes a plain open PR with no reviews, checks, or requested reviewers', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/repos/acme/widgets/pulls?state=open&per_page=100': [
+        {
+          number: 1,
+          title: 'Add feature',
+          html_url: 'https://github.com/acme/widgets/pull/1',
+          user: { login: 'raj' },
+          draft: false,
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-02T00:00:00Z',
+          requested_reviewers: [],
+          head: { sha: 'abc123' },
+        },
+      ],
+      '/pulls/1/reviews?per_page=100': [],
+      '/commits/abc123/check-runs?per_page=100': { check_runs: [] },
+      '/pulls/1': { mergeable_state: 'unknown' },
+    }),
+  );
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result.length, 1);
+  assert.equal(result[0]?.title, 'Add feature');
+  assert.equal(result[0]?.authorLogin, 'raj');
+  assert.equal(result[0]?.checkStatus, 'none');
+  assert.equal(result[0]?.reviewDecision, 'none');
+  assert.equal(result[0]?.hasConflicts, false);
+});
+
+test('listOpenPullRequests: a requested reviewer who has not submitted a review -> reviewDecision "reviewRequired"', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/pulls?state=open&per_page=100': [
+        {
+          number: 2,
+          title: 'PR',
+          html_url: 'u',
+          user: { login: 'raj' },
+          created_at: 'c',
+          updated_at: 'u',
+          requested_reviewers: [{ login: 'amy' }],
+          head: { sha: 'sha2' },
+        },
+      ],
+      '/reviews?per_page=100': [],
+      '/check-runs?per_page=100': { check_runs: [] },
+      '/pulls/2': { mergeable_state: 'clean' },
+    }),
+  );
+  const result = await client.listOpenPullRequests(REPO);
+  assert.deepEqual(result[0]?.requestedReviewers, ['amy']);
+  assert.equal(result[0]?.reviewDecision, 'reviewRequired');
+});
+
+test('listOpenPullRequests: a changes-requested review wins over a stale earlier approval from the same reviewer', () => testReviewDecision(
+  [
+    { user: { login: 'amy' }, state: 'APPROVED' },
+    { user: { login: 'amy' }, state: 'CHANGES_REQUESTED' },
+  ],
+  [],
+  'changesRequested',
+));
+
+test('listOpenPullRequests: an approval after an earlier changes-requested from the same reviewer resolves to approved', () => testReviewDecision(
+  [
+    { user: { login: 'amy' }, state: 'CHANGES_REQUESTED' },
+    { user: { login: 'amy' }, state: 'APPROVED' },
+  ],
+  [],
+  'approved',
+));
+
+test('listOpenPullRequests: changesRequested takes priority over a still-outstanding requested reviewer', () => testReviewDecision(
+  [{ user: { login: 'amy' }, state: 'CHANGES_REQUESTED' }],
+  ['bob'],
+  'changesRequested',
+));
+
+async function testReviewDecision(
+  reviews: unknown[],
+  requestedReviewers: string[],
+  expected: string,
+): Promise<void> {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/pulls?state=open&per_page=100': [
+        {
+          number: 3,
+          title: 'PR',
+          html_url: 'u',
+          user: { login: 'raj' },
+          created_at: 'c',
+          updated_at: 'u',
+          requested_reviewers: requestedReviewers.map((login) => ({ login })),
+          head: { sha: 'sha3' },
+        },
+      ],
+      '/reviews?per_page=100': reviews,
+      '/check-runs?per_page=100': { check_runs: [] },
+      '/pulls/3': { mergeable_state: 'clean' },
+    }),
+  );
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewDecision, expected);
+}
+
+test('listOpenPullRequests: an in-progress check run -> checkStatus "pending", even if another already failed', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/pulls?state=open&per_page=100': [
+        { number: 4, title: 'PR', html_url: 'u', user: { login: 'raj' }, created_at: 'c', updated_at: 'u', head: { sha: 'sha4' } },
+      ],
+      '/reviews?per_page=100': [],
+      '/check-runs?per_page=100': {
+        check_runs: [
+          { status: 'completed', conclusion: 'failure' },
+          { status: 'in_progress', conclusion: null },
+        ],
+      },
+      '/pulls/4': { mergeable_state: 'clean' },
+    }),
+  );
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.checkStatus, 'pending');
+});
+
+test('listOpenPullRequests: all check runs completed and successful -> checkStatus "passing"', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/pulls?state=open&per_page=100': [
+        { number: 5, title: 'PR', html_url: 'u', user: { login: 'raj' }, created_at: 'c', updated_at: 'u', head: { sha: 'sha5' } },
+      ],
+      '/reviews?per_page=100': [],
+      '/check-runs?per_page=100': { check_runs: [{ status: 'completed', conclusion: 'success' }] },
+      '/pulls/5': { mergeable_state: 'clean' },
+    }),
+  );
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.checkStatus, 'passing');
+});
+
+test('listOpenPullRequests: mergeable_state "dirty" -> hasConflicts true', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/pulls?state=open&per_page=100': [
+        { number: 6, title: 'PR', html_url: 'u', user: { login: 'raj' }, created_at: 'c', updated_at: 'u', head: { sha: 'sha6' } },
+      ],
+      '/reviews?per_page=100': [],
+      '/check-runs?per_page=100': { check_runs: [] },
+      '/pulls/6': { mergeable_state: 'dirty' },
+    }),
+  );
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.hasConflicts, true);
+});
+
+test('listOpenPullRequests: mergeable_state null (still computing) is treated as no known conflict', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/pulls?state=open&per_page=100': [
+        { number: 7, title: 'PR', html_url: 'u', user: { login: 'raj' }, created_at: 'c', updated_at: 'u', head: { sha: 'sha7' } },
+      ],
+      '/reviews?per_page=100': [],
+      '/check-runs?per_page=100': { check_runs: [] },
+      '/pulls/7': { mergeable_state: null },
+    }),
+  );
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.hasConflicts, false);
+});
+
+test('listOpenPullRequests: a failed list request returns an empty array, not a throw', async () => {
+  const client = new GitHubClient(BASE, 'tok', (async () => jsonResponse([], false)) as unknown as typeof fetch);
+  assert.deepEqual(await client.listOpenPullRequests(REPO), []);
+});
+
+test('listOpenPullRequests: a network failure on an enrichment call degrades that field instead of throwing for the whole PR', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    (async (url: string) => {
+      if (url.includes('/check-runs')) {
+        throw new Error('network down');
+      }
+      if (url.endsWith('/pulls?state=open&per_page=100')) {
+        return jsonResponse([
+          { number: 8, title: 'PR', html_url: 'u', user: { login: 'raj' }, created_at: 'c', updated_at: 'u', head: { sha: 'sha8' } },
+        ]);
+      }
+      if (url.endsWith('/reviews?per_page=100')) {
+        return jsonResponse([]);
+      }
+      if (url.endsWith('/pulls/8')) {
+        return jsonResponse({ mergeable_state: 'clean' });
+      }
+      throw new Error(`unmocked: ${url}`);
+    }) as unknown as typeof fetch,
+  );
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.checkStatus, 'none');
+});

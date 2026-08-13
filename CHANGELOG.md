@@ -6,6 +6,83 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-14
+
+### Added
+
+**Visual File History** — a bubble timeline for the current file
+
+- **GitLore: Show Visual File History** opens an author-swimlane view of the current file's commits: each commit is a bubble sized by how much it changed, positioned by author lane and by age, with additions/deletions bars beneath. Click a bubble to open that commit's details.
+- Docked alongside Commit Graph, Commit Details, and Branch Comparison; also reachable from the Commit Graph panel's toolbar.
+- Respects `gitLore.maxHistoryItems`, same as the tree-based File History view.
+
+**Interactive Rebase Editor** — a GUI for `git rebase -i`
+
+- **GitLore: Rebase Branch Interactively...** picks a target ref and starts an interactive rebase in an integrated terminal. Whenever git opens the rebase todo file, GitLore's own editor takes over automatically: reorder commits (drag or the move up/down buttons), change each one's action (pick/reword/edit/squash/fixup/drop), then Start Rebase or Abort.
+- Works the same way even without the command above, for anyone who already has `code --wait` configured as their own git `sequence.editor`.
+- GitLore never calls `git rebase`, `--abort`, `--continue`, or any reset/checkout command itself — it only ever reads, writes, and closes the one file git already opens for this. If a rebase pauses on a conflict, GitLore points at Source Control rather than building its own conflict-resolution UI.
+- Turn it off with `gitLore.rebaseEditor.enabled: false` to use the plain text editor instead.
+
+**Sidebar Explorer** — one tree for the whole repo, in its own activity bar container
+
+- Branches, Remotes, Tags, Stashes, Worktrees, and Contributors, each as a collapsible section — always visible, no command needed to open it.
+- Branches show ahead/behind counts and mark the checked-out one; right-click a branch to **Checkout** or **Compare with Current Branch** (opens in the existing Branch Comparison view).
+- Right-click a remote to **Open Remote in Browser**; right-click a stash to **Apply** or **Drop** (drop asks for confirmation first — it can't be undone).
+- Contributors are counted across every branch, not just the checked-out one, so the roster doesn't quietly drop anyone.
+
+**Hover quick-actions and revision nav** — act on a blamed line without leaving the hover
+
+- The blame hover card now has a **Compare** / **File History** / **Copy SHA** row, so acting on a line's commit no longer means opening a different panel first.
+- An **Older** link starts stepping backward through that exact line's own history (via git's real per-line tracking, not just "commits that touched this file") — ◀ prev / next ▶ walk through every revision that changed the line, with a "N of M" position, all rendered in the same hover.
+- The line-history cards skip the AI-explain section (it's tied to the *current* line content, which doesn't correspond to an older revision) but keep the same quick actions, scoped to that revision's own commit.
+
+**Branch Compare: Create PR, and Open all changes with the common base**
+
+- A **Create PR** button appears in the ref bar when the repo's remote is on a host GitLore recognizes (GitHub, GitLab, Bitbucket) — it opens that host's compare/create-PR page pre-filled with the two branches. Hidden on unrecognized hosts rather than guessing a URL shape that might 404.
+- **Open all changes** opens every changed file's diff at once, each against the same common base the inline diff already uses — instead of clicking "Open changes" file by file. Asks for confirmation first when there are more than 20 files.
+
+**Full-file blame heatmap** — a hot-to-cold recency gradient across the whole file
+
+- **GitLore: Toggle Full-File Blame Heatmap** (`gitLore.fullFileBlame.enabled`, off by default) marks every line with a colored left edge, gradiented from hot (recently changed) to cold (long untouched) — relative to the file's own age range, so even an entirely old file still shows which of its lines are relatively newer.
+- Distinct from the current-line inline blame decoration and the author-ownership ruler: this is a third, independent visual, not a mode of either.
+
+**Commit Graph: pull/push buttons with ahead/behind counts**
+
+- The toolbar now shows a pull and a push button for the checked-out branch, each badged with how many commits it's behind/ahead of its upstream — hidden entirely when the branch has no upstream to compare against. Both run in a real terminal (not silently in the background), since a pull or push can need interactive auth or land a merge conflict.
+- The graph now also auto-refreshes whenever `.git/HEAD` or `refs/**` change on disk — a pull, a push, a checkout, from GitLore's own buttons, a terminal, or any other tool — instead of only updating on an explicit refresh click or a ref-picker change.
+
+**Launchpad** — a cross-repo PR triage board (off by default)
+
+- **GitLore: Open Launchpad** (`gitLore.launchpad.enabled`, off by default) opens a 6-column board — Needs Review, Ready to Merge, Waiting, Blocked, Drafts, Snoozed — pooling open PRs from every recognized git remote across your workspace's repos into one place. Off by default: it's the only GitLore feature that calls out to a remote host at all, unlike everything else, which works entirely from your local `.git`.
+- Not GitHub-only: GitHub, GitLab, Bitbucket, and Azure DevOps are all supported out of the box, plus self-hosted/custom instances (GitHub Enterprise Server, Gitea, Forgejo, self-hosted GitLab) via `gitLore.launchpad.customHosts`.
+- Scans every remote you've added per repo, not just `origin` — a fork's `upstream`, a second remote, anything — deduped when two remotes point at the same actual repo. Also reachable from the Commit Graph panel's toolbar, not just the Command Palette.
+- GitHub uses VS Code's own built-in sign-in — no GitLore backend, no key GitLore ever handles. Every other host needs a Personal Access Token, entered once and stored in VS Code's encrypted secret storage.
+- Snoozing a PR is a local-only override (there's no such concept on any of these hosts' APIs) — it hides a PR from its normal column until you unsnooze it.
+
+### Changed
+
+- **Diffstat bars** — Commit Details and Branch Comparison now show a proportional green/red bar next to each changed file, scaled to the largest file in the list, alongside the existing `+N -M` counts.
+- **Commit Graph columns** are noticeably tighter, so more layouts (e.g. Commit Graph, Commit Details, and Branch Comparison open side by side) show Author/Changes/Date/SHA without needing to scroll the row grid horizontally.
+- **A consistent accent** now marks every panel — the checked-out-branch pill, the "Summarize" action, each panel's header underline, file-section headers, and every hover card share one signature gradient (purple → blue) instead of the default button-blue every other extension uses. Both gradient stops are theme tokens (`--vscode-charts-purple`/`-blue`), so it stays correct across light, dark, and high-contrast themes — never a hardcoded color.
+- **Summarize** (formerly "Summarize with AI") now sits in Commit Details' main action bar next to Copy SHA / Copy message / Open on remote, instead of its own separate section — the icon and accent color already say it's the AI action, so the button no longer needs its own heading to explain itself.
+- **A visible edge between docked panels** — Commit Graph, Commit Details, Branch Comparison, and Visual File History each now draw their own left border, so opening several side by side no longer reads as one undifferentiated block.
+- **Consistent secondary-text color** — dates, SHAs, author names, empty-state messages, and hint text across every panel now use the theme's own secondary-text color (`descriptionForeground`) instead of a dozen slightly different opacity values accumulated file-by-file. More consistent, and more reliably legible across themes than faking it with opacity.
+- Unified the hover-card corner radius (Commit Graph and Visual File History previously used two different values for the same kind of element).
+- **Denser inline diff view** — Commit Details and Branch Comparison's code diff now renders one notch below the editor's own font size with tighter line spacing, so a narrow docked panel shows more lines of actual code instead of a few oversized ones.
+- **Sidebar Explorer** — each section now has its own icon (Branches, Remotes, Tags, Stashes, Worktrees, Contributors) so the tree scans at a glance instead of reading every label; a section with nothing in it starts collapsed instead of expanded-but-empty; a worktree row shows its folder name instead of the full absolute path (the full path is still there as a tooltip), and a remote-tracking branch gets the same cloud icon as the Remotes section so a long, mixed branch list separates into local vs. remote at a glance.
+
+### Fixed
+
+- **Visual File History**: a large bubble pushed to the far edge of its collision jitter could visually cross into the neighboring author's lane. The safety check only accounted for the jitter distance, not the bubble's own radius; fixed by accounting for both and giving lanes more vertical room.
+- **Visual File History**: bubbles from commits made close together in time could still overlap each other after separation, especially for large, similarly-sized changes. Replaced the vertical-only jitter with genuine 2D circle-packing (an outward search plus a relaxation pass), so a dense burst of commits now renders as fully separate, individually legible bubbles instead of a partially-merged cluster.
+- **Commit Details**: Copy SHA / Copy message / Open on remote had `border: none` and relied entirely on `--vscode-button-secondaryBackground` for contrast — in themes where that color is close to the panel background, they rendered with no visible button shape at all. Added a guaranteed-visible border so they read as buttons regardless of theme.
+- **Branch Comparison**: the base/compare ref pickers had the same underlying bug — `border: 1px solid transparent` by default, only gaining a visible border on hover. In a low-contrast theme they read as plain colored text with no dropdown affordance until the mouse found them. Now visible by default.
+- **Blame hover**: clicking the **Older** link appeared to do nothing when there was no earlier revision to step to, or when the mouse was hovering a line the text cursor wasn't actually on (the normal way to peek at blame without moving your cursor) — both cases silently updated internal state with no visible reaction. Both now show a message explaining what happened instead of looking broken.
+- **Branch Comparison**: opening the panel for the first time in a session could show the wrong ref pair — focusing it for the first time triggers its own default-ref guess as an independent background step, which could finish *after* (and silently overwrite) an explicitly requested comparison, depending on timing. The explicit request now always wins.
+- A repo's remote URL was cached forever after the first lookup, with nothing to invalidate it — adding or changing a remote while VS Code was running (e.g. via a terminal) was never picked up without a full reload. Removed the cache; a plain `git remote get-url` is cheap enough not to need one.
+- **Launchpad**: an Azure DevOps repo cloned over SSH (`git@ssh.dev.azure.com:v3/{org}/{project}/{repo}`) was never recognized — GitLore only knew `dev.azure.com` and `<org>.visualstudio.com` as Azure DevOps hosts, not the distinct `ssh.dev.azure.com` hostname the SSH remote form actually uses, so it silently fell through to "no recognized git-forge remotes". Now recognized, and normalized to the same credential as the HTTPS form so it doesn't prompt for a token twice.
+- **Launchpad**: a repo that failed to authenticate always showed the same generic "Couldn't authenticate with `<host>`" with no way to tell why — a bad/expired token, an out-of-scope one, and the host being unreachable all looked identical. Now shows the real reason (e.g. `401 Unauthorized from app.vssps.visualstudio.com`), so it's actually possible to tell whether to re-check the token or the network.
+
 ## [0.3.1] - 2026-08-13
 
 ### Changed

@@ -21,6 +21,10 @@ body {
   font-size: var(--vscode-font-size);
   color: var(--vscode-foreground);
   background-color: var(--vscode-panel-background, var(--vscode-editor-background));
+  /* Every GitLore webview draws its own left edge — docked sibling views in the same panel
+     container share one flat background with no native seam between them, so without this, two
+     panels open side by side visually merge into one. */
+  border-left: 1px solid var(--vscode-panel-border);
   line-height: 1.45;
 }
 
@@ -62,7 +66,7 @@ h1 {
 }
 
 .head-meta {
-  opacity: 0.7;
+  color: var(--vscode-descriptionForeground);
   font-size: 0.92em;
 }
 
@@ -87,9 +91,16 @@ h1 {
   padding: 0.15rem 0.4rem;
   border-radius: 3px;
   background-color: var(--vscode-textCodeBlock-background);
-  opacity: 0.85;
+  color: var(--vscode-descriptionForeground);
 }
 
+/*
+ * `border` is deliberate, not decorative: `--vscode-button-secondaryBackground` is nearly
+ * identical to the panel background in some themes, which left this reading as plain text with no
+ * visible button shape at all. A guaranteed-visible edge (the same divider color used everywhere
+ * else in GitLore) means it still reads as a button regardless of how a given theme tunes that
+ * fill color. `.btn-accent` doesn't need this — its gradient fill already has its own contrast.
+ */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -99,7 +110,7 @@ h1 {
   font-size: 0.92em;
   color: var(--vscode-button-secondaryForeground);
   background-color: var(--vscode-button-secondaryBackground);
-  border: none;
+  border: 1px solid var(--vscode-panel-border);
   border-radius: 3px;
   cursor: pointer;
   white-space: nowrap;
@@ -121,14 +132,17 @@ h1 {
 }
 
 /* The one accent-colored action in the panel — reserved for AI, so it reads as the panel's
-   signature feature rather than another utility button next to Copy SHA. */
+   signature feature rather than another utility button next to Copy SHA. Uses GitLore's own
+   signature accent (shared.css) rather than the default button color every other extension uses.
+   `filter: brightness` (not a second hardcoded hover color) keeps the hover state correct against
+   whatever the accent resolves to under any theme. */
 .btn-accent {
   color: var(--vscode-button-foreground);
-  background-color: var(--vscode-button-background);
+  background: var(--gitlore-accent-gradient-diag);
 }
 
 .btn-accent:hover {
-  background-color: var(--vscode-button-hoverBackground);
+  filter: brightness(1.15);
 }
 
 .commit-body {
@@ -159,7 +173,7 @@ h1 {
 }
 
 .ai-summary-hint {
-  opacity: 0.65;
+  color: var(--vscode-descriptionForeground);
   margin: 0.5rem 0 0;
   font-size: 0.92em;
 }

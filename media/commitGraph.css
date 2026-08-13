@@ -7,12 +7,20 @@
  */
 
 :root {
-  --col-refs: 150px;
-  --col-author: 96px;
-  --col-changes: 58px;
-  --col-date: 100px;
-  --col-sha: 66px;
-  --col-message-min: 160px;
+  /*
+   * Tightened from the original 150/96/58/100/66/160 budget (~830px minimum) — with three panels
+   * open side by side (Commit Graph, Commit Details, Branch Comparison), each pane commonly gets
+   * only a third of the window, well under the old budget, forcing horizontal scroll even for an
+   * ordinary-width pane. This trims every column to its actual content need (branch pills and
+   * relative-age strings don't need 150px/100px) so more layouts fit without scrolling, while still
+   * scrolling rather than clipping once a pane really is too narrow.
+   */
+  --col-refs: 110px;
+  --col-author: 78px;
+  --col-changes: 50px;
+  --col-date: 76px;
+  --col-sha: 58px;
+  --col-message-min: 110px;
   --row-min-width: calc(
     var(--col-refs) + var(--graph-svg-width) + var(--col-message-min) + var(--col-author) +
       var(--col-changes) + var(--col-date) + var(--col-sha) + 5rem
@@ -34,6 +42,10 @@ body {
   font-size: calc(var(--vscode-font-size, 13px) - 1px);
   color: var(--vscode-foreground);
   background-color: var(--vscode-panel-background, var(--vscode-editor-background));
+  /* Every GitLore webview draws its own left edge — docked sibling views in the same panel
+     container share one flat background with no native seam between them, so without this, two
+     panels open side by side visually merge into one. */
+  border-left: 1px solid var(--vscode-panel-border);
   line-height: 1.4;
 }
 
@@ -45,7 +57,9 @@ body {
   align-items: center;
   gap: 0.5rem;
   padding: 0.25rem 0.5rem;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  /* GitLore's signature accent (shared.css) marks every panel's header — quiet everywhere else, present here. */
+  border-bottom: 2px solid;
+  border-image: var(--gitlore-accent-gradient) 1;
 }
 
 .ref-picker {
@@ -94,8 +108,22 @@ body {
 
 .count {
   flex: 0 0 auto;
-  opacity: 0.6;
+  color: var(--vscode-descriptionForeground);
   white-space: nowrap;
+}
+
+#pull,
+#push {
+  gap: 0.3rem;
+}
+
+.sync-badge {
+  font-size: 0.85em;
+  line-height: 1.4;
+  padding: 0 0.35em;
+  border-radius: 8px;
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
 }
 
 #ref-filter:focus-visible {
@@ -129,7 +157,7 @@ body {
   font-size: 0.9em;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  opacity: 0.55;
+  color: var(--vscode-descriptionForeground);
   background-color: var(--vscode-panel-background, var(--vscode-editor-background));
   border-bottom: 1px solid var(--vscode-panel-border);
 }
@@ -194,7 +222,7 @@ body {
   align-items: center;
   gap: 0.25rem;
   justify-content: flex-end;
-  opacity: 0.75;
+  color: var(--vscode-descriptionForeground);
   font-variant-numeric: tabular-nums;
 }
 
@@ -205,7 +233,7 @@ body {
 
 .cell-date,
 .cell-sha {
-  opacity: 0.6;
+  color: var(--vscode-descriptionForeground);
   font-variant-numeric: tabular-nums;
 }
 
@@ -216,7 +244,7 @@ body {
 
 .empty {
   margin: 1rem 0.75rem;
-  opacity: 0.6;
+  color: var(--vscode-descriptionForeground);
 }
 
 /* ---------- Ref labels ---------- */
@@ -252,9 +280,9 @@ body {
   color: var(--vscode-badge-foreground);
 }
 
-/* Checked-out branch — the one label a reader scans for, so it gets the accent color. */
+/* Checked-out branch — the one label a reader scans for, so it gets GitLore's signature accent. */
 .ref-head {
-  background-color: var(--vscode-button-background);
+  background: var(--gitlore-accent-gradient-diag);
   color: var(--vscode-button-foreground);
   font-weight: 600;
 }
@@ -313,9 +341,17 @@ body {
   z-index: 10;
   max-width: 360px;
   padding: 0.5rem 0.6rem;
-  border-radius: 3px;
-  background-color: var(--vscode-editorHoverWidget-background);
-  border: 1px solid var(--vscode-editorHoverWidget-border);
+  border-radius: var(--gitlore-radius-lg);
+  /*
+   * `border-image` ignores `border-radius` (it paints square corners regardless), so a rounded
+   * gradient border needs this two-layer trick instead: a flat "gradient" (same color twice) fills
+   * the padding box, the real gradient fills the border box, and a transparent border reserves the
+   * ring between them for it to show through.
+   */
+  background:
+    linear-gradient(var(--vscode-editorHoverWidget-background), var(--vscode-editorHoverWidget-background)) padding-box,
+    var(--gitlore-accent-gradient-diag) border-box;
+  border: 1px solid transparent;
   color: var(--vscode-editorHoverWidget-foreground);
   font-size: 0.95em;
   line-height: 1.5;
@@ -347,7 +383,7 @@ body {
 
 .row-tooltip-meta,
 .row-tooltip-stat {
-  opacity: 0.75;
+  color: var(--vscode-descriptionForeground);
   font-size: 0.92em;
 }
 

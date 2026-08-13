@@ -214,3 +214,146 @@ export function buildOwnershipFixtureRepo(): OwnershipFixtureManifest {
 
   return { repoRoot, trackedFile };
 }
+
+export interface ExplorerFixtureManifest {
+  repoRoot: string;
+  trackedFile: string;
+  currentBranch: string;
+  otherBranch: string;
+  tagName: string;
+  stashMessage: string;
+}
+
+/**
+ * A fresh, isolated repo per call (mutating commands — checkout, stash apply/drop — must never
+ * touch the one shared workspace repo every other integration suite runs against) with one of
+ * everything the Sidebar Explorer lists: two local branches, a tag, and a stash entry.
+ */
+export function buildExplorerFixtureRepo(): ExplorerFixtureManifest {
+  const repoRoot = mkdtempSync(join(tmpdir(), 'gitlore-explorer-fixture-'));
+  git(repoRoot, ['init', '-q', '-b', 'main']);
+  git(repoRoot, ['config', 'user.name', 'Raj Jadon']);
+  git(repoRoot, ['config', 'user.email', 'raj@example.com']);
+
+  const trackedFile = join(repoRoot, 'tracked.txt');
+  writeFileSync(trackedFile, 'line one\n');
+  git(repoRoot, ['add', 'tracked.txt']);
+  git(repoRoot, ['commit', '-q', '-m', 'base commit'], commitEnv('Raj Jadon', 'raj@example.com', '2024-01-01T10:00:00'));
+
+  git(repoRoot, ['tag', 'v1.0.0']);
+
+  git(repoRoot, ['checkout', '-q', '-b', 'feature-y']);
+  writeFileSync(trackedFile, 'line one\nfeature line\n');
+  git(repoRoot, ['add', 'tracked.txt']);
+  git(repoRoot, ['commit', '-q', '-m', 'add feature line'], commitEnv('Amy Dev', 'amy@example.com', '2024-01-02T10:00:00'));
+  git(repoRoot, ['checkout', '-q', 'main']);
+
+  const stashMessage = 'wip explorer test';
+  writeFileSync(trackedFile, 'line one\nuncommitted change\n');
+  git(repoRoot, ['stash', 'push', '-q', '-m', stashMessage]);
+
+  return { repoRoot, trackedFile, currentBranch: 'main', otherBranch: 'feature-y', tagName: 'v1.0.0', stashMessage };
+}
+
+export interface LineHistoryFixtureManifest {
+  repoRoot: string;
+  trackedFile: string;
+  /** 0-based — the line created by `commits[2]` and rewritten by `commits[1]` and `commits[0]`. */
+  line: number;
+  /**
+   * Newest first, matching `git log -L` order. All three commits touched `line`: `-L` tracks a
+   * line back to the commit that first wrote its content, so the file-creation commit legitimately
+   * belongs at the oldest end of the line's own history, not just "commits that touched the file".
+   */
+  commits: FixtureCommit[];
+}
+
+/**
+ * A file whose second line is rewritten twice by two different authors on top of the commit that
+ * first created it — three real revisions of the same line, so the hover's `-L`-based line-history
+ * stepper has a real multi-revision line to step through, plus an unrelated third line that's
+ * never touched, so a naive "which commits touched this file" scan (as opposed to real per-line
+ * tracking) would be provably wrong here (it would also count edits to the third line as history
+ * for the second one, if there were any — there deliberately aren't).
+ */
+export function buildLineHistoryFixtureRepo(): LineHistoryFixtureManifest {
+  const repoRoot = mkdtempSync(join(tmpdir(), 'gitlore-linehistory-fixture-'));
+  git(repoRoot, ['init', '-q', '-b', 'main']);
+  git(repoRoot, ['config', 'user.name', 'Raj Jadon']);
+  git(repoRoot, ['config', 'user.email', 'raj@example.com']);
+
+  const trackedFile = join(repoRoot, 'tracked.txt');
+
+  writeFileSync(trackedFile, 'line one\nline two\nline three\n');
+  git(repoRoot, ['add', 'tracked.txt']);
+  git(repoRoot, ['commit', '-q', '-m', 'first commit'], commitEnv('Raj Jadon', 'raj@example.com', '2024-01-01T10:00:00'));
+
+  writeFileSync(trackedFile, 'line one\nline two v2\nline three\n');
+  git(repoRoot, ['add', 'tracked.txt']);
+  git(repoRoot, ['commit', '-q', '-m', 'amy edits line two'], commitEnv('Amy Dev', 'amy@example.com', '2024-02-01T10:00:00'));
+
+  writeFileSync(trackedFile, 'line one\nline two v3\nline three\n');
+  git(repoRoot, ['add', 'tracked.txt']);
+  git(repoRoot, ['commit', '-q', '-m', 'raj edits line two again'], commitEnv('Raj Jadon', 'raj@example.com', '2024-03-01T10:00:00'));
+
+  const log = execFileSync('git', ['log', '--pretty=format:%H|%s|%an'], { cwd: repoRoot }).toString();
+  const commits: FixtureCommit[] = log
+    .split('\n')
+    .filter(Boolean)
+    .map((entry) => {
+      const [sha, message, author] = entry.split('|');
+      return { sha: sha ?? '', message: message ?? '', author: author ?? '' };
+    });
+
+  return { repoRoot, trackedFile, line: 1, commits };
+}
+
+export interface SyncFixtureManifest {
+  repoRoot: string;
+  trackedFile: string;
+  /** Commits `main` has that its upstream doesn't. */
+  ahead: number;
+  /** Commits the upstream has that `main` doesn't. */
+  behind: number;
+}
+
+/**
+ * A repo whose checked-out branch has a real, divergent upstream — for the commit graph's
+ * pull/push ahead/behind badges. Uses a second *local* branch as the upstream (via
+ * `git branch --set-upstream-to`) rather than a real or bare remote: git's ahead/behind
+ * accounting (`%(upstream:track)`) works identically either way, and this avoids standing up an
+ * actual remote just to exercise it.
+ */
+export function buildSyncFixtureRepo(): SyncFixtureManifest {
+  const repoRoot = mkdtempSync(join(tmpdir(), 'gitlore-sync-fixture-'));
+  git(repoRoot, ['init', '-q', '-b', 'main']);
+  git(repoRoot, ['config', 'user.name', 'Raj Jadon']);
+  git(repoRoot, ['config', 'user.email', 'raj@example.com']);
+
+  const trackedFile = join(repoRoot, 'tracked.txt');
+  writeFileSync(trackedFile, 'line one\n');
+  git(repoRoot, ['add', 'tracked.txt']);
+  git(repoRoot, ['commit', '-q', '-m', 'base commit'], commitEnv('Raj Jadon', 'raj@example.com', '2024-01-01T10:00:00'));
+
+  git(repoRoot, ['branch', 'pretend-origin-main']);
+  git(repoRoot, ['branch', '--set-upstream-to=pretend-origin-main', 'main']);
+
+  const ahead = 2;
+  for (let i = 0; i < ahead; i++) {
+    writeFileSync(trackedFile, `line one\nahead ${i}\n`);
+    git(repoRoot, ['add', 'tracked.txt']);
+    git(repoRoot, ['commit', '-q', '-m', `ahead commit ${i}`], commitEnv('Raj Jadon', 'raj@example.com', `2024-01-0${2 + i}T10:00:00`));
+  }
+
+  const behind = 3;
+  git(repoRoot, ['checkout', '-q', 'pretend-origin-main']);
+  const behindFile = join(repoRoot, 'behind.txt');
+  for (let i = 0; i < behind; i++) {
+    writeFileSync(behindFile, `behind ${i}\n`);
+    git(repoRoot, ['add', 'behind.txt']);
+    git(repoRoot, ['commit', '-q', '-m', `behind commit ${i}`], commitEnv('Amy Dev', 'amy@example.com', `2024-02-0${i + 1}T10:00:00`));
+  }
+  git(repoRoot, ['checkout', '-q', 'main']);
+
+  return { repoRoot, trackedFile, ahead, behind };
+}

@@ -11,10 +11,20 @@ export const COMMANDS = {
   showCommit: 'gitLore.showCommit',
   copySha: 'gitLore.copySha',
   openGraph: 'gitLore.openGraph',
+  showVisualFileHistory: 'gitLore.showVisualFileHistory',
   compareBranches: 'gitLore.compareBranches',
   explainCommit: 'gitLore.explainCommit',
   explainLine: 'gitLore.explainLine',
   showFileOwnership: 'gitLore.showFileOwnership',
+  rebaseInteractively: 'gitLore.rebaseInteractively',
+  checkoutBranch: 'gitLore.checkoutBranch',
+  compareBranchFromExplorer: 'gitLore.compareBranchFromExplorer',
+  openRemote: 'gitLore.openRemote',
+  applyStash: 'gitLore.applyStash',
+  dropStash: 'gitLore.dropStash',
+  stepLineHistory: 'gitLore.stepLineHistory',
+  toggleFullFileBlame: 'gitLore.toggleFullFileBlame',
+  openLaunchpad: 'gitLore.openLaunchpad',
 } as const;
 
 export const CONFIG = {
@@ -30,12 +40,16 @@ export const CONFIG = {
   staleCodeEnabled: 'staleCode.enabled',
   staleThresholdDays: 'staleThresholdDays',
   ownershipEnabled: 'ownership.enabled',
+  fullFileBlameEnabled: 'fullFileBlame.enabled',
   issueLinkingEnabled: 'issueLinking.enabled',
   issueLinkingPattern: 'issueLinking.pattern',
   issueLinkingUrlTemplate: 'issueLinking.urlTemplate',
   aiEnabled: 'ai.enabled',
   aiModelFamily: 'ai.modelFamily',
   aiMaxDiffChars: 'ai.maxDiffChars',
+  rebaseEditorEnabled: 'rebaseEditor.enabled',
+  launchpadEnabled: 'launchpad.enabled',
+  launchpadCustomHosts: 'launchpad.customHosts',
 } as const;
 
 export const VIEWS = {
@@ -43,6 +57,11 @@ export const VIEWS = {
   commitDetails: 'gitLore.commitDetails',
   commitGraph: 'gitLore.commitGraph',
   branchComparison: 'gitLore.branchComparison',
+  visualFileHistory: 'gitLore.visualFileHistory',
+  rebaseEditor: 'gitLore.rebaseEditor',
+  explorer: 'gitLore.explorer',
+  /** Not registered via `contributes.views` — created imperatively with `createWebviewPanel` (a full editor-area tab, like Rebase Editor, not a docked panel), so this id is only ever used internally. */
+  launchpad: 'gitLore.launchpad',
 } as const;
 
 /**
@@ -56,6 +75,9 @@ export const MEDIA = {
   commitGraph: 'commitGraph.css',
   commitDetails: 'commitDetails.css',
   branchComparison: 'branchComparison.css',
+  visualFileHistory: 'visualFileHistory.css',
+  rebaseEditor: 'rebaseEditor.css',
+  launchpad: 'launchpad.css',
   panelIcon: 'panel-icon.svg',
 } as const;
 

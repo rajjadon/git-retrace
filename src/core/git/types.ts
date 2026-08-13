@@ -13,6 +13,12 @@ export interface CommitDetail extends Commit {
   body: string;
 }
 
+/** One commit's effect on a single file, for the Visual File History timeline. */
+export interface FileHistoryEntry extends Commit {
+  insertions: number;
+  deletions: number;
+}
+
 export interface BlameLine {
   /** 0-based line index within the file. */
   line: number;
@@ -68,6 +74,9 @@ export interface BranchInfo {
   name: string;
   isRemote: boolean;
   isCurrent: boolean;
+  /** Commits ahead/behind its upstream, from git's own `%(upstream:track)` — undefined when there's no upstream, it's gone, or this is itself a remote-tracking branch. */
+  ahead?: number;
+  behind?: number;
 }
 
 export interface RemoteInfo {
@@ -75,4 +84,34 @@ export interface RemoteInfo {
   /** May contain slashes for GitLab-style nested groups (e.g. "group/subgroup"). */
   owner: string;
   repo: string;
+}
+
+/** One configured remote, for the Sidebar Explorer — distinct from `RemoteInfo`, which is a remote's URL already parsed into host/owner/repo. */
+export interface GitRemote {
+  name: string;
+  url: string;
+}
+
+export interface TagInfo {
+  name: string;
+}
+
+export interface StashInfo {
+  /** The `N` in `stash@{N}` — what `git stash apply/drop` expects. */
+  index: number;
+  message: string;
+}
+
+export interface WorktreeInfo {
+  path: string;
+  /** Null for a detached-HEAD worktree. */
+  branch: string | null;
+  /** True only for the first entry `git worktree list` reports — the main checkout, not a linked worktree. */
+  isMain: boolean;
+}
+
+export interface ContributorInfo {
+  name: string;
+  email: string;
+  commitCount: number;
 }

@@ -135,6 +135,25 @@ function renderFileStat(file: FileChange): string {
   return `<span class="stat-add">+${file.insertions}</span><span class="stat-del">&minus;${file.deletions}</span>`;
 }
 
+/** Max on-screen width (px) of a fully-scaled diffstat bar — matches `.stat-bar` in shared.css. */
+const STAT_BAR_MAX_WIDTH = 48;
+
+/**
+ * A two-segment bar (additions, then deletions) whose total length is proportional to this file's
+ * share of the largest change in the current list — so a one-line tweak reads as a sliver next to
+ * a file that was mostly rewritten, the same relative-magnitude convention used elsewhere (e.g.
+ * the Visual File History timeline). Binary files render no bar; there's nothing to measure.
+ */
+function renderStatBar(file: FileChange, maxTotal: number): string {
+  if (file.binary || maxTotal === 0) {
+    return '';
+  }
+  const scale = STAT_BAR_MAX_WIDTH / maxTotal;
+  const addWidth = file.insertions * scale;
+  const delWidth = file.deletions * scale;
+  return `<span class="stat-bar" aria-hidden="true"><span class="stat-bar-add" style="width:${addWidth}px"></span><span class="stat-bar-del" style="width:${delWidth}px"></span></span>`;
+}
+
 /**
  * Renders each changed file as a collapsible section holding only that file's hunks, instead of
  * one undifferentiated dump of the whole diff. Sole-file changes open by default — there is
@@ -151,6 +170,7 @@ export function renderFileSections(files: FileChange[], diff: string): string {
   }
   const byPath = splitDiffByFile(diff);
   const expandAll = files.length === 1;
+  const maxTotal = Math.max(...files.map((f) => (f.binary ? 0 : f.insertions + f.deletions)));
 
   return files
     .map((file) => {
@@ -163,7 +183,7 @@ export function renderFileSections(files: FileChange[], diff: string): string {
         ? `<pre class="diff">${renderDiff(hunks)}</pre>`
         : '<p class="muted no-diff">No textual diff for this file.</p>';
       return `<details class="file"${expandAll ? ' open' : ''} data-filter="${escapeHtml(file.path.toLowerCase())}">
-<summary><span class="file-path" title="${escapedPath}"><span class="file-dir">${escapeHtml(dir)}</span><span class="file-name">${escapeHtml(name)}</span></span><span class="file-stat">${renderFileStat(file)}</span><button class="row-btn" type="button" data-path="${escapedPath}" title="Open changes" aria-label="Open changes in ${escapedPath}">${OPEN_CHANGES_ICON}</button></summary>
+<summary><span class="file-path" title="${escapedPath}"><span class="file-dir">${escapeHtml(dir)}</span><span class="file-name">${escapeHtml(name)}</span></span>${renderStatBar(file, maxTotal)}<span class="file-stat">${renderFileStat(file)}</span><button class="row-btn" type="button" data-path="${escapedPath}" title="Open changes" aria-label="Open changes in ${escapedPath}">${OPEN_CHANGES_ICON}</button></summary>
 ${body}
 </details>`;
     })

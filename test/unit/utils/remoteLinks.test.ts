@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCommitUrl, remoteHostLabel } from '../../../src/utils/remoteLinks';
+import { buildCommitUrl, buildCreatePrUrl, buildRepoUrl, remoteHostLabel } from '../../../src/utils/remoteLinks';
 import type { RemoteInfo } from '../../../src/core/git/types';
 
 const SHA = '5a93a8d3e93fcc0a1f409e89d3aaca4346ced8ec';
@@ -48,4 +48,50 @@ test('buildCommitUrl: a GitHub Enterprise host is not sniffable, so it gets no U
   // Guessing GitHub's URL shape for it would produce a broken link on every non-GHE lookalike.
   assert.equal(remoteHostLabel(remote('github.acme.com')), 'github.acme.com');
   assert.equal(buildCommitUrl(remote('github.acme.com'), SHA), null);
+});
+
+test('buildRepoUrl: builds the repo home page for a known host', () => {
+  assert.equal(buildRepoUrl(remote('github.com')), 'https://github.com/acme/widgets');
+});
+
+test('buildRepoUrl: works for an unrecognized self-hosted host too — no host gating needed for a repo home page', () => {
+  assert.equal(buildRepoUrl(remote('git.acme.dev')), 'https://git.acme.dev/acme/widgets');
+});
+
+test('buildRepoUrl: keeps nested group paths intact', () => {
+  assert.equal(
+    buildRepoUrl(remote('gitlab.com', 'acme/platform/team', 'widgets')),
+    'https://gitlab.com/acme/platform/team/widgets',
+  );
+});
+
+test('buildCreatePrUrl: GitHub uses /compare/base...compare?expand=1', () => {
+  assert.equal(
+    buildCreatePrUrl(remote('github.com'), 'main', 'feature-x'),
+    'https://github.com/acme/widgets/compare/main...feature-x?expand=1',
+  );
+});
+
+test('buildCreatePrUrl: GitLab uses /-/merge_requests/new with source/target query params', () => {
+  assert.equal(
+    buildCreatePrUrl(remote('gitlab.com'), 'main', 'feature-x'),
+    'https://gitlab.com/acme/widgets/-/merge_requests/new?merge_request%5Bsource_branch%5D=feature-x&merge_request%5Btarget_branch%5D=main',
+  );
+});
+
+test('buildCreatePrUrl: Bitbucket uses /pull-requests/new with source/dest query params', () => {
+  assert.equal(
+    buildCreatePrUrl(remote('bitbucket.org'), 'main', 'feature-x'),
+    'https://bitbucket.org/acme/widgets/pull-requests/new?source=feature-x&dest=acme%2Fwidgets%3A%3Amain',
+  );
+});
+
+test('buildCreatePrUrl: an unknown host gets no URL rather than a guessed one', () => {
+  assert.equal(buildCreatePrUrl(remote('git.acme.dev'), 'main', 'feature-x'), null);
+});
+
+test('buildCreatePrUrl: branch names with special characters are percent-encoded', () => {
+  const url = buildCreatePrUrl(remote('github.com'), 'main', 'feature/foo bar');
+  assert.ok(url);
+  assert.ok(url.includes(encodeURIComponent('feature/foo bar')));
 });

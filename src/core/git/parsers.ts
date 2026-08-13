@@ -3,11 +3,17 @@ import type {
   BranchInfo,
   Commit,
   CommitDetail,
+  ContributorInfo,
   FileChange,
+  FileHistoryEntry,
+  GitRemote,
   GraphCommit,
   Ref,
   RemoteInfo,
+  StashInfo,
+  TagInfo,
   WorkingChanges,
+  WorktreeInfo,
 } from './types';
 
 const UNCOMMITTED_SHA = '0000000000000000000000000000000000000000';
@@ -38,8 +44,17 @@ export const COMMIT_DETAIL_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LO
 /** Pass to `git log --all --topo-order --numstat --decorate=full --pretty=tformat:<this>` for the commit graph. `%P` = parent shas (space-separated), `%D` = ref decorations. */
 export const GRAPH_LOG_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SEP}%ae${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%P${LOG_FIELD_SEP}%D${LOG_FIELD_SEP}%s${LOG_RECORD_SEP}`;
 
-/** Pass to `git for-each-ref refs/heads refs/remotes --format=<this>`. Uses the full refname (not `:short`) so local vs remote can be told apart reliably by prefix. */
-export const BRANCH_FORMAT = `%(refname)${LOG_FIELD_SEP}%(HEAD)`;
+/** Pass to `git for-each-ref refs/heads refs/remotes --format=<this>`. Uses the full refname (not `:short`) so local vs remote can be told apart reliably by prefix. `%(upstream:track)` lets git compute ahead/behind itself — no per-branch `rev-list --count` calls. */
+export const BRANCH_FORMAT = `%(refname)${LOG_FIELD_SEP}%(HEAD)${LOG_FIELD_SEP}%(upstream:track)`;
+
+/**
+ * Pass to `git log --format=<this> -L <n>,<n>:<file>` for the hover's line-history stepper.
+ * Unlike `LOG_FORMAT`, the record separator comes *first*: `-L` always follows each commit's
+ * formatted line with a unified-diff hunk, so there's no clean spot after the fields to end the
+ * record. Leading with the separator instead means the fields are always the first line of the
+ * chunk that follows it — `parseLineHistoryLog` takes that line and discards the hunk after it.
+ */
+export const LINE_HISTORY_FORMAT = `${LOG_RECORD_SEP}%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SEP}%ae${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%s`;
 
 /**
  * Parses `git blame --line-porcelain` output. Pure — no I/O.
@@ -136,6 +151,30 @@ export function parseLog(raw: string): Commit[] {
     });
 }
 
+/**
+ * Parses `git log --format=LINE_HISTORY_FORMAT -L <n>,<n>:<file>` output: one commit's fields
+ * per chunk, immediately followed by a unified-diff hunk this parser discards — the hover's
+ * prev/next stepper only needs commit metadata, not the hunk text. Newest first, same as
+ * `parseLog`. Pure — no I/O.
+ */
+export function parseLineHistoryLog(raw: string): Commit[] {
+  return raw
+    .split(LOG_RECORD_SEP)
+    .map((chunk) => chunk.split('\n')[0] ?? '')
+    .filter((line) => line.includes(LOG_FIELD_SEP))
+    .map((fieldsLine) => {
+      const [sha, shortSha, author, authorEmail, date, message] = fieldsLine.split(LOG_FIELD_SEP);
+      return {
+        sha: sha ?? '',
+        shortSha: shortSha ?? '',
+        author: author ?? '',
+        authorEmail: authorEmail ?? '',
+        date: date ?? '',
+        message: message ?? '',
+      };
+    });
+}
+
 /** Classifies one decoration segment. Handles both `--decorate=full` refnames (`refs/heads/main`) and the short `%D` form (`main`), so callers that omit `--decorate=full` still get usable refs — just without local/remote separation. */
 function parseRefSegment(segment: string, isHead: boolean): Ref {
   // The `tag: ` marker is git's own, present in both decoration forms — it must be checked before
@@ -219,6 +258,49 @@ export function parseGraphLog(raw: string): GraphCommit[] {
     }
   }
   return commits;
+}
+
+function parseFileHistoryRecord(fieldsLine: string): FileHistoryEntry {
+  const [sha, shortSha, author, authorEmail, date, message] = fieldsLine.split(LOG_FIELD_SEP);
+  return {
+    sha: sha ?? '',
+    shortSha: shortSha ?? '',
+    author: author ?? '',
+    authorEmail: authorEmail ?? '',
+    date: date ?? '',
+    message: message ?? '',
+    insertions: 0,
+    deletions: 0,
+  };
+}
+
+/**
+ * Parses `git log --follow --numstat --pretty=tformat:LOG_FORMAT -- <path>` output for the Visual
+ * File History timeline. Pure — no I/O.
+ *
+ * Scoping `--numstat` to a single path means git emits at most one stat line per commit, but the
+ * interleaving is the same shape `parseGraphLog` already handles (stat block follows the record,
+ * not precedes it) — same line-by-line walk, reused rather than re-derived.
+ */
+export function parseFileHistoryLog(raw: string): FileHistoryEntry[] {
+  const entries: FileHistoryEntry[] = [];
+  for (const segment of raw.split(RECORD_OR_NEWLINE_RE)) {
+    const line = segment.trim();
+    if (line.length === 0) {
+      continue;
+    }
+    if (line.includes(LOG_FIELD_SEP)) {
+      entries.push(parseFileHistoryRecord(line));
+      continue;
+    }
+    const stat = parseNumstatLine(line);
+    const current = entries[entries.length - 1];
+    if (stat && current) {
+      current.insertions += stat.insertions;
+      current.deletions += stat.deletions;
+    }
+  }
+  return entries;
 }
 
 /**
@@ -309,18 +391,129 @@ export function parseNumstatAll(raw: string): FileChange[] {
 }
 
 /** Parses `git for-each-ref --format=BRANCH_FORMAT` output. Filters out the `origin/HEAD` symbolic alias. Pure — no I/O. */
+/**
+ * Parses git's `%(upstream:track)` value, e.g. `[ahead 2, behind 1]`, `[ahead 2]`, `[gone]`, or
+ * empty (no upstream, or up to date). Only includes the keys git actually reported — a branch
+ * with no upstream carries neither `ahead` nor `behind`, not zeros.
+ */
+function parseUpstreamTrack(raw: string): Pick<BranchInfo, 'ahead' | 'behind'> {
+  const ahead = /ahead (\d+)/.exec(raw);
+  const behind = /behind (\d+)/.exec(raw);
+  return {
+    ...(ahead ? { ahead: Number(ahead[1]) } : {}),
+    ...(behind ? { behind: Number(behind[1]) } : {}),
+  };
+}
+
 export function parseBranches(raw: string): BranchInfo[] {
   return raw
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .map((line) => {
-      const [refname, headMarker] = line.split(LOG_FIELD_SEP);
+      const [refname, headMarker, track] = line.split(LOG_FIELD_SEP);
       const isRemote = (refname ?? '').startsWith('refs/remotes/');
       const name = (refname ?? '').replace(/^refs\/(heads|remotes)\//, '');
-      return { name, isRemote, isCurrent: headMarker === '*' };
+      return { name, isRemote, isCurrent: headMarker === '*', ...parseUpstreamTrack(track ?? '') };
     })
     .filter((branch) => branch.name !== 'HEAD' && !branch.name.endsWith('/HEAD'));
+}
+
+/** Parses `git config --get-regexp "remote\..*\.url"` output: `remote.<name>.url <url>` per line. Pure — no I/O. */
+export function parseRemotes(raw: string): GitRemote[] {
+  const remotes: GitRemote[] = [];
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const spaceIdx = trimmed.indexOf(' ');
+    if (spaceIdx === -1) {
+      continue;
+    }
+    const key = trimmed.slice(0, spaceIdx);
+    const url = trimmed.slice(spaceIdx + 1);
+    const match = /^remote\.(.+)\.url$/.exec(key);
+    if (match?.[1]) {
+      remotes.push({ name: match[1], url });
+    }
+  }
+  return remotes;
+}
+
+/** Parses `git for-each-ref refs/tags --format=%(refname:short)` output: one tag name per line. Pure — no I/O. */
+export function parseTags(raw: string): TagInfo[] {
+  return raw
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((name) => ({ name }));
+}
+
+/** Parses `git stash list --format=%gd<FIELD>%s` output, extracting the numeric index from `stash@{N}` — what `git stash apply/drop` expects. Pure — no I/O. */
+export function parseStashes(raw: string): StashInfo[] {
+  const stashes: StashInfo[] = [];
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) {
+      continue;
+    }
+    const [ref, message] = line.split(LOG_FIELD_SEP);
+    const match = /stash@\{(\d+)\}/.exec(ref ?? '');
+    if (match?.[1]) {
+      stashes.push({ index: Number(match[1]), message: message ?? '' });
+    }
+  }
+  return stashes;
+}
+
+/**
+ * Parses `git worktree list --porcelain` output: blank-line-separated blocks, each starting with
+ * `worktree <path>`. The first block is always the main checkout, never a linked worktree. Pure
+ * — no I/O.
+ */
+export function parseWorktrees(raw: string): WorktreeInfo[] {
+  const worktrees: WorktreeInfo[] = [];
+  let current: { path: string; branch: string | null } | null = null;
+  let isFirst = true;
+
+  const flush = (): void => {
+    if (current) {
+      worktrees.push({ path: current.path, branch: current.branch, isMain: isFirst });
+      isFirst = false;
+    }
+    current = null;
+  };
+
+  for (const line of raw.split('\n')) {
+    if (line.trim() === '') {
+      flush();
+    } else if (line.startsWith('worktree ')) {
+      flush();
+      current = { path: line.slice('worktree '.length).trim(), branch: null };
+    } else if (line.startsWith('branch ') && current) {
+      current.branch = line.slice('branch '.length).trim().replace(/^refs\/heads\//, '');
+    }
+    // `HEAD <sha>`, `bare`, `locked`, `prunable` lines are ignored for v1 — read-only display
+    // doesn't need them yet.
+  }
+  flush();
+  return worktrees;
+}
+
+/** Parses `git shortlog -sne HEAD` output: `<count>\t<name> <email>` per line. Pure — no I/O. */
+export function parseContributors(raw: string): ContributorInfo[] {
+  const contributors: ContributorInfo[] = [];
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const match = /^(\d+)\s+(.+?)\s+<(.+)>$/.exec(trimmed);
+    if (match?.[1] && match[2] && match[3]) {
+      contributors.push({ commitCount: Number(match[1]), name: match[2], email: match[3] });
+    }
+  }
+  return contributors;
 }
 
 /**
