@@ -2,7 +2,7 @@
   "name": "gitlore",
   "displayName": "GitLore — git blame, history & commit graph",
   "description": "The story behind every line. Free, local-first git blame, history, commit graph and branch comparison — no account, no telemetry.",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "publisher": "RajpratapsinghJadon",
   "license": "MIT",
   "engines": {
@@ -404,7 +404,11 @@
           "description": "Self-hosted or custom git-forge instances Launchpad can't recognize by hostname alone (GitHub Enterprise Server, Gitea, Forgejo, self-hosted GitLab, etc). Each entry maps a hostname to which of the four API shapes it speaks and its API base URL.",
           "items": {
             "type": "object",
-            "required": ["hostname", "flavor", "apiBaseUrl"],
+            "required": [
+              "hostname",
+              "flavor",
+              "apiBaseUrl"
+            ],
             "properties": {
               "hostname": {
                 "type": "string",
@@ -412,7 +416,12 @@
               },
               "flavor": {
                 "type": "string",
-                "enum": ["github", "gitlab", "bitbucket", "azureDevOps"],
+                "enum": [
+                  "github",
+                  "gitlab",
+                  "bitbucket",
+                  "azureDevOps"
+                ],
                 "description": "Which API shape this host speaks. Gitea/Forgejo are API-compatible with GitHub, so use \"github\" for those."
               },
               "apiBaseUrl": {
@@ -435,6 +444,7 @@
     "lint": "eslint --no-error-on-unmatched-pattern src test && tsc --noEmit -p .",
     "icon": "rsvg-convert -w 256 -h 256 media/icon.svg -o media/icon.png",
     "shots": "tsx scripts/shoot-screenshots.ts",
+    "shots:native": "tsx scripts/shoot-native-screenshots.ts",
     "package": "vsce package",
     "package:pre": "vsce package --pre-release",
     "publish": "vsce publish",
@@ -447,6 +457,7 @@
     "simple-git": "^3.27.0"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.9",
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^8.15.0",
@@ -456,8 +467,8 @@
     "esbuild": "^0.24.0",
     "eslint": "^9.15.0",
     "mocha": "^10.7.3",
-    "@types/mocha": "^10.0.9",
     "ovsx": "^0.10.12",
+    "playwright": "1.62.1",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   },

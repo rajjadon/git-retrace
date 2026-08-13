@@ -1,75 +1,66 @@
 # Screenshots
 
-Three of the four are **generated** — run `npm run shots`. `src/core/` has no `vscode` imports and the
-view renderers are pure, so the real webview HTML can be produced in plain Node against this repo's
-own history and photographed with headless Chrome. Re-run it after any UI change instead of
-re-shooting by hand; see `scripts/shoot-screenshots.ts` for what is real and what is approximated.
+Every screenshot here is **generated**, not captured by hand — two scripts, split by what they can
+reach:
 
-| File | How |
+- **`npm run shots`** (`scripts/shoot-screenshots.ts`) covers the webview panels. `src/core/` has no
+  `vscode` imports and the view renderers are pure functions, so the exact HTML a webview would show
+  can be produced in plain Node against this repo's own git history (or, for Launchpad, realistic
+  sample data — see below), then photographed with headless Chrome.
+- **`npm run shots:native`** (`scripts/shoot-native-screenshots.ts`) covers everything that isn't a
+  webview — an editor decoration, a CodeLens, a TreeView, an overview-ruler mark — none of which have
+  HTML to render outside VS Code itself. This one drives an actual VS Code window via Playwright's
+  Electron support (`_electron.launch`), pointed at the same `.vscode-test`-cached binary the
+  integration tests use, against `scripts/build-demo-repo.ts` — a small, realistic, multi-author demo
+  repo built specifically for this (the `test/fixtures/` repos optimize for deterministic assertions,
+  not something worth looking at — "alice line one" placeholder text and all).
+
+Re-run the relevant one after any UI change instead of re-shooting by hand.
+
+| File | Script |
 |---|---|
 | `commit-graph.png` | `npm run shots` |
 | `commit-details.png` | `npm run shots` |
 | `branch-comparison.png` | `npm run shots` |
-| `inline-blame.png` | **manual** — an editor decoration is not a webview, so there is no HTML to render. Captured; re-shoot at 2x if it ever needs to be bigger. |
+| `visual-file-history.png` | `npm run shots` |
+| `rebase-editor.png` | `npm run shots` |
+| `launchpad.png` | `npm run shots` (sample data — see below) |
+| `inline-blame.png` | `npm run shots:native` |
+| `file-history.png` | `npm run shots:native` |
+| `sidebar-explorer.png` | `npm run shots:native` |
+| `stale-code.png` | `npm run shots:native` |
+| `full-file-blame.png` | `npm run shots:native` |
+| `ownership-heatmap.png` | `npm run shots:native` |
 
-## Capturing inline-blame by hand
+Two things worth knowing about what's *not* 100% real:
 
-Two traps worth naming, both hit once already:
+1. **The theme.** VS Code injects ~100 `--vscode-*` custom properties into every webview; `shoot-screenshots.ts` approximates Dark Modern for the headless-Chrome renders. `shoot-native-screenshots.ts` doesn't have this problem — it's real VS Code, so the theme is exactly whatever the demo profile's default is.
+2. **Launchpad's data.** It pools PRs from real, authenticated remote hosts — there's nothing to render without a live network call and real credentials, so `launchpad.png` is built from realistic hand-written sample data instead of this repo's own history. Every other screenshot is this repo's real commits, real authors, real dates (or the demo repo's, for the native ones).
 
-- **Screenshot, not a photo.** A phone picture of the monitor carries the bezel, desk, and moiré
-  from the LCD. Use `⌘⇧4` (or `⌘⇧5`) so it is a real capture, and save PNG — JPEG puts compression
-  artifacts on UI text.
-- **Check it is *this* extension.** A similar extension is installed alongside during development
-  and its hover looks superficially similar. Tells that it is the other extension and not us: a `(Co-author)` line, a
-  whole-commit `N files changed, +X −Y` summary, a settings gear in the footer, and a status bar
-  reading `Blame <name> (<age>)`. Ours renders `<author>` / message / `age · absolute-date · sha` /
-  `+X -Y`, and the status bar reads `<author>, <age>`.
+## Why a separate demo repo for the native shots
 
-The README references these four files by **absolute** `raw.githubusercontent.com` URL, because the
-VS Code Marketplace does not resolve relative image paths — a relative `media/...` link renders on
-GitHub but shows as a broken image on the extension page.
+`scripts/build-demo-repo.ts` builds a small multi-author repo with a deliberately wide commit-date
+spread — some commits ~14 months old, some from today — so the stale-code detector, the ownership
+heatmap, and the full-file-blame gradient all have something real to show. This repo's own history
+(single author, everything within the last few days) can't demonstrate any of those three
+convincingly, which is exactly why a purpose-built repo exists rather than reusing it.
 
-**The README's images 404 until these are captured and pushed to `master`.**
+## Marketplace image URLs
 
-They are excluded from the `.vsix` on purpose (see `.vscodeignore`): the Marketplace fetches them
-over HTTPS from GitHub, so shipping copies inside the package would only add weight.
+The README's `<img>` tags use plain relative paths (`media/screenshots/...`) — don't rewrite these
+to absolute URLs by hand. `vsce package`/`vsce publish` already does that automatically at package
+time (confirmed by extracting a built `.vsix` and checking): it rewrites every relative link to
+`https://github.com/rajjadon/gitlore/raw/HEAD/media/screenshots/...` using the `repository` field in
+`package.json`, because the VS Code Marketplace itself doesn't resolve relative image paths — only
+GitHub's own README rendering does. Screenshots are excluded from the `.vsix` on purpose (see
+`.vscodeignore`): both GitHub and the Marketplace fetch them over HTTPS from the repo, so shipping
+copies inside the package would only add weight — **the images 404 on both until they're pushed to
+`master`.**
 
-| File | What must be visible |
-|---|---|
-| `inline-blame.png` | An editor with the end-of-line blame decoration on the current line, **and** the hover card open showing avatar, full message, both dates, and the diff stat. |
-| `commit-graph.png` | The GitLore panel with the commit graph: the toolbar (branch picker, filter box, commit count), branch/tag labels in the left column, the dashed **Working Changes** row at the top, and commit details loaded in the pane beside it. This is the hero image — make it the best one. |
-| `commit-details.png` | Commit details with the action bar (Copy SHA / Copy message / Open on…) and **at least one file expanded** so the diff gutter's old/new line numbers are clearly legible. |
-| `branch-comparison.png` | The comparison view showing both ref pickers, the swap button, and the Ahead / Behind / All Files tabs with their count badges. Pick two refs that actually differ so the counts aren't all zero. |
+## Before regenerating
 
-## Capturing
-
-- Use a **dark theme** (Dark Modern) — the icon and banner are dark, so it reads as one set.
-- Make the panel **taller than default** before shooting the graph; the default height crops the rows.
-- Target roughly **1600–2000px wide**. Retina captures are fine and look sharper on the Marketplace.
-- Crop to just the relevant UI. Don't include your whole desktop, other extensions' panels, or the
-  status bar of an unrelated project.
-- Use a repo with a few branches and merges — a single-lane linear graph undersells the feature.
 - Check for anything you don't want public: file paths, branch names, real commit messages, tokens
   in a visible `.env`. One of the earlier dev screenshots had `.env` contents on screen.
-
-## Where each one goes
-
-Save straight into this folder under the exact filename above — don't leave them on the Desktop or
-in `/var/folders`, where macOS deletes them and tooling can't read them:
-
-```bash
-mv ~/Desktop/Screenshot*.png media/screenshots/commit-graph.png
-```
-
-Each `<img>` tag already exists in `README.md`, wrapped in an HTML comment so the page doesn't
-render four broken-image icons while the files are missing. To publish one, delete the two wrapper
-lines around it:
-
-```html
-<!-- Screenshot pending. Delete this comment wrapper once ...      <- delete this line
-<img src="https://raw.githubusercontent.com/..." alt="..." />
--->                                                               <- and this one
-```
-
-Then commit and push to `master`. The URLs are absolute `raw.githubusercontent.com` links, so they
-only resolve after the push — not from a local file.
+- If `scripts/build-demo-repo.ts`'s content changes, re-check that `shoot-native-screenshots.ts`'s
+  hardcoded line numbers/text matchers (e.g. `goToLine(page, 8)`, the `hasText` filters) still point
+  at the right lines.

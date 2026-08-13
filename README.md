@@ -7,7 +7,8 @@
 **The story behind every line.**
 
 Free, local-first git insight inside VS Code — blame, history, an interactive commit graph,
-and branch comparison. No account, no paywall, no telemetry, no backend.
+branch comparison, a rebase editor, and a cross-repo PR triage board. No account, no paywall,
+no telemetry, no backend.
 
 </div>
 
@@ -21,7 +22,7 @@ It does that without leaving your editor, without signing in, and without sendin
 
 If you've used similar VS Code git extensions, GitLore covers the same core ground — inline blame, a commit graph, commit details, branch comparison — with every feature free and a deliberately smaller surface area. See [How it compares](#how-it-compares).
 
-> **Status: early but stable-channel.** Everything below works and is covered by tests — 495 unit tests and 91 integration tests against a real VS Code instance. It is still `0.x`, so expect breaking changes before `1.0`. Bug reports are very welcome.
+> **Status: early but stable-channel.** Everything below works and is covered by tests — 497 unit tests and 95 integration tests against a real VS Code instance. It is still `0.x`, so expect breaking changes before `1.0`. Bug reports are very welcome.
 
 ## Install
 
@@ -34,7 +35,7 @@ code --install-extension RajpratapsinghJadon.gitlore
 **From a `.vsix`** — grab one from [Releases](https://github.com/rajjadon/gitlore/releases), then:
 
 ```bash
-code --install-extension gitlore-0.3.1.vsix
+code --install-extension gitlore-0.4.0.vsix
 ```
 
 Requires **VS Code 1.85+** and `git` on your `PATH`. Works in Cursor and other VS Code-based editors.
@@ -59,7 +60,7 @@ The hover card also has **Compare** / **File History** / **Copy SHA** quick acti
 
 ### An interactive commit graph, in the panel
 
-<img src="media/screenshots/commit-graph.png" alt="The GitLore panel showing the commit graph with branch labels, a working-changes row, and commit details beside it" />
+<img src="media/screenshots/commit-graph.png" alt="The GitLore panel showing the commit graph with branch labels, a working-changes row, pull/push badges, and commit details beside it" />
 
 A repo-wide, branch-and-merge-aware graph — not a flat log. Branch, tag and remote-tracking labels are each styled distinctly, uncommitted work is pinned at the top as a **Working Changes** row, and the toolbar lets you scope to one branch, filter by message/author/SHA as you type, and refresh. Arrow keys move the selection; Enter opens the commit.
 
@@ -71,11 +72,11 @@ Pull and push buttons sit in the toolbar too, badged with how many commits you'r
 
 Each changed file is its own collapsible section holding only that file's hunks, with a filter box for large commits. Diffs show **old and new line numbers in a gutter** and tint changed lines, so you can see *which* line moved — and line numbers stay out of your text selection, so copying a diff gives you just the code.
 
-**Copy SHA**, **Copy message**, and **Open on GitHub/GitLab/Bitbucket** sit in the action bar. **Open changes** on any file row hands off to a real diff editor when you want syntax highlighting and folding.
+**Copy SHA**, **Copy message**, and **Open on GitHub/GitLab/Bitbucket** sit in the action bar. **Open changes** on any file row hands off to a real diff editor when you want syntax highlighting and folding. Commit messages also linkify issue references (`#123` by default) straight to your tracker — see [Issue and PR links](#also) below.
 
 ### Branch comparison without modal prompts
 
-<img src="media/screenshots/branch-comparison.png" alt="Branch comparison showing two ref pickers with a swap button and Ahead, Behind and All Files tabs with counts" />
+<img src="media/screenshots/branch-comparison.png" alt="Branch comparison showing two ref pickers with a swap button, Ahead/Behind/All Files tabs with counts, and Create PR and Open all changes buttons" />
 
 Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with counts. It opens on your current branch versus its upstream, so it's useful immediately — retarget either side in place. Diffs are taken against the merge-base, matching what a GitHub or GitLab pull request shows you.
 
@@ -83,22 +84,59 @@ Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with
 
 ### Launchpad — a cross-repo PR triage board (off by default)
 
+<img src="media/screenshots/launchpad.png" alt="Launchpad showing a six-column board: Needs Review, Ready to Merge, Waiting, Blocked, Drafts, and Snoozed, each with pull request cards" />
+
 The only GitLore feature that reaches beyond your local `.git` — everything else above works fully offline. **GitLore: Open Launchpad** opens a 6-column board (Needs Review, Ready to Merge, Waiting, Blocked, Drafts, Snoozed) pooling open PRs across every recognized remote in your workspace, so triaging what needs your attention doesn't mean tab-switching between repos and a browser.
 
 Not GitHub-only: GitHub, GitLab, Bitbucket, and Azure DevOps are supported out of the box, plus self-hosted or custom instances (GitHub Enterprise Server, Gitea, Forgejo, self-hosted GitLab) via `gitLore.launchpad.customHosts`. GitHub uses VS Code's own built-in sign-in; every other host needs a Personal Access Token, entered once and stored in VS Code's encrypted secret storage — never a GitLore backend, never a key GitLore itself handles.
 
 Off by default (`gitLore.launchpad.enabled`) — it's opt-in, same as AI, since it's the one feature that calls out to a remote host at all. Scans every remote on every repo in the workspace, not just `origin` (a fork's `upstream` included), deduped when two remotes point at the same actual repo. Once enabled, it's also one click away from the Commit Graph panel's toolbar, not just the Command Palette.
 
+### Sidebar Explorer — one tree for the whole repo
+
+<img src="media/screenshots/sidebar-explorer.png" alt="The GitLore Explorer sidebar showing Branches, Remotes, Tags, Stashes, Worktrees, and Contributors sections" />
+
+Branches, Remotes, Tags, Stashes, Worktrees, and Contributors, each a collapsible section, always visible in its own activity bar icon — no command needed to open it. Right-click a branch to **Checkout** or **Compare with Current Branch**; right-click a remote to **Open Remote in Browser**; right-click a stash to **Apply** or **Drop** (with confirmation — it can't be undone).
+
+### File History
+
+<img src="media/screenshots/file-history.png" alt="The File History panel listing every commit that touched the current file, newest first, with author and age" />
+
+Every commit that touched the current file, newest first, following renames, right in the Explorer sidebar — no separate view to open.
+
+### Visual File History
+
+<img src="media/screenshots/visual-file-history.png" alt="Visual File History showing an author-swimlane bubble timeline with additions and deletions bars beneath" />
+
+An author-swimlane bubble timeline as an alternative to the tree above: each commit is a bubble sized by how much it changed, positioned by author lane and by age, with additions/deletions bars beneath. Click a bubble to open that commit's details.
+
+### Interactive Rebase Editor
+
+<img src="media/screenshots/rebase-editor.png" alt="The Interactive Rebase Editor listing commits with pick, squash, and reword actions, drag handles, and Start Rebase / Abort buttons" />
+
+Reorder, reword, edit, squash, fixup, or drop commits with a real UI instead of hand-editing the `git rebase -i` todo file. **GitLore: Rebase Branch Interactively...** picks a target ref and starts one — or it just works if you already use `code --wait` as your own git `sequence.editor`. GitLore never runs `rebase`, `--abort`, `--continue`, or any reset/checkout command itself: it only ever reads, writes, and closes the one file git already opens for this.
+
+### Stale-code detector
+
+<img src="media/screenshots/stale-code.png" alt="A CodeLens reading 'Stale · last changed 1 year ago' above an untouched function, with no lens above a recently changed one" />
+
+A CodeLens above functions, methods, and classes untouched for longer than `gitLore.staleThresholdDays` (180 by default), reading how long it's been and who last touched it — click through straight to that commit. Nothing shows above code that's actually been touched recently, so the signal stays legible even in a large file.
+
+### Author ownership heatmap
+
+<img src="media/screenshots/ownership-heatmap.png" alt="The File Ownership quick pick showing each author's recency-weighted percentage and line count, with color marks in the editor's overview ruler" />
+
+An overview-ruler color mark per line, by that line's author (`gitLore.ownership.enabled`, off by default). **GitLore: Show File Ownership** adds a recency-weighted breakdown — who owns the file, not just who has the most raw lines, so a large old contribution doesn't outrank a smaller recent one.
+
+### Full-file blame heatmap
+
+<img src="media/screenshots/full-file-blame.png" alt="A hot-to-cold recency gradient as a colored left edge on every line of the file" />
+
+A hot-to-cold recency gradient as a left-edge mark per line, across the whole file (`gitLore.fullFileBlame.enabled`, off by default) — relative to the file's own age range, so even an entirely old file still shows which of its lines are relatively newer. Distinct from the current-line inline blame decoration and the ownership ruler above: a third, independent visual, not a mode of either.
+
 ### Also
 
-- **File history** — every commit that touched the current file, following renames, in the Explorer.
-- **Visual File History** — an author-swimlane bubble timeline of the current file: commit size, age, and additions/deletions at a glance, in the panel.
-- **Issue and PR links** — `#123` in a commit message becomes a link, auto-detected from your remote or pointed at any tracker (Jira included) via a regex and URL template.
-- **Stale-code detector** — a CodeLens above functions and methods untouched for longer than `gitLore.staleThresholdDays`, linking straight to the commit that last changed them.
-- **Author ownership heatmap** — an overview-ruler color mark per line, by that line's author (`gitLore.ownership.enabled`, off by default), plus **GitLore: Show File Ownership** for a recency-weighted breakdown of who owns the file.
-- **Full-file blame heatmap** — a hot-to-cold recency gradient as a left-edge mark per line, across the whole file (`gitLore.fullFileBlame.enabled`, off by default) — distinct from the current-line decoration and the ownership ruler above.
-- **Interactive Rebase Editor** — reorder, reword, edit, squash, fixup, or drop commits with a real UI instead of hand-editing the `git rebase -i` todo file. **GitLore: Rebase Branch Interactively...** starts one, or it just works if you already use `code --wait` as your `sequence.editor`. GitLore never runs `rebase`/`--abort`/`--continue` itself — only reads, writes, and closes the file git already opens.
-- **Sidebar Explorer** — Branches, Remotes, Tags, Stashes, Worktrees, and Contributors in one always-visible tree, in its own activity bar icon. Checkout or compare a branch, open a remote in your browser, apply or drop a stash, all from the right-click menu.
+- **Issue and PR links** — `#123` in a commit message becomes a link, auto-detected from your remote or pointed at any tracker (Jira included) via a regex and URL template. Visible inline wherever a commit message renders — no separate view of its own.
 
 ## Commands
 
@@ -161,11 +199,11 @@ No telemetry. No analytics. No account.
 
 GitLore is not trying to out-feature the bigger, paid alternatives — it's trying to be the free, fast, small part you actually use every day. Honest accounting:
 
-**What GitLore does** — inline blame and hover, status bar, file history, commit graph, commit details with per-file diffs, AI commit summaries, AI line explanations, branch comparison, issue linking. All free, forever.
+**What GitLore does** — inline blame and hover, status bar, file history (tree and visual), a self-refreshing commit graph with pull/push, commit details with per-file diffs, an interactive rebase editor, branch comparison, a repo-wide sidebar explorer, a cross-repo PR triage board, AI commit summaries, AI line explanations, stale-code detection, ownership and recency heatmaps, and issue linking. All free, forever.
 
 **What it deliberately doesn't** — staging, stashing or committing (that's VS Code's own Source Control view, and the graph links you there), and anything behind a sign-in.
 
-**What's missing for now** — a file-tree view of changed files, and graph auto-refresh. See the [changelog](CHANGELOG.md) for the current list.
+**What's missing for now** — a file-tree view of changed files (GitLore's diffs list files flat, not nested by folder). See the [changelog](CHANGELOG.md) for the current list.
 
 ## Contributing
 

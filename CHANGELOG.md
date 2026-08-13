@@ -6,6 +6,8 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-14
+
 ### Added
 
 **Visual File History** — a bubble timeline for the current file
