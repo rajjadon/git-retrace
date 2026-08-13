@@ -86,7 +86,7 @@ Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with
 
 <img src="media/screenshots/launchpad.png" alt="Launchpad showing a six-column board: Needs Review, Ready to Merge, Waiting, Blocked, Drafts, and Snoozed, each with pull request cards" />
 
-The only GitLore feature that reaches beyond your local `.git` — everything else above works fully offline. **GitLore: Open Launchpad** opens a 6-column board (Needs Review, Ready to Merge, Waiting, Blocked, Drafts, Snoozed) pooling open PRs across every recognized remote in your workspace, so triaging what needs your attention doesn't mean tab-switching between repos and a browser.
+The only GitLore feature that reaches beyond your local `.git` — everything else above works fully offline. **GitLore: Open Launchpad** opens an 8-column board (Needs Review, Ready to Merge, Waiting, Blocked, Drafts, Snoozed, Merged, Closed) pooling PRs across every recognized remote in your workspace, so triaging what needs your attention — and seeing what you've recently shipped — doesn't mean tab-switching between repos and a browser. **Merged** and **Closed** show your own most-recently-completed PRs; every card in an open column also gets a **Close PR** action (with a confirmation first) to close it on its host without merging, right from the board.
 
 Not GitHub-only: GitHub, GitLab, Bitbucket, and Azure DevOps are supported out of the box, plus self-hosted or custom instances (GitHub Enterprise Server, Gitea, Forgejo, self-hosted GitLab) via `gitLore.launchpad.customHosts`. GitHub uses VS Code's own built-in sign-in; every other host needs a Personal Access Token, entered once and stored in VS Code's encrypted secret storage — never a GitLore backend, never a key GitLore itself handles.
 

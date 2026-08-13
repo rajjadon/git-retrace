@@ -151,7 +151,8 @@ Extends existing hover/decoration/webview code already in the repo — no new vi
 
 ### Phase 7 — Launchpad (optional, last)
 The only feature that reaches beyond the local repo — needs PR/CI status, not just `git`. Not GitHub-only: GitHub, GitLab, Bitbucket, and Azure DevOps are all supported (each via its own `core/forge/*Client.ts`, the only place that touches that host's API), plus self-hosted/custom instances via `gitLore.launchpad.customHosts`. GitHub uses VS Code's built-in authentication session (`vscode.authentication.getSession('github', …)`); every other host needs a Personal Access Token stored in `context.secrets`. Never a GitLore backend or proxied key, for any host. Off by default (`gitLore.launchpad.enabled`) — the only feature that calls out to a remote host at all.
-- [x] **PR triage board** — Needs Review / Ready to Merge / Waiting / Blocked / Drafts / Snoozed, across the workspace's repos
+- [x] **PR triage board** — Needs Review / Ready to Merge / Waiting / Blocked / Drafts / Snoozed / Merged / Closed, across the workspace's repos
+- [x] **Close PR** — a per-card action (with a confirm dialog) that closes an open PR/MR on its host without merging, via each `ForgeClient`'s own write endpoint
 
 Do not start a phase until the previous phase is tested and merged.
 

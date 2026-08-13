@@ -26,12 +26,12 @@ function pr(overrides: Partial<PullRequestSummary> = {}): PullRequestSummary {
   };
 }
 
-test('renderLaunchpadHtml: renders all six columns in the roadmap-specified order, with counts', () => {
+test('renderLaunchpadHtml: renders all eight columns in the roadmap-specified order, with counts', () => {
   // At least one PR, so the board actually renders instead of the "nothing to show" empty state.
   const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'waiting' }];
   const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
   const titles = [...html.matchAll(/class="column-title">([^<]+)</g)].map((m) => m[1]);
-  assert.deepEqual(titles, ['Needs Review', 'Ready to Merge', 'Waiting', 'Blocked', 'Drafts', 'Snoozed']);
+  assert.deepEqual(titles, ['Needs Review', 'Ready to Merge', 'Waiting', 'Blocked', 'Drafts', 'Snoozed', 'Merged', 'Closed']);
 });
 
 test('renderLaunchpadHtml: places a PR card in its bucket\'s column with a count badge', () => {
@@ -75,6 +75,41 @@ test('renderLaunchpadHtml: a snoozed-column card is labeled "Unsnooze" instead o
   const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
   assert.match(html, /title="Unsnooze"/);
   assert.ok(!html.includes('title="Snooze"'));
+});
+
+test('renderLaunchpadHtml: the close button posts closePr with the PR\'s stable key and title', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'waiting' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /class="pr-card-close[^"]*" type="button" data-key="github:acme\/widgets#1" data-title="Add feature"/);
+  assert.match(html, /type: 'closePr', key: btn\.dataset\.key, title: btn\.dataset\.title/);
+});
+
+test('renderLaunchpadHtml: a merged card shows "merged <age>" using closedAt, not createdAt', () => {
+  const categorized: CategorizedPullRequest[] = [
+    { pr: pr({ createdAt: '2024-01-01T10:00:00Z', closedAt: '2024-02-02T10:00:00Z', merged: true }), bucket: 'merged' },
+  ];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /merged 2 days ago/);
+});
+
+test('renderLaunchpadHtml: a closed (not merged) card shows "closed <age>"', () => {
+  const categorized: CategorizedPullRequest[] = [
+    { pr: pr({ closedAt: '2024-02-02T10:00:00Z', merged: false }), bucket: 'closed' },
+  ];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /closed 2 days ago/);
+});
+
+test('renderLaunchpadHtml: merged/closed cards offer neither snooze nor close — nothing to do with a PR that is already done', () => {
+  const categorized: CategorizedPullRequest[] = [
+    { pr: pr({ number: 1, closedAt: '2024-02-02T10:00:00Z', merged: true }), bucket: 'merged' },
+    { pr: pr({ number: 2, closedAt: '2024-02-02T10:00:00Z', merged: false }), bucket: 'closed' },
+  ];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  // The client-side script's own `.pr-card-snooze`/`.pr-card-close` selectors are always present,
+  // so check for the rendered element (`class="..."`), not the bare class name.
+  assert.ok(!html.includes('class="pr-card-snooze'));
+  assert.ok(!html.includes('class="pr-card-close'));
 });
 
 test('renderLaunchpadHtml: shows a per-repo error banner without failing the whole board', () => {

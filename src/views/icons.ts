@@ -115,3 +115,4 @@ export const ARROW_UP_ICON = icon('<path d="M8 13V4.5" /><path d="M4.5 7.5 8 4l3
 
 /** Snooze a Launchpad card — a simple clock face, echoing "come back to this later". */
 export const SNOOZE_ICON = icon('<circle cx="8" cy="8.5" r="5.3" /><path d="M8 5.7v3l2 1.2" /><path d="M6 1.5h4" />', 'action-icon', 12);
+export const CLOSE_ICON = icon('<path d="M4 4l8 8" /><path d="M12 4l-8 8" />', 'action-icon', 12);

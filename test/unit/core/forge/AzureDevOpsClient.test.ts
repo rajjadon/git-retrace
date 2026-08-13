@@ -207,3 +207,40 @@ test('listOpenPullRequests: a failed list request returns an empty array, not a 
   const client = new AzureDevOpsClient('pat', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
   assert.deepEqual(await client.listOpenPullRequests(REPO), []);
 });
+
+test('listRecentlyClosedPullRequests: combines completed and abandoned, tagging each with the right merged flag', async () => {
+  const client = new AzureDevOpsClient('pat', (async (url: string) => {
+    if (url.includes('searchCriteria.status=completed')) {
+      return jsonResponse({
+        value: [{ pullRequestId: 40, title: 'Shipped', createdBy: { uniqueName: 'raj@acme.com' }, creationDate: 'c' }],
+      });
+    }
+    if (url.includes('searchCriteria.status=abandoned')) {
+      return jsonResponse({
+        value: [{ pullRequestId: 41, title: 'Abandoned', createdBy: { uniqueName: 'raj@acme.com' }, creationDate: 'c' }],
+      });
+    }
+    throw new Error(`unmocked request: ${url}`);
+  }) as unknown as typeof fetch);
+  const result = await client.listRecentlyClosedPullRequests(REPO);
+  assert.equal(result.length, 2);
+  assert.equal(result.find((r) => r.number === 40)?.merged, true);
+  assert.equal(result.find((r) => r.number === 41)?.merged, false);
+});
+
+test('closePullRequest: PATCHes status=abandoned to the pull request endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new AzureDevOpsClient('pat', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.closePullRequest(REPO, 42);
+  assert.equal(
+    capturedUrl,
+    `https://dev.azure.com/acme/Widgets/_apis/git/repositories/widgets-api/pullrequests/42?api-version=7.1`,
+  );
+  assert.equal(capturedInit?.method, 'PATCH');
+  assert.equal(capturedInit?.body, JSON.stringify({ status: 'abandoned' }));
+});

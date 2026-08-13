@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { categorizePullRequests } from '../../../../src/core/forge/categorize';
+import { categorizeClosedPullRequests, categorizePullRequests } from '../../../../src/core/forge/categorize';
 import type { ForgeRepoRef, PullRequestSummary } from '../../../../src/core/forge/types';
 
 const REPO: ForgeRepoRef = { host: 'github', identity: 'acme/widgets', label: 'acme/widgets' };
@@ -111,6 +111,24 @@ test('categorizePullRequests: a completed review (no longer in requestedReviewer
     [pr({ authorLogin: 'someone-else', requestedReviewers: [], reviewDecision: 'reviewRequired', checkStatus: 'pending' })],
     ME,
     neverSnoozed,
+  );
+  assert.deepEqual(result, []);
+});
+
+test('categorizeClosedPullRequests: a merged PR lands in "merged"', () => {
+  const result = categorizeClosedPullRequests([pr({ merged: true, closedAt: '2024-01-05T00:00:00Z' })], ME);
+  assert.equal(result[0]?.bucket, 'merged');
+});
+
+test('categorizeClosedPullRequests: a closed-without-merging PR lands in "closed"', () => {
+  const result = categorizeClosedPullRequests([pr({ merged: false, closedAt: '2024-01-05T00:00:00Z' })], ME);
+  assert.equal(result[0]?.bucket, 'closed');
+});
+
+test('categorizeClosedPullRequests: excludes PRs authored by someone else, even if I reviewed them', () => {
+  const result = categorizeClosedPullRequests(
+    [pr({ authorLogin: 'someone-else', requestedReviewers: [ME], merged: true, closedAt: '2024-01-05T00:00:00Z' })],
+    ME,
   );
   assert.deepEqual(result, []);
 });

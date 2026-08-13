@@ -200,3 +200,40 @@ test('listOpenPullRequests: a failed list request returns an empty array, not a 
   const client = new BitbucketClient(BASE, 'tok', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
   assert.deepEqual(await client.listOpenPullRequests(REPO), []);
 });
+
+test('listRecentlyClosedPullRequests: combines MERGED and DECLINED, tagging each with the right merged flag', async () => {
+  const client = new BitbucketClient(BASE, 'tok', (async (url: string) => {
+    if (url.includes('state=MERGED')) {
+      return jsonResponse({
+        values: [
+          { id: 30, title: 'Shipped', links: { html: { href: 'u1' } }, author: { username: 'raj' }, created_on: 'c', updated_on: 'u' },
+        ],
+      });
+    }
+    if (url.includes('state=DECLINED')) {
+      return jsonResponse({
+        values: [
+          { id: 31, title: 'Declined', links: { html: { href: 'u2' } }, author: { username: 'raj' }, created_on: 'c', updated_on: 'u' },
+        ],
+      });
+    }
+    throw new Error(`unmocked request: ${url}`);
+  }) as unknown as typeof fetch);
+  const result = await client.listRecentlyClosedPullRequests(REPO);
+  assert.equal(result.length, 2);
+  assert.equal(result.find((r) => r.number === 30)?.merged, true);
+  assert.equal(result.find((r) => r.number === 31)?.merged, false);
+});
+
+test('closePullRequest: POSTs to the decline endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new BitbucketClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.closePullRequest(REPO, 32);
+  assert.equal(capturedUrl, 'https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests/32/decline');
+  assert.equal(capturedInit?.method, 'POST');
+});
