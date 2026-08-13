@@ -20,9 +20,14 @@ const WELL_KNOWN_HOSTS: Record<string, Omit<DetectedForgeHost, 'displayHost'>> =
   'bitbucket.org': { flavor: 'bitbucket', apiBaseUrl: 'https://api.bitbucket.org/2.0' },
 };
 
-/** `dev.azure.com` and the legacy `<org>.visualstudio.com` both identify an Azure DevOps remote — the API itself is always served from `dev.azure.com`, regardless of which form the remote URL used. */
+/**
+ * `dev.azure.com` (HTTPS), `ssh.dev.azure.com` (the SSH remote form — `git@ssh.dev.azure.com:v3/...`,
+ * a distinct hostname from the HTTPS one), and the legacy `<org>.visualstudio.com` all identify an
+ * Azure DevOps remote — the API itself is always served from `dev.azure.com`, regardless of which
+ * form the remote URL used.
+ */
 function isAzureDevOpsHost(host: string): boolean {
-  return host === 'dev.azure.com' || host.endsWith('.visualstudio.com');
+  return host === 'dev.azure.com' || host === 'ssh.dev.azure.com' || host.endsWith('.visualstudio.com');
 }
 
 /**
@@ -37,7 +42,11 @@ function isAzureDevOpsHost(host: string): boolean {
 export function detectForgeHost(host: string, customHosts: ForgeHostConfig[]): DetectedForgeHost | null {
   const normalized = host.toLowerCase();
   if (isAzureDevOpsHost(normalized)) {
-    return { flavor: 'azureDevOps', apiBaseUrl: 'https://dev.azure.com', displayHost: host };
+    // The SSH remote hostname is never where a user would go to generate a PAT, and it's not a
+    // distinct credential from the HTTPS form of the same org — normalize so a token entered once
+    // for one remote form is reused for the other, instead of prompting twice for the same org.
+    const displayHost = normalized === 'ssh.dev.azure.com' ? 'dev.azure.com' : host;
+    return { flavor: 'azureDevOps', apiBaseUrl: 'https://dev.azure.com', displayHost };
   }
   const wellKnown = WELL_KNOWN_HOSTS[normalized];
   if (wellKnown) {

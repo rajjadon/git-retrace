@@ -35,6 +35,14 @@ test('detectForgeHost: dev.azure.com needs no configuration', () => {
   });
 });
 
+test('detectForgeHost: the SSH ssh.dev.azure.com host is also Azure DevOps, normalized to the dev.azure.com display host', () => {
+  assert.deepEqual(detectForgeHost('ssh.dev.azure.com', []), {
+    flavor: 'azureDevOps',
+    apiBaseUrl: 'https://dev.azure.com',
+    displayHost: 'dev.azure.com',
+  });
+});
+
 test('detectForgeHost: the legacy <org>.visualstudio.com form is also Azure DevOps', () => {
   const result = detectForgeHost('acme.visualstudio.com', []);
   assert.equal(result?.flavor, 'azureDevOps');

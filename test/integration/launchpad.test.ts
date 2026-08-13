@@ -137,6 +137,45 @@ suite('Launchpad', () => {
       }),
     ));
 
+  test('enabled, with an Azure DevOps SSH remote (git@ssh.dev.azure.com:v3/org/project/repo): fetches and renders real PR data', async () =>
+    withLaunchpadEnabled(() =>
+      withRemote('origin', 'git@ssh.dev.azure.com:v3/GoFynd/FyndOne/Boltic', async () => {
+        api.launchpadProvider.setFetchImplForTest((async (url: string) => {
+          if (url.includes('app.vssps.visualstudio.com')) {
+            return jsonResponse({ emailAddress: 'raj@example.com' });
+          }
+          if (url.includes('/pullrequests?searchCriteria.status=active')) {
+            return jsonResponse({
+              value: [
+                {
+                  pullRequestId: 5,
+                  title: 'Azure DevOps PR',
+                  createdBy: { uniqueName: 'raj@example.com' },
+                  creationDate: '2024-01-01T00:00:00Z',
+                  reviewers: [],
+                },
+              ],
+            });
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Azure DevOps PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        const html = api.getLaunchpadHtml() ?? '';
+        assert.match(html, /Azure DevOps PR/);
+        assert.match(html, /GoFynd\/FyndOne\/Boltic/);
+      }),
+    ));
+
   test('with remotes on two different repos (origin + upstream): both are scanned and both PRs render', async () =>
     withLaunchpadEnabled(() =>
       withRemote('origin', 'https://gitlab.com/acme/widgets.git', () =>

@@ -43,6 +43,14 @@ test('resolveForgeRepoRef: an Azure DevOps remote resolves to organization/proje
   });
 });
 
+test('resolveForgeRepoRef: an Azure DevOps SSH remote (git@ssh.dev.azure.com:v3/org/project/repo) resolves too', () => {
+  assert.deepEqual(resolveForgeRepoRef('git@ssh.dev.azure.com:v3/GoFynd/FyndOne/Boltic', []), {
+    host: 'azureDevOps',
+    identity: 'GoFynd/FyndOne/Boltic',
+    label: 'GoFynd/FyndOne/Boltic',
+  });
+});
+
 test('resolveForgeRepoRef: an unrecognized, unconfigured host returns null', () => {
   assert.equal(resolveForgeRepoRef('https://git.acme.internal/acme/widgets.git', []), null);
 });
