@@ -52,10 +52,12 @@ function renderTotals(files: FileChange[]): string {
 }
 
 /**
- * The commit's action bar. Every action here is read-only: copying, or opening a view. Cherry-pick,
- * revert and branch-from-here are deliberately absent — a single click in a panel is the wrong
- * affordance for rewriting history, and §13's error taxonomy has no good answer for a mutation
- * that half-succeeds.
+ * The commit's action bar. Copy/open actions are read-only; Summarize is the one exception — it
+ * calls out to whatever language model the user has configured — but it's still non-destructive
+ * (unlike cherry-pick, revert, or branch-from-here, deliberately absent: a single click in a panel
+ * is the wrong affordance for rewriting history), so it earns a place in the same row rather than
+ * a separate section. It keeps the accent treatment so it still reads as the one AI action here,
+ * not just another utility button.
  */
 function renderActions(commit: CommitDetail, remote: RemoteTarget | null | undefined): string {
   const openOnRemote = remote
@@ -66,6 +68,7 @@ function renderActions(commit: CommitDetail, remote: RemoteTarget | null | undef
 <button class="btn" id="copy-sha" type="button">${COPY_ICON}Copy SHA</button>
 <button class="btn" id="copy-message" type="button">${MESSAGE_ICON}Copy message</button>
 ${openOnRemote}
+<button class="btn btn-accent" id="explain-commit" type="button" title="Summarize this commit with AI">${AI_ICON}Summarize</button>
 </div>`;
 }
 
@@ -99,11 +102,7 @@ ${styles}
 </div>
 ${renderActions(commit, opts.remote)}
 ${bodyRest ? `<pre class="commit-body">${linkifyHtml(bodyRest, opts.issueLinking)}</pre>` : ''}
-<div class="section-head">
-${AI_ICON}<span class="section-title">AI Summary</span>
-</div>
 <div class="ai-summary">
-<button class="btn btn-accent" id="explain-commit" type="button">${AI_ICON}Summarize with AI</button>
 <p class="ai-summary-text" id="ai-summary-text" aria-live="polite" hidden></p>
 <p class="ai-summary-hint" id="ai-summary-hint" role="status" hidden></p>
 </div>

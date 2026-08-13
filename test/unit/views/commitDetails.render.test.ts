@@ -194,22 +194,23 @@ test('renderCommitDetailsHtml: numbers the diff gutter from the hunk header', ()
   assert.match(html, /<span class="dn dn-old"><\/span><span class="dn dn-new">3<\/span><span class="dc diff-add">\+line three</);
 });
 
-test('renderCommitDetailsHtml: offers a Summarize with AI button that posts explainCommit', () => {
+test('renderCommitDetailsHtml: offers a Summarize button that posts explainCommit', () => {
   const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
-  assert.match(html, /id="explain-commit" type="button">.*?Summarize with AI<\/button>/s);
+  assert.match(html, /id="explain-commit" type="button"[^>]*>.*?Summarize<\/button>/s);
   assert.match(html, /type: 'explainCommit'/);
 });
 
-test('renderCommitDetailsHtml: the Summarize with AI button carries the accent treatment, unlike the copy/open actions', () => {
+test('renderCommitDetailsHtml: the Summarize button sits in the same action bar as copy/open, with the accent treatment to still stand out', () => {
   const remote = { label: 'GitHub', url: 'https://github.com/o/r/commit/x' };
   const html = renderCommitDetailsHtml({ commit, files, diff, now }, { ...opts, remote });
+  assert.match(html, /<div class="actions">[\s\S]*id="copy-sha"[\s\S]*id="copy-message"[\s\S]*id="open-remote"[\s\S]*id="explain-commit"[\s\S]*<\/div>/);
   assert.match(html, /class="btn btn-accent" id="explain-commit"/);
   assert.match(html, /class="btn" id="copy-sha"/);
   assert.match(html, /class="btn" id="copy-message"/);
   assert.match(html, /class="btn" id="open-remote"/);
 });
 
-test('renderCommitDetailsHtml: clicking Summarize with AI shows a "Generating…" hint until content arrives', () => {
+test('renderCommitDetailsHtml: clicking Summarize shows a "Generating…" hint until content arrives', () => {
   // Regression: the click handler used to leave the summary paragraph empty with zero feedback
   // until the first chunk streamed in — the same "did my click even register?" gap already fixed
   // for the hover's line-explanation flow.
