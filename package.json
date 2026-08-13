@@ -108,6 +108,11 @@
         "command": "gitLore.toggleFullFileBlame",
         "title": "GitLore: Toggle Full-File Blame Heatmap",
         "icon": "$(flame)"
+      },
+      {
+        "command": "gitLore.openLaunchpad",
+        "title": "GitLore: Open Launchpad",
+        "icon": "$(rocket)"
       }
     ],
     "viewsContainers": {
@@ -382,6 +387,35 @@
           "type": "boolean",
           "default": true,
           "description": "Use GitLore's Interactive Rebase Editor for git-rebase-todo files. When disabled, they open in the default text editor."
+        },
+        "gitLore.launchpad.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable Launchpad, the cross-repo PR triage board. Off by default — it's the only GitLore feature that calls out to a remote host (GitHub, GitLab, Bitbucket, Azure DevOps, or a configured custom instance) rather than working entirely from your local .git."
+        },
+        "gitLore.launchpad.customHosts": {
+          "type": "array",
+          "default": [],
+          "description": "Self-hosted or custom git-forge instances Launchpad can't recognize by hostname alone (GitHub Enterprise Server, Gitea, Forgejo, self-hosted GitLab, etc). Each entry maps a hostname to which of the four API shapes it speaks and its API base URL.",
+          "items": {
+            "type": "object",
+            "required": ["hostname", "flavor", "apiBaseUrl"],
+            "properties": {
+              "hostname": {
+                "type": "string",
+                "description": "The git remote's hostname, e.g. \"github.acme.com\"."
+              },
+              "flavor": {
+                "type": "string",
+                "enum": ["github", "gitlab", "bitbucket", "azureDevOps"],
+                "description": "Which API shape this host speaks. Gitea/Forgejo are API-compatible with GitHub, so use \"github\" for those."
+              },
+              "apiBaseUrl": {
+                "type": "string",
+                "description": "The API base URL, e.g. \"https://github.acme.com/api/v3\" or \"https://gitlab.acme.com/api/v4\"."
+              }
+            }
+          }
         }
       }
     }

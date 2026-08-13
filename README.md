@@ -21,7 +21,7 @@ It does that without leaving your editor, without signing in, and without sendin
 
 If you've used similar VS Code git extensions, GitLore covers the same core ground — inline blame, a commit graph, commit details, branch comparison — with every feature free and a deliberately smaller surface area. See [How it compares](#how-it-compares).
 
-> **Status: early but stable-channel.** Everything below works and is covered by tests — 207 unit tests and 32 integration tests against a real VS Code instance. It is still `0.x`, so expect breaking changes before `1.0`. Bug reports are very welcome.
+> **Status: early but stable-channel.** Everything below works and is covered by tests — 495 unit tests and 91 integration tests against a real VS Code instance. It is still `0.x`, so expect breaking changes before `1.0`. Bug reports are very welcome.
 
 ## Install
 
@@ -63,6 +63,8 @@ The hover card also has **Compare** / **File History** / **Copy SHA** quick acti
 
 A repo-wide, branch-and-merge-aware graph — not a flat log. Branch, tag and remote-tracking labels are each styled distinctly, uncommitted work is pinned at the top as a **Working Changes** row, and the toolbar lets you scope to one branch, filter by message/author/SHA as you type, and refresh. Arrow keys move the selection; Enter opens the commit.
 
+Pull and push buttons sit in the toolbar too, badged with how many commits you're behind/ahead of the upstream (hidden when there's no upstream to compare against) — both run in a real terminal, so you see prompts and conflicts instead of them failing silently. The graph also auto-refreshes on any external `git pull`/push/checkout, not just its own buttons.
+
 ### Commit details you can act on
 
 <img src="media/screenshots/commit-details.png" alt="Commit details showing the action bar and a per-file collapsible diff with old and new line numbers in a gutter" />
@@ -78,6 +80,14 @@ Each changed file is its own collapsible section holding only that file's hunks,
 Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with counts. It opens on your current branch versus its upstream, so it's useful immediately — retarget either side in place. Diffs are taken against the merge-base, matching what a GitHub or GitLab pull request shows you.
 
 **Create PR** opens your host's compare/create-PR page pre-filled with both branches (GitHub, GitLab, Bitbucket — hidden on hosts GitLore doesn't recognize, rather than guessing a URL that might 404). **Open all changes** opens every changed file's diff at once instead of one at a time, all against the same common base.
+
+### Launchpad — a cross-repo PR triage board (off by default)
+
+The only GitLore feature that reaches beyond your local `.git` — everything else above works fully offline. **GitLore: Open Launchpad** opens a 6-column board (Needs Review, Ready to Merge, Waiting, Blocked, Drafts, Snoozed) pooling open PRs across every recognized remote in your workspace, so triaging what needs your attention doesn't mean tab-switching between repos and a browser.
+
+Not GitHub-only: GitHub, GitLab, Bitbucket, and Azure DevOps are supported out of the box, plus self-hosted or custom instances (GitHub Enterprise Server, Gitea, Forgejo, self-hosted GitLab) via `gitLore.launchpad.customHosts`. GitHub uses VS Code's own built-in sign-in; every other host needs a Personal Access Token, entered once and stored in VS Code's encrypted secret storage — never a GitLore backend, never a key GitLore itself handles.
+
+Off by default (`gitLore.launchpad.enabled`) — it's opt-in, same as AI, since it's the one feature that calls out to a remote host at all.
 
 ### Also
 
@@ -112,6 +122,7 @@ Every command is also a title-bar button in the GitLore panel.
 | `GitLore: Drop Stash` | Permanently delete the selected stash, after confirming (from the Explorer's context menu) |
 | `GitLore: Step Through This Line's History` | Move the hover's line-history stepper (from the hover's Older/prev/next links) |
 | `GitLore: Toggle Full-File Blame Heatmap` | Turn the whole-file recency gradient on or off |
+| `GitLore: Open Launchpad` | Open the cross-repo PR triage board (needs `gitLore.launchpad.enabled`) |
 
 ## Settings
 
@@ -131,6 +142,8 @@ Every command is also a title-bar button in the GitLore panel.
 | `gitLore.issueLinking.enabled` | boolean | `true` | Auto-link issue/PR references in commit messages. |
 | `gitLore.issueLinking.pattern` | string | `"#(\\d+)"` | Regex matching issue references. The first capture group (or the whole match) fills `{issue}` in the URL template. |
 | `gitLore.issueLinking.urlTemplate` | string | `""` | `{issue}`-templated issue URL. Empty = auto-detect from the repo's GitHub/GitLab remote. |
+| `gitLore.launchpad.enabled` | boolean | `false` | Enable Launchpad, the cross-repo PR triage board. The only setting that makes GitLore call out to a remote host. |
+| `gitLore.launchpad.customHosts` | array | `[]` | Self-hosted/custom git-forge instances (GitHub Enterprise Server, Gitea, Forgejo, self-hosted GitLab) Launchpad can't recognize by hostname alone. Each entry: `{ hostname, flavor, apiBaseUrl }`. |
 
 ## Privacy
 
@@ -139,6 +152,8 @@ GitLore runs entirely locally. Your git data never leaves your machine.
 The one network request it makes on its own: author avatars from `gravatar.com`, keyed by an MD5 hash of the commit email — that's Gravatar's own lookup spec, not a security-relevant use of the hash.
 
 A few things open your browser, and only when you click them: **Open on GitHub/GitLab/Bitbucket**, **Create PR**, **Open Remote in Browser**, and issue links. Every one of those URLs is built locally from your git remote; GitLore doesn't contact the host to construct them.
+
+**Launchpad is the one exception to "everything is local"** — it's off by default (`gitLore.launchpad.enabled`), and only fetches PR data from hosts you've explicitly authenticated with (VS Code's own GitHub sign-in, or a Personal Access Token you provide for anything else, stored in VS Code's encrypted secret storage). No GitLore backend ever sees your code, your token, or your PR data — GitLore talks directly to the host you configured.
 
 No telemetry. No analytics. No account.
 

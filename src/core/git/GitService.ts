@@ -57,9 +57,6 @@ export class GitService {
   // A directory's repo root never changes for the lifetime of the process — safe to memoize
   // indefinitely, and worth it since decoration updates call getRepoRoot on every line move.
   private readonly repoRootByDir = new Map<string, string | null>();
-  // Remotes essentially never change mid-session — worth caching since issue linking
-  // resolves this on every hover/commit-details render.
-  private readonly remoteUrlByRoot = new Map<string, string | null>();
 
   constructor(private readonly logger?: GitLogger) {}
 
@@ -572,20 +569,13 @@ export class GitService {
     if (!repoRoot) {
       return null;
     }
-    const cacheKey = `${repoRoot}:${remoteName}`;
-    if (this.remoteUrlByRoot.has(cacheKey)) {
-      return this.remoteUrlByRoot.get(cacheKey) ?? null;
-    }
-    let url: string | null;
     try {
       const git = this.gitFor(repoRoot);
-      url = (await git.raw(['remote', 'get-url', remoteName])).trim() || null;
+      return (await git.raw(['remote', 'get-url', remoteName])).trim() || null;
     } catch {
       // Expected when there's no such remote — silent, not an error.
-      url = null;
+      return null;
     }
-    this.remoteUrlByRoot.set(cacheKey, url);
-    return url;
   }
 
   /** Checks out a local branch, for the Sidebar Explorer's "Checkout" action. Throws on conflicts (e.g. dirty working tree) — the caller surfaces the message, GitLore doesn't force or stash on the user's behalf. */

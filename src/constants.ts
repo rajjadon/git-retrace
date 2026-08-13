@@ -24,6 +24,7 @@ export const COMMANDS = {
   dropStash: 'gitLore.dropStash',
   stepLineHistory: 'gitLore.stepLineHistory',
   toggleFullFileBlame: 'gitLore.toggleFullFileBlame',
+  openLaunchpad: 'gitLore.openLaunchpad',
 } as const;
 
 export const CONFIG = {
@@ -47,6 +48,8 @@ export const CONFIG = {
   aiModelFamily: 'ai.modelFamily',
   aiMaxDiffChars: 'ai.maxDiffChars',
   rebaseEditorEnabled: 'rebaseEditor.enabled',
+  launchpadEnabled: 'launchpad.enabled',
+  launchpadCustomHosts: 'launchpad.customHosts',
 } as const;
 
 export const VIEWS = {
@@ -57,6 +60,8 @@ export const VIEWS = {
   visualFileHistory: 'gitLore.visualFileHistory',
   rebaseEditor: 'gitLore.rebaseEditor',
   explorer: 'gitLore.explorer',
+  /** Not registered via `contributes.views` — created imperatively with `createWebviewPanel` (a full editor-area tab, like Rebase Editor, not a docked panel), so this id is only ever used internally. */
+  launchpad: 'gitLore.launchpad',
 } as const;
 
 /**
@@ -72,6 +77,7 @@ export const MEDIA = {
   branchComparison: 'branchComparison.css',
   visualFileHistory: 'visualFileHistory.css',
   rebaseEditor: 'rebaseEditor.css',
+  launchpad: 'launchpad.css',
   panelIcon: 'panel-icon.svg',
 } as const;
 

@@ -5,6 +5,8 @@ import { escapeHtml } from '../escapeHtml';
 import { buildGravatarUrl } from '../../utils/gravatar';
 import { chartCssVarForIndex } from '../../utils/colors';
 import {
+  ARROW_DOWN_ICON,
+  ARROW_UP_ICON,
   AUTHOR_ICON,
   BRANCH_ICON,
   CLOCK_ICON,
@@ -168,6 +170,27 @@ function renderRefPicker(branches: BranchInfo[], currentRef: string): string {
   return `<span class="ref-picker">${BRANCH_ICON}<select id="ref-filter" aria-label="Scope the graph to a branch">${option('', 'All branches')}${group('Local', local)}${group('Remote', remote)}</select></span>`;
 }
 
+/**
+ * Pull/push buttons for the checked-out branch, each badged with its ahead/behind count against
+ * the upstream. Hidden entirely when the current branch has no upstream at all — `ahead`/`behind`
+ * are only ever present on `BranchInfo` when `%(upstream:track)` actually resolved one (see
+ * `parseUpstreamTrack`), so "no upstream" and "up to date" (0/0) are distinguishable here.
+ */
+function renderSyncButtons(branches: BranchInfo[]): string {
+  const current = branches.find((b) => b.isCurrent && !b.isRemote);
+  if (!current || (current.ahead === undefined && current.behind === undefined)) {
+    return '';
+  }
+  const behind = current.behind ?? 0;
+  const ahead = current.ahead ?? 0;
+  const pullBadge = behind > 0 ? `<span class="sync-badge">${behind}</span>` : '';
+  const pushBadge = ahead > 0 ? `<span class="sync-badge">${ahead}</span>` : '';
+  const pullLabel = behind > 0 ? `Pull ${behind} ${behind === 1 ? 'commit' : 'commits'}` : 'Pull — up to date';
+  const pushLabel = ahead > 0 ? `Push ${ahead} ${ahead === 1 ? 'commit' : 'commits'}` : 'Push — nothing to push';
+  return `<button id="pull" class="icon-btn" type="button" title="${escapeHtml(pullLabel)}" aria-label="${escapeHtml(pullLabel)}">${ARROW_DOWN_ICON}${pullBadge}</button>
+<button id="push" class="icon-btn" type="button" title="${escapeHtml(pushLabel)}" aria-label="${escapeHtml(pushLabel)}">${ARROW_UP_ICON}${pushBadge}</button>`;
+}
+
 /** The `+added ~modified -deleted` badge — counted by file, so the three numbers sum to the file count. */
 function renderWorkingChangeBadges(changes: WorkingChanges): string {
   const parts: string[] = [];
@@ -257,6 +280,7 @@ ${styles}
 ${renderRefPicker(branches, currentRef)}
 <span class="search">${SEARCH_ICON}<input id="search" type="search" placeholder="Filter by message, author, or SHA" aria-label="Filter commits by message, author, or SHA" autocomplete="off" spellcheck="false" /></span>
 <span class="count" id="count" aria-live="polite">${nodes.length} ${nodes.length === 1 ? 'commit' : 'commits'}</span>
+${renderSyncButtons(branches)}
 <button id="refresh" class="icon-btn" type="button" title="Refresh" aria-label="Refresh the commit graph">${REFRESH_ICON}</button>
 </div>
 <div class="grid" role="grid" aria-label="Commit graph" aria-rowcount="${nodes.length + (hasWip ? 1 : 0)}">
@@ -440,6 +464,13 @@ document.getElementById('ref-filter').addEventListener('change', (e) => {
 
 document.getElementById('refresh').addEventListener('click', () => {
   vscode.postMessage({ type: 'refresh' });
+});
+
+document.getElementById('pull')?.addEventListener('click', () => {
+  vscode.postMessage({ type: 'pull' });
+});
+document.getElementById('push')?.addEventListener('click', () => {
+  vscode.postMessage({ type: 'push' });
 });
 </script>
 </body>

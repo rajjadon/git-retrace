@@ -106,3 +106,12 @@ export const DRAG_HANDLE_ICON = icon(
 
 export const CHEVRON_UP_ICON = icon('<path d="M3.5 10.5 8 5.5l4.5 5" />', 'action-icon', 12);
 export const CHEVRON_DOWN_ICON = icon('<path d="M3.5 5.5 8 10.5l4.5-5" />', 'action-icon', 12);
+
+/** Pull — incoming commits, drawn as an arrow landing (stem + head, not a bare chevron like the rebase reorder buttons, so the two read as different actions at a glance). */
+export const ARROW_DOWN_ICON = icon('<path d="M8 3v8.5" /><path d="M4.5 8.5 8 12l3.5-3.5" />', 'toolbar-icon', 13);
+
+/** Push — outgoing commits. */
+export const ARROW_UP_ICON = icon('<path d="M8 13V4.5" /><path d="M4.5 7.5 8 4l3.5 3.5" />', 'toolbar-icon', 13);
+
+/** Snooze a Launchpad card — a simple clock face, echoing "come back to this later". */
+export const SNOOZE_ICON = icon('<circle cx="8" cy="8.5" r="5.3" /><path d="M8 5.7v3l2 1.2" /><path d="M6 1.5h4" />', 'action-icon', 12);

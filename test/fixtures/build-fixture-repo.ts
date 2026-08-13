@@ -307,3 +307,53 @@ export function buildLineHistoryFixtureRepo(): LineHistoryFixtureManifest {
 
   return { repoRoot, trackedFile, line: 1, commits };
 }
+
+export interface SyncFixtureManifest {
+  repoRoot: string;
+  trackedFile: string;
+  /** Commits `main` has that its upstream doesn't. */
+  ahead: number;
+  /** Commits the upstream has that `main` doesn't. */
+  behind: number;
+}
+
+/**
+ * A repo whose checked-out branch has a real, divergent upstream — for the commit graph's
+ * pull/push ahead/behind badges. Uses a second *local* branch as the upstream (via
+ * `git branch --set-upstream-to`) rather than a real or bare remote: git's ahead/behind
+ * accounting (`%(upstream:track)`) works identically either way, and this avoids standing up an
+ * actual remote just to exercise it.
+ */
+export function buildSyncFixtureRepo(): SyncFixtureManifest {
+  const repoRoot = mkdtempSync(join(tmpdir(), 'gitlore-sync-fixture-'));
+  git(repoRoot, ['init', '-q', '-b', 'main']);
+  git(repoRoot, ['config', 'user.name', 'Raj Jadon']);
+  git(repoRoot, ['config', 'user.email', 'raj@example.com']);
+
+  const trackedFile = join(repoRoot, 'tracked.txt');
+  writeFileSync(trackedFile, 'line one\n');
+  git(repoRoot, ['add', 'tracked.txt']);
+  git(repoRoot, ['commit', '-q', '-m', 'base commit'], commitEnv('Raj Jadon', 'raj@example.com', '2024-01-01T10:00:00'));
+
+  git(repoRoot, ['branch', 'pretend-origin-main']);
+  git(repoRoot, ['branch', '--set-upstream-to=pretend-origin-main', 'main']);
+
+  const ahead = 2;
+  for (let i = 0; i < ahead; i++) {
+    writeFileSync(trackedFile, `line one\nahead ${i}\n`);
+    git(repoRoot, ['add', 'tracked.txt']);
+    git(repoRoot, ['commit', '-q', '-m', `ahead commit ${i}`], commitEnv('Raj Jadon', 'raj@example.com', `2024-01-0${2 + i}T10:00:00`));
+  }
+
+  const behind = 3;
+  git(repoRoot, ['checkout', '-q', 'pretend-origin-main']);
+  const behindFile = join(repoRoot, 'behind.txt');
+  for (let i = 0; i < behind; i++) {
+    writeFileSync(behindFile, `behind ${i}\n`);
+    git(repoRoot, ['add', 'behind.txt']);
+    git(repoRoot, ['commit', '-q', '-m', `behind commit ${i}`], commitEnv('Amy Dev', 'amy@example.com', `2024-02-0${i + 1}T10:00:00`));
+  }
+  git(repoRoot, ['checkout', '-q', 'main']);
+
+  return { repoRoot, trackedFile, ahead, behind };
+}

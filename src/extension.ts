@@ -32,6 +32,8 @@ import { CommitGraphViewProvider, resolveRepoContextPath } from './views/CommitG
 import { BranchComparisonViewProvider } from './views/BranchComparison/BranchComparisonViewProvider';
 import { VisualFileHistoryViewProvider } from './views/VisualFileHistory/VisualFileHistoryViewProvider';
 import { RebaseEditorProvider } from './views/RebaseEditor/RebaseEditorProvider';
+import { LaunchpadViewProvider } from './views/Launchpad/LaunchpadViewProvider';
+import { handleOpenLaunchpadCommand } from './commands/launchpadCommands';
 import { RepoExplorerProvider } from './providers/RepoExplorerProvider';
 import { LanguageModelClient } from './ai/LanguageModelClient';
 import { LineExplanationService } from './ai/LineExplanationService';
@@ -51,7 +53,9 @@ export interface GitLoreTestApi {
   getBranchComparisonHtml: () => string | undefined;
   getVisualFileHistoryHtml: () => string | undefined;
   getRebaseEditorHtml: () => string | undefined;
+  getLaunchpadHtml: () => string | undefined;
   repoExplorerProvider: RepoExplorerProvider;
+  launchpadProvider: LaunchpadViewProvider;
   explainCommit: () => Promise<void>;
   getAiSummaryMessagesForTest: () => unknown[];
   getLineExplanationStateForTest: (filePath: string, sha: string, lineContent: string) => Promise<LineExplanationState | undefined>;
@@ -82,11 +86,12 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
   const fullFileBlameProvider = new FullFileBlameDecorationProvider(blameSource);
   const fileHistoryProvider = new FileHistoryProvider(git);
   const statusBarProvider = new StatusBarProvider(blameProvider);
-  const commitGraphViewProvider = new CommitGraphViewProvider(ctx.extensionUri, git);
+  const commitGraphViewProvider = new CommitGraphViewProvider(ctx.extensionUri, git, blameSource);
   const commitDetailsViewProvider = new CommitDetailsViewProvider(ctx.extensionUri, git, languageModelClient, logger);
   const branchComparisonViewProvider = new BranchComparisonViewProvider(ctx.extensionUri, git);
   const visualFileHistoryViewProvider = new VisualFileHistoryViewProvider(ctx.extensionUri, git);
   const rebaseEditorProvider = new RebaseEditorProvider(ctx.extensionUri);
+  const launchpadProvider = new LaunchpadViewProvider(ctx.extensionUri, ctx, git, logger);
   const repoExplorerProvider = new RepoExplorerProvider(git);
 
   ctx.subscriptions.push(
@@ -97,6 +102,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     staleCodeLensProvider,
     ownershipProvider,
     fullFileBlameProvider,
+    commitGraphViewProvider,
     handleToggleBlameCommand(blameProvider),
     handleToggleFullFileBlameCommand(fullFileBlameProvider),
     handleStepLineHistoryCommand(git, lineHistoryNavStore),
@@ -110,6 +116,8 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     handleExplainLineCommand(lineExplanationService),
     handleShowFileOwnershipCommand(blameSource),
     handleRebaseInteractivelyCommand(git),
+    launchpadProvider,
+    handleOpenLaunchpadCommand(launchpadProvider),
     repoExplorerProvider,
     handleCheckoutBranchCommand(git, repoExplorerProvider),
     handleCompareBranchCommand(git),
@@ -151,7 +159,9 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     getBranchComparisonHtml: () => branchComparisonViewProvider.getCurrentHtmlForTest(),
     getVisualFileHistoryHtml: () => visualFileHistoryViewProvider.getCurrentHtmlForTest(),
     getRebaseEditorHtml: () => rebaseEditorProvider.getCurrentHtmlForTest(),
+    getLaunchpadHtml: () => launchpadProvider.getCurrentHtmlForTest(),
     repoExplorerProvider,
+    launchpadProvider,
     explainCommit: () => commitDetailsViewProvider.explainCommit(),
     getAiSummaryMessagesForTest: () => commitDetailsViewProvider.getAiSummaryMessagesForTest(),
     getLineExplanationStateForTest: (filePath, sha, lineContent) =>

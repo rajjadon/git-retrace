@@ -98,8 +98,16 @@ test('view/item/context: entries name real commands and real views', () => {
 });
 
 test('contributes.views: every VIEWS entry is declared exactly once (via views or customEditors)', () => {
+  // A `createWebviewPanel` viewType (Launchpad's full editor-area tab, created imperatively when
+  // its command runs) has nothing to declare in package.json at all — unlike every other VIEWS
+  // entry, which corresponds to a `contributes.views` or `contributes.customEditors` entry.
+  const createdImperatively = new Set<string>([VIEWS.launchpad]);
   const declared = [...Object.values(views).flat().map((v) => v.id), ...customEditors.map((c) => c.viewType)];
   for (const [key, id] of Object.entries(VIEWS)) {
+    if (createdImperatively.has(id)) {
+      assert.ok(!declared.includes(id), `VIEWS.${key} (${id}) is created imperatively and should not appear in package.json`);
+      continue;
+    }
     assert.equal(declared.filter((d) => d === id).length, 1, `VIEWS.${key} (${id}) must be declared exactly once`);
   }
 });

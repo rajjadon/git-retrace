@@ -44,6 +44,18 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **GitLore: Toggle Full-File Blame Heatmap** (`gitLore.fullFileBlame.enabled`, off by default) marks every line with a colored left edge, gradiented from hot (recently changed) to cold (long untouched) — relative to the file's own age range, so even an entirely old file still shows which of its lines are relatively newer.
 - Distinct from the current-line inline blame decoration and the author-ownership ruler: this is a third, independent visual, not a mode of either.
 
+**Commit Graph: pull/push buttons with ahead/behind counts**
+
+- The toolbar now shows a pull and a push button for the checked-out branch, each badged with how many commits it's behind/ahead of its upstream — hidden entirely when the branch has no upstream to compare against. Both run in a real terminal (not silently in the background), since a pull or push can need interactive auth or land a merge conflict.
+- The graph now also auto-refreshes whenever `.git/HEAD` or `refs/**` change on disk — a pull, a push, a checkout, from GitLore's own buttons, a terminal, or any other tool — instead of only updating on an explicit refresh click or a ref-picker change.
+
+**Launchpad** — a cross-repo PR triage board (off by default)
+
+- **GitLore: Open Launchpad** (`gitLore.launchpad.enabled`, off by default) opens a 6-column board — Needs Review, Ready to Merge, Waiting, Blocked, Drafts, Snoozed — pooling open PRs from every recognized git remote across your workspace's repos into one place. Off by default: it's the only GitLore feature that calls out to a remote host at all, unlike everything else, which works entirely from your local `.git`.
+- Not GitHub-only: GitHub, GitLab, Bitbucket, and Azure DevOps are all supported out of the box, plus self-hosted/custom instances (GitHub Enterprise Server, Gitea, Forgejo, self-hosted GitLab) via `gitLore.launchpad.customHosts`.
+- GitHub uses VS Code's own built-in sign-in — no GitLore backend, no key GitLore ever handles. Every other host needs a Personal Access Token, entered once and stored in VS Code's encrypted secret storage.
+- Snoozing a PR is a local-only override (there's no such concept on any of these hosts' APIs) — it hides a PR from its normal column until you unsnooze it.
+
 ### Changed
 
 - **Diffstat bars** — Commit Details and Branch Comparison now show a proportional green/red bar next to each changed file, scaled to the largest file in the list, alongside the existing `+N -M` counts.
@@ -63,6 +75,8 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **Commit Details**: Copy SHA / Copy message / Open on remote had `border: none` and relied entirely on `--vscode-button-secondaryBackground` for contrast — in themes where that color is close to the panel background, they rendered with no visible button shape at all. Added a guaranteed-visible border so they read as buttons regardless of theme.
 - **Branch Comparison**: the base/compare ref pickers had the same underlying bug — `border: 1px solid transparent` by default, only gaining a visible border on hover. In a low-contrast theme they read as plain colored text with no dropdown affordance until the mouse found them. Now visible by default.
 - **Blame hover**: clicking the **Older** link appeared to do nothing when there was no earlier revision to step to, or when the mouse was hovering a line the text cursor wasn't actually on (the normal way to peek at blame without moving your cursor) — both cases silently updated internal state with no visible reaction. Both now show a message explaining what happened instead of looking broken.
+- **Branch Comparison**: opening the panel for the first time in a session could show the wrong ref pair — focusing it for the first time triggers its own default-ref guess as an independent background step, which could finish *after* (and silently overwrite) an explicitly requested comparison, depending on timing. The explicit request now always wins.
+- A repo's remote URL was cached forever after the first lookup, with nothing to invalidate it — adding or changing a remote while VS Code was running (e.g. via a terminal) was never picked up without a full reload. Removed the cache; a plain `git remote get-url` is cheap enough not to need one.
 
 ## [0.3.1] - 2026-08-13
 

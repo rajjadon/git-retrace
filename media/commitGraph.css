@@ -112,6 +112,20 @@ body {
   white-space: nowrap;
 }
 
+#pull,
+#push {
+  gap: 0.3rem;
+}
+
+.sync-badge {
+  font-size: 0.85em;
+  line-height: 1.4;
+  padding: 0 0.35em;
+  border-radius: 8px;
+  background-color: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+
 #ref-filter:focus-visible {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: 1px;

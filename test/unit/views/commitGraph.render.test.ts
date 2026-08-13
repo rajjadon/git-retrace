@@ -287,6 +287,45 @@ test('renderGraphHtml: escapes a branch name injected through the ref picker', (
   assert.ok(!html.includes('<script>alert(1)</script>'));
 });
 
+test('renderGraphHtml: pull/push buttons show ahead/behind badges for the current branch', () => {
+  const branches: BranchInfo[] = [{ name: 'main', isRemote: false, isCurrent: true, ahead: 6, behind: 5 }];
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), branches, now }, opts);
+  assert.match(html, /id="pull"[^>]*title="Pull 5 commits"/);
+  assert.match(html, /id="push"[^>]*title="Push 6 commits"/);
+  assert.match(html, /id="pull"[\s\S]*?class="sync-badge">5</);
+  assert.match(html, /id="push"[\s\S]*?class="sync-badge">6</);
+});
+
+test('renderGraphHtml: no badge (but the button stays) when ahead/behind is 0', () => {
+  const branches: BranchInfo[] = [{ name: 'main', isRemote: false, isCurrent: true, ahead: 0, behind: 0 }];
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), branches, now }, opts);
+  assert.match(html, /id="pull"/);
+  assert.match(html, /id="push"/);
+  assert.ok(!html.includes('sync-badge'));
+  assert.match(html, /id="pull"[^>]*title="Pull — up to date"/);
+  assert.match(html, /id="push"[^>]*title="Push — nothing to push"/);
+});
+
+test('renderGraphHtml: no pull/push buttons at all when the current branch has no upstream', () => {
+  const branches: BranchInfo[] = [{ name: 'main', isRemote: false, isCurrent: true }];
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), branches, now }, opts);
+  assert.ok(!html.includes('id="pull"'));
+  assert.ok(!html.includes('id="push"'));
+});
+
+test('renderGraphHtml: no pull/push buttons when there are no branches at all (e.g. detached HEAD)', () => {
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
+  assert.ok(!html.includes('id="pull"'));
+  assert.ok(!html.includes('id="push"'));
+});
+
+test('renderGraphHtml: pull/push buttons post their message types', () => {
+  const branches: BranchInfo[] = [{ name: 'main', isRemote: false, isCurrent: true, ahead: 1, behind: 1 }];
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), branches, now }, opts);
+  assert.match(html, /getElementById\('pull'\)\?\.addEventListener\('click', \(\) => \{\s*vscode\.postMessage\(\{ type: 'pull' \}\);/);
+  assert.match(html, /getElementById\('push'\)\?\.addEventListener\('click', \(\) => \{\s*vscode\.postMessage\(\{ type: 'push' \}\);/);
+});
+
 test('renderGraphHtml: rows post openCommit, the wip row posts openWorkingChanges, no inline handlers', () => {
   const workingChanges: WorkingChanges = { added: 1, modified: 0, deleted: 0, total: 1 };
   const html = renderGraphHtml({ nodes: layoutGraph([commit('deadbeef', [])]), workingChanges, now }, opts);

@@ -149,8 +149,8 @@ Extends existing hover/decoration/webview code already in the repo — no new vi
 - [x] **Interactive rebase editor** — custom editor webview replacing the `git rebase -i` todo file: drag-reorder, pick/squash/fixup/drop/reword/edit, Start/Abort (conflict list deferred — points at Source Control instead, per the design spec's scope cut)
 
 ### Phase 7 — Launchpad (optional, last)
-The only feature that reaches beyond the local repo — needs GitHub PR/CI status, not just `git`. Use VS Code's built-in GitHub authentication session (`vscode.authentication.getSession('github', …)`); never a GitLore backend or proxied key. Revisit whether this belongs in GitLore at all once Phases 4–6 ship.
-- [ ] **PR triage board** — Needs Review / Ready to Merge / Waiting / Blocked / Drafts / Snoozed, across the workspace's repos
+The only feature that reaches beyond the local repo — needs PR/CI status, not just `git`. Not GitHub-only: GitHub, GitLab, Bitbucket, and Azure DevOps are all supported (each via its own `core/forge/*Client.ts`, the only place that touches that host's API), plus self-hosted/custom instances via `gitLore.launchpad.customHosts`. GitHub uses VS Code's built-in authentication session (`vscode.authentication.getSession('github', …)`); every other host needs a Personal Access Token stored in `context.secrets`. Never a GitLore backend or proxied key, for any host. Off by default (`gitLore.launchpad.enabled`) — the only feature that calls out to a remote host at all.
+- [x] **PR triage board** — Needs Review / Ready to Merge / Waiting / Blocked / Drafts / Snoozed, across the workspace's repos
 
 Do not start a phase until the previous phase is tested and merged.
 
@@ -179,6 +179,7 @@ Do not start a phase until the previous phase is tested and merged.
 | `gitLore.dropStash` | GitLore: Drop Stash |
 | `gitLore.stepLineHistory` | GitLore: Step Through This Line's History |
 | `gitLore.toggleFullFileBlame` | GitLore: Toggle Full-File Blame Heatmap |
+| `gitLore.openLaunchpad` | GitLore: Open Launchpad |
 
 ### Settings (all under `gitLore.*`)
 | Setting | Type | Default | Description |
@@ -195,6 +196,8 @@ Do not start a phase until the previous phase is tested and merged.
 | `gitLore.maxBlameFileSize` | number | `1048576` | Skip blame for files larger than this (bytes) |
 | `gitLore.dateFormat` | string | `"relative"` | `relative` or an absolute date-fns pattern |
 | `gitLore.fullFileBlame.enabled` | boolean | `false` | Show a hot-to-cold recency gradient as a left-edge mark per line, across the whole file |
+| `gitLore.launchpad.enabled` | boolean | `false` | Enable Launchpad, the cross-repo PR triage board — the only setting that makes GitLore call out to a remote host |
+| `gitLore.launchpad.customHosts` | array | `[]` | Self-hosted/custom forge instances Launchpad can't recognize by hostname alone: `{ hostname, flavor, apiBaseUrl }[]` |
 
 ### Views
 Register a TreeView **only when it has content**. Contributed view: `gitLore.fileHistory` in the SCM or Explorer container (decide via config, default Explorer).
