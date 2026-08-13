@@ -45,6 +45,11 @@
         "icon": "$(type-hierarchy)"
       },
       {
+        "command": "gitLore.showVisualFileHistory",
+        "title": "GitLore: Show Visual File History",
+        "icon": "$(graph-line)"
+      },
+      {
         "command": "gitLore.compareBranches",
         "title": "GitLore: Compare Branches",
         "icon": "$(git-compare)"
@@ -99,6 +104,12 @@
           "id": "gitLore.branchComparison",
           "name": "Branch Comparison",
           "visibility": "collapsed"
+        },
+        {
+          "type": "webview",
+          "id": "gitLore.visualFileHistory",
+          "name": "Visual File History",
+          "visibility": "collapsed"
         }
       ]
     },
@@ -129,6 +140,11 @@
           "command": "gitLore.openGraph",
           "when": "view == gitLore.commitGraph",
           "group": "navigation@4"
+        },
+        {
+          "command": "gitLore.showVisualFileHistory",
+          "when": "view == gitLore.commitGraph",
+          "group": "navigation@5"
         },
         {
           "command": "gitLore.compareBranches",

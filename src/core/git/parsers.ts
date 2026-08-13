@@ -4,6 +4,7 @@ import type {
   Commit,
   CommitDetail,
   FileChange,
+  FileHistoryEntry,
   GraphCommit,
   Ref,
   RemoteInfo,
@@ -219,6 +220,49 @@ export function parseGraphLog(raw: string): GraphCommit[] {
     }
   }
   return commits;
+}
+
+function parseFileHistoryRecord(fieldsLine: string): FileHistoryEntry {
+  const [sha, shortSha, author, authorEmail, date, message] = fieldsLine.split(LOG_FIELD_SEP);
+  return {
+    sha: sha ?? '',
+    shortSha: shortSha ?? '',
+    author: author ?? '',
+    authorEmail: authorEmail ?? '',
+    date: date ?? '',
+    message: message ?? '',
+    insertions: 0,
+    deletions: 0,
+  };
+}
+
+/**
+ * Parses `git log --follow --numstat --pretty=tformat:LOG_FORMAT -- <path>` output for the Visual
+ * File History timeline. Pure — no I/O.
+ *
+ * Scoping `--numstat` to a single path means git emits at most one stat line per commit, but the
+ * interleaving is the same shape `parseGraphLog` already handles (stat block follows the record,
+ * not precedes it) — same line-by-line walk, reused rather than re-derived.
+ */
+export function parseFileHistoryLog(raw: string): FileHistoryEntry[] {
+  const entries: FileHistoryEntry[] = [];
+  for (const segment of raw.split(RECORD_OR_NEWLINE_RE)) {
+    const line = segment.trim();
+    if (line.length === 0) {
+      continue;
+    }
+    if (line.includes(LOG_FIELD_SEP)) {
+      entries.push(parseFileHistoryRecord(line));
+      continue;
+    }
+    const stat = parseNumstatLine(line);
+    const current = entries[entries.length - 1];
+    if (stat && current) {
+      current.insertions += stat.insertions;
+      current.deletions += stat.deletions;
+    }
+  }
+  return entries;
 }
 
 /**

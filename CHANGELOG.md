@@ -6,6 +6,14 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+### Added
+
+**Visual File History** — a bubble timeline for the current file
+
+- **GitLore: Show Visual File History** opens an author-swimlane view of the current file's commits: each commit is a bubble sized by how much it changed, positioned by author lane and by age, with additions/deletions bars beneath. Click a bubble to open that commit's details.
+- Docked alongside Commit Graph, Commit Details, and Branch Comparison; also reachable from the Commit Graph panel's toolbar.
+- Respects `gitLore.maxHistoryItems`, same as the tree-based File History view.
+
 ## [0.3.1] - 2026-08-13
 
 ### Changed

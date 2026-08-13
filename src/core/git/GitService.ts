@@ -8,6 +8,7 @@ import {
   parseLog,
   parseCommitDetail,
   parseGraphLog,
+  parseFileHistoryLog,
   parseBranches,
   parseRemoteUrl,
   parseStatusPorcelain,
@@ -22,6 +23,7 @@ import type {
   Commit,
   CommitDetail,
   FileChange,
+  FileHistoryEntry,
   GraphCommit,
   RemoteInfo,
   WorkingChanges,
@@ -165,6 +167,39 @@ export class GitService {
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err);
       this.logger?.error(`git log failed for ${filePath}`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Every commit that touched this file, newest first, each with its own insertions/deletions — used by the Visual File History timeline. One call: `--numstat` scoped to `filePath` rides along with the same `git log` that fetches history. */
+  async getFileHistoryStats(filePath: string, maxCount: number): Promise<FileHistoryEntry[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    if (!(await this.isTracked(filePath))) {
+      return [];
+    }
+
+    const git = this.gitFor(repoRoot);
+    const rel = toRepoRelativePath(repoRoot, this.toCanonicalPath(filePath));
+    const args = [
+      'log',
+      '--follow',
+      '--numstat',
+      '-n',
+      String(maxCount),
+      `--pretty=tformat:${LOG_FORMAT}`,
+      '--',
+      rel,
+    ];
+
+    try {
+      const raw = await git.raw(args);
+      return parseFileHistoryLog(raw);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git log --numstat failed for ${filePath}`, err);
       throw new GitCommandError(args.join(' '), stderr);
     }
   }

@@ -145,7 +145,7 @@ Extends existing hover/decoration/webview code already in the repo — no new vi
 - [ ] **Sidebar explorer tree** — one view container: Branches, Remotes, Tags, Stashes, Worktrees, Contributors, with ahead/behind status and right-click actions
 
 ### Phase 6 — Visual history & rebase
-- [ ] **Visual File History** — author-swimlane bubble timeline (additions/deletions over time), as an alternative to the existing tree-based File History
+- [x] **Visual File History** — author-swimlane bubble timeline (additions/deletions over time), as an alternative to the existing tree-based File History
 - [ ] **Interactive rebase editor** — custom editor webview replacing the `git rebase -i` todo file: drag-reorder, pick/squash/fixup/drop/reword/edit, conflict list, Start/Abort
 
 ### Phase 7 — Launchpad (optional, last)
@@ -170,6 +170,7 @@ Do not start a phase until the previous phase is tested and merged.
 | `gitLore.explainLine` | GitLore: Explain This Line's History |
 | `gitLore.copySha` | GitLore: Copy Commit SHA |
 | `gitLore.openGraph` | GitLore: Open Commit Graph |
+| `gitLore.showVisualFileHistory` | GitLore: Show Visual File History |
 
 ### Settings (all under `gitLore.*`)
 | Setting | Type | Default | Description |

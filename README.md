@@ -78,6 +78,7 @@ Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with
 ### Also
 
 - **File history** — every commit that touched the current file, following renames, in the Explorer.
+- **Visual File History** — an author-swimlane bubble timeline of the current file: commit size, age, and additions/deletions at a glance, in the panel.
 - **Issue and PR links** — `#123` in a commit message becomes a link, auto-detected from your remote or pointed at any tracker (Jira included) via a regex and URL template.
 - **Stale-code detector** — a CodeLens above functions and methods untouched for longer than `gitLore.staleThresholdDays`, linking straight to the commit that last changed them.
 - **Author ownership heatmap** — an overview-ruler color mark per line, by that line's author (`gitLore.ownership.enabled`, off by default), plus **GitLore: Show File Ownership** for a recency-weighted breakdown of who owns the file.
@@ -92,6 +93,7 @@ Every command is also a title-bar button in the GitLore panel.
 | `GitLore: Show Commit Details` | Load a commit into the details pane |
 | `GitLore: Compare Branches` | Compare two refs, ahead/behind/files |
 | `GitLore: Show File History` | List commits touching the current file |
+| `GitLore: Show Visual File History` | Open the bubble timeline for the current file |
 | `GitLore: Toggle Inline Blame` | Turn the end-of-line decoration on or off |
 | `GitLore: Copy Commit SHA` | Copy a commit's full SHA (from a commit's context menu) |
 | `GitLore: Show File Ownership` | See a file's authors ranked by recency-weighted ownership share (command palette only, no title-bar button) |

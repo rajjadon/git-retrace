@@ -13,6 +13,12 @@ export interface CommitDetail extends Commit {
   body: string;
 }
 
+/** One commit's effect on a single file, for the Visual File History timeline. */
+export interface FileHistoryEntry extends Commit {
+  insertions: number;
+  deletions: number;
+}
+
 export interface BlameLine {
   /** 0-based line index within the file. */
   line: number;

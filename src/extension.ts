@@ -14,12 +14,14 @@ import { handleToggleBlameCommand } from './commands/blameCommands';
 import { handleShowFileHistoryCommand, handleCopyShaCommand } from './commands/fileHistoryCommands';
 import { handleShowCommitCommand } from './commands/commitCommands';
 import { handleOpenGraphCommand } from './commands/graphCommands';
+import { handleShowVisualFileHistoryCommand } from './commands/visualFileHistoryCommands';
 import { handleCompareBranchesCommand } from './commands/branchCommands';
 import { handleExplainCommitCommand, handleExplainLineCommand } from './commands/aiCommands';
 import { handleShowFileOwnershipCommand, buildOwnershipQuickPickItems } from './commands/ownershipCommands';
 import { CommitDetailsViewProvider } from './views/CommitDetails/CommitDetailsViewProvider';
 import { CommitGraphViewProvider } from './views/CommitGraph/CommitGraphViewProvider';
 import { BranchComparisonViewProvider } from './views/BranchComparison/BranchComparisonViewProvider';
+import { VisualFileHistoryViewProvider } from './views/VisualFileHistory/VisualFileHistoryViewProvider';
 import { LanguageModelClient } from './ai/LanguageModelClient';
 import { LineExplanationService } from './ai/LineExplanationService';
 import { LruCache } from './core/cache/LruCache';
@@ -35,6 +37,7 @@ export interface GitLoreTestApi {
   getCommitDetailsHtml: () => string | undefined;
   getCommitGraphHtml: () => string | undefined;
   getBranchComparisonHtml: () => string | undefined;
+  getVisualFileHistoryHtml: () => string | undefined;
   explainCommit: () => Promise<void>;
   getAiSummaryMessagesForTest: () => unknown[];
   getLineExplanationStateForTest: (filePath: string, sha: string, lineContent: string) => Promise<LineExplanationState | undefined>;
@@ -66,6 +69,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
   const commitGraphViewProvider = new CommitGraphViewProvider(ctx.extensionUri, git);
   const commitDetailsViewProvider = new CommitDetailsViewProvider(ctx.extensionUri, git, languageModelClient, logger);
   const branchComparisonViewProvider = new BranchComparisonViewProvider(ctx.extensionUri, git);
+  const visualFileHistoryViewProvider = new VisualFileHistoryViewProvider(ctx.extensionUri, git);
 
   ctx.subscriptions.push(
     blameSource,
@@ -79,6 +83,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     handleCopyShaCommand(),
     handleShowCommitCommand(commitDetailsViewProvider),
     handleOpenGraphCommand(commitGraphViewProvider),
+    handleShowVisualFileHistoryCommand(visualFileHistoryViewProvider),
     handleCompareBranchesCommand(git, branchComparisonViewProvider),
     handleExplainCommitCommand(commitDetailsViewProvider),
     handleExplainLineCommand(lineExplanationService),
@@ -91,6 +96,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     vscode.window.registerWebviewViewProvider(VIEWS.commitGraph, commitGraphViewProvider),
     vscode.window.registerWebviewViewProvider(VIEWS.commitDetails, commitDetailsViewProvider),
     vscode.window.registerWebviewViewProvider(VIEWS.branchComparison, branchComparisonViewProvider),
+    vscode.window.registerWebviewViewProvider(VIEWS.visualFileHistory, visualFileHistoryViewProvider),
   );
   output.appendLine('GitLore activated.');
 
@@ -103,6 +109,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     getCommitDetailsHtml: () => commitDetailsViewProvider.getCurrentHtmlForTest(),
     getCommitGraphHtml: () => commitGraphViewProvider.getCurrentHtmlForTest(),
     getBranchComparisonHtml: () => branchComparisonViewProvider.getCurrentHtmlForTest(),
+    getVisualFileHistoryHtml: () => visualFileHistoryViewProvider.getCurrentHtmlForTest(),
     explainCommit: () => commitDetailsViewProvider.explainCommit(),
     getAiSummaryMessagesForTest: () => commitDetailsViewProvider.getAiSummaryMessagesForTest(),
     getLineExplanationStateForTest: (filePath, sha, lineContent) =>

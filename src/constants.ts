@@ -11,6 +11,7 @@ export const COMMANDS = {
   showCommit: 'gitLore.showCommit',
   copySha: 'gitLore.copySha',
   openGraph: 'gitLore.openGraph',
+  showVisualFileHistory: 'gitLore.showVisualFileHistory',
   compareBranches: 'gitLore.compareBranches',
   explainCommit: 'gitLore.explainCommit',
   explainLine: 'gitLore.explainLine',
@@ -43,6 +44,7 @@ export const VIEWS = {
   commitDetails: 'gitLore.commitDetails',
   commitGraph: 'gitLore.commitGraph',
   branchComparison: 'gitLore.branchComparison',
+  visualFileHistory: 'gitLore.visualFileHistory',
 } as const;
 
 /**
@@ -56,6 +58,7 @@ export const MEDIA = {
   commitGraph: 'commitGraph.css',
   commitDetails: 'commitDetails.css',
   branchComparison: 'branchComparison.css',
+  visualFileHistory: 'visualFileHistory.css',
   panelIcon: 'panel-icon.svg',
 } as const;
 
