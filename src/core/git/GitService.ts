@@ -10,6 +10,11 @@ import {
   parseGraphLog,
   parseFileHistoryLog,
   parseBranches,
+  parseRemotes,
+  parseTags,
+  parseStashes,
+  parseWorktrees,
+  parseContributors,
   parseRemoteUrl,
   parseStatusPorcelain,
   LOG_FORMAT,
@@ -22,11 +27,16 @@ import type {
   BranchInfo,
   Commit,
   CommitDetail,
+  ContributorInfo,
   FileChange,
   FileHistoryEntry,
+  GitRemote,
   GraphCommit,
   RemoteInfo,
+  StashInfo,
+  TagInfo,
   WorkingChanges,
+  WorktreeInfo,
 } from './types';
 import { GitCommandError, type GitLogger } from './errors';
 import { toRepoRelativePath } from '../../utils/path';
@@ -370,6 +380,92 @@ export class GitService {
     }
   }
 
+  /** Every configured remote's name and URL, for the Sidebar Explorer. Not scoped to `filePath` beyond resolving which repo. */
+  async getRemotes(filePath: string): Promise<GitRemote[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    try {
+      const raw = await this.gitFor(repoRoot).raw(['config', '--get-regexp', String.raw`remote\..*\.url`]);
+      return parseRemotes(raw);
+    } catch {
+      // No remotes configured at all is the expected shape for `git config --get-regexp` — not an error.
+      return [];
+    }
+  }
+
+  /** Every tag, for the Sidebar Explorer. */
+  async getTags(filePath: string): Promise<TagInfo[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    const git = this.gitFor(repoRoot);
+    const args = ['for-each-ref', 'refs/tags', '--format=%(refname:short)'];
+    try {
+      const raw = await git.raw(args);
+      return parseTags(raw);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error('git for-each-ref refs/tags failed', err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Every stash entry, newest first (git's own default order), for the Sidebar Explorer. */
+  async getStashes(filePath: string): Promise<StashInfo[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    try {
+      const raw = await this.gitFor(repoRoot).raw(['stash', 'list', '--format=%gd\x1f%s']);
+      return parseStashes(raw);
+    } catch {
+      // An empty stash list exits non-zero in some git versions — no stashes, not an error.
+      return [];
+    }
+  }
+
+  /** Every worktree (the main checkout plus any linked ones), for the Sidebar Explorer. */
+  async getWorktrees(filePath: string): Promise<WorktreeInfo[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    const git = this.gitFor(repoRoot);
+    const args = ['worktree', 'list', '--porcelain'];
+    try {
+      const raw = await git.raw(args);
+      return parseWorktrees(raw);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error('git worktree list failed', err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /**
+   * Every contributor across every branch, ranked by commit count, for the Sidebar Explorer.
+   * Scoped to `--all` rather than `HEAD` — a repo-wide roster is what "Contributors" promises,
+   * and scoping to just the checked-out branch would silently drop anyone whose commits only
+   * live on a branch that isn't currently checked out.
+   */
+  async getContributors(filePath: string): Promise<ContributorInfo[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    try {
+      const raw = await this.gitFor(repoRoot).raw(['shortlog', '-sne', '--all']);
+      return parseContributors(raw);
+    } catch {
+      // An empty repo (no commits yet) fails `shortlog --all` — no contributors, not an error.
+      return [];
+    }
+  }
+
   /** Commits reachable from `to` but not from `from` — e.g. what `compare` has that `base` doesn't. */
   async getCommitsBetween(filePath: string, from: string, to: string): Promise<Commit[]> {
     const repoRoot = await this.getRepoRoot(filePath);
@@ -462,6 +558,54 @@ export class GitService {
     }
     this.remoteUrlByRoot.set(cacheKey, url);
     return url;
+  }
+
+  /** Checks out a local branch, for the Sidebar Explorer's "Checkout" action. Throws on conflicts (e.g. dirty working tree) — the caller surfaces the message, GitLore doesn't force or stash on the user's behalf. */
+  async checkoutBranch(filePath: string, branchName: string): Promise<void> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    const args = ['checkout', branchName];
+    try {
+      await this.gitFor(repoRoot).raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git checkout ${branchName} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Applies `stash@{index}` without dropping it, for the Sidebar Explorer's "Apply" action. Throws on conflicts. */
+  async applyStash(filePath: string, index: number): Promise<void> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    const args = ['stash', 'apply', `stash@{${index}}`];
+    try {
+      await this.gitFor(repoRoot).raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git stash apply stash@{${index}} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Permanently deletes `stash@{index}`, for the Sidebar Explorer's "Drop" action. Caller confirms first — this is destructive and irreversible. */
+  async dropStash(filePath: string, index: number): Promise<void> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    const args = ['stash', 'drop', `stash@{${index}}`];
+    try {
+      await this.gitFor(repoRoot).raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git stash drop stash@{${index}} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
   }
 
   /**

@@ -3,12 +3,17 @@ import type {
   BranchInfo,
   Commit,
   CommitDetail,
+  ContributorInfo,
   FileChange,
   FileHistoryEntry,
+  GitRemote,
   GraphCommit,
   Ref,
   RemoteInfo,
+  StashInfo,
+  TagInfo,
   WorkingChanges,
+  WorktreeInfo,
 } from './types';
 
 const UNCOMMITTED_SHA = '0000000000000000000000000000000000000000';
@@ -39,8 +44,8 @@ export const COMMIT_DETAIL_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LO
 /** Pass to `git log --all --topo-order --numstat --decorate=full --pretty=tformat:<this>` for the commit graph. `%P` = parent shas (space-separated), `%D` = ref decorations. */
 export const GRAPH_LOG_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SEP}%ae${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%P${LOG_FIELD_SEP}%D${LOG_FIELD_SEP}%s${LOG_RECORD_SEP}`;
 
-/** Pass to `git for-each-ref refs/heads refs/remotes --format=<this>`. Uses the full refname (not `:short`) so local vs remote can be told apart reliably by prefix. */
-export const BRANCH_FORMAT = `%(refname)${LOG_FIELD_SEP}%(HEAD)`;
+/** Pass to `git for-each-ref refs/heads refs/remotes --format=<this>`. Uses the full refname (not `:short`) so local vs remote can be told apart reliably by prefix. `%(upstream:track)` lets git compute ahead/behind itself — no per-branch `rev-list --count` calls. */
+export const BRANCH_FORMAT = `%(refname)${LOG_FIELD_SEP}%(HEAD)${LOG_FIELD_SEP}%(upstream:track)`;
 
 /**
  * Parses `git blame --line-porcelain` output. Pure — no I/O.
@@ -353,18 +358,129 @@ export function parseNumstatAll(raw: string): FileChange[] {
 }
 
 /** Parses `git for-each-ref --format=BRANCH_FORMAT` output. Filters out the `origin/HEAD` symbolic alias. Pure — no I/O. */
+/**
+ * Parses git's `%(upstream:track)` value, e.g. `[ahead 2, behind 1]`, `[ahead 2]`, `[gone]`, or
+ * empty (no upstream, or up to date). Only includes the keys git actually reported — a branch
+ * with no upstream carries neither `ahead` nor `behind`, not zeros.
+ */
+function parseUpstreamTrack(raw: string): Pick<BranchInfo, 'ahead' | 'behind'> {
+  const ahead = /ahead (\d+)/.exec(raw);
+  const behind = /behind (\d+)/.exec(raw);
+  return {
+    ...(ahead ? { ahead: Number(ahead[1]) } : {}),
+    ...(behind ? { behind: Number(behind[1]) } : {}),
+  };
+}
+
 export function parseBranches(raw: string): BranchInfo[] {
   return raw
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .map((line) => {
-      const [refname, headMarker] = line.split(LOG_FIELD_SEP);
+      const [refname, headMarker, track] = line.split(LOG_FIELD_SEP);
       const isRemote = (refname ?? '').startsWith('refs/remotes/');
       const name = (refname ?? '').replace(/^refs\/(heads|remotes)\//, '');
-      return { name, isRemote, isCurrent: headMarker === '*' };
+      return { name, isRemote, isCurrent: headMarker === '*', ...parseUpstreamTrack(track ?? '') };
     })
     .filter((branch) => branch.name !== 'HEAD' && !branch.name.endsWith('/HEAD'));
+}
+
+/** Parses `git config --get-regexp "remote\..*\.url"` output: `remote.<name>.url <url>` per line. Pure — no I/O. */
+export function parseRemotes(raw: string): GitRemote[] {
+  const remotes: GitRemote[] = [];
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const spaceIdx = trimmed.indexOf(' ');
+    if (spaceIdx === -1) {
+      continue;
+    }
+    const key = trimmed.slice(0, spaceIdx);
+    const url = trimmed.slice(spaceIdx + 1);
+    const match = /^remote\.(.+)\.url$/.exec(key);
+    if (match?.[1]) {
+      remotes.push({ name: match[1], url });
+    }
+  }
+  return remotes;
+}
+
+/** Parses `git for-each-ref refs/tags --format=%(refname:short)` output: one tag name per line. Pure — no I/O. */
+export function parseTags(raw: string): TagInfo[] {
+  return raw
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((name) => ({ name }));
+}
+
+/** Parses `git stash list --format=%gd<FIELD>%s` output, extracting the numeric index from `stash@{N}` — what `git stash apply/drop` expects. Pure — no I/O. */
+export function parseStashes(raw: string): StashInfo[] {
+  const stashes: StashInfo[] = [];
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) {
+      continue;
+    }
+    const [ref, message] = line.split(LOG_FIELD_SEP);
+    const match = /stash@\{(\d+)\}/.exec(ref ?? '');
+    if (match?.[1]) {
+      stashes.push({ index: Number(match[1]), message: message ?? '' });
+    }
+  }
+  return stashes;
+}
+
+/**
+ * Parses `git worktree list --porcelain` output: blank-line-separated blocks, each starting with
+ * `worktree <path>`. The first block is always the main checkout, never a linked worktree. Pure
+ * — no I/O.
+ */
+export function parseWorktrees(raw: string): WorktreeInfo[] {
+  const worktrees: WorktreeInfo[] = [];
+  let current: { path: string; branch: string | null } | null = null;
+  let isFirst = true;
+
+  const flush = (): void => {
+    if (current) {
+      worktrees.push({ path: current.path, branch: current.branch, isMain: isFirst });
+      isFirst = false;
+    }
+    current = null;
+  };
+
+  for (const line of raw.split('\n')) {
+    if (line.trim() === '') {
+      flush();
+    } else if (line.startsWith('worktree ')) {
+      flush();
+      current = { path: line.slice('worktree '.length).trim(), branch: null };
+    } else if (line.startsWith('branch ') && current) {
+      current.branch = line.slice('branch '.length).trim().replace(/^refs\/heads\//, '');
+    }
+    // `HEAD <sha>`, `bare`, `locked`, `prunable` lines are ignored for v1 — read-only display
+    // doesn't need them yet.
+  }
+  flush();
+  return worktrees;
+}
+
+/** Parses `git shortlog -sne HEAD` output: `<count>\t<name> <email>` per line. Pure — no I/O. */
+export function parseContributors(raw: string): ContributorInfo[] {
+  const contributors: ContributorInfo[] = [];
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const match = /^(\d+)\s+(.+?)\s+<(.+)>$/.exec(trimmed);
+    if (match?.[1] && match[2] && match[3]) {
+      contributors.push({ commitCount: Number(match[1]), name: match[2], email: match[3] });
+    }
+  }
+  return contributors;
 }
 
 /**

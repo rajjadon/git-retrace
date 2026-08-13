@@ -33,3 +33,28 @@ test('parseBranches: handles branch names containing slashes', () => {
 test('parseBranches: empty output produces an empty array', () => {
   assert.deepEqual(parseBranches(''), []);
 });
+
+test('parseBranches: parses ahead and behind counts from %(upstream:track)', () => {
+  const raw = `refs/heads/main${FIELD}*${FIELD}[ahead 2, behind 1]`;
+  const [branch] = parseBranches(raw);
+  assert.equal(branch?.ahead, 2);
+  assert.equal(branch?.behind, 1);
+});
+
+test('parseBranches: an ahead-only or behind-only track omits the other field entirely, not as 0 or undefined-but-present', () => {
+  const [aheadOnly] = parseBranches(`refs/heads/a${FIELD}${FIELD}[ahead 3]`);
+  assert.equal(aheadOnly?.ahead, 3);
+  assert.ok(!('behind' in (aheadOnly ?? {})));
+
+  const [behindOnly] = parseBranches(`refs/heads/b${FIELD}${FIELD}[behind 5]`);
+  assert.equal(behindOnly?.behind, 5);
+  assert.ok(!('ahead' in (behindOnly ?? {})));
+});
+
+test('parseBranches: no upstream (empty track, or "[gone]") carries neither ahead nor behind', () => {
+  const [noUpstream] = parseBranches(`refs/heads/a${FIELD}${FIELD}`);
+  assert.ok(!('ahead' in (noUpstream ?? {})) && !('behind' in (noUpstream ?? {})));
+
+  const [gone] = parseBranches(`refs/heads/b${FIELD}${FIELD}[gone]`);
+  assert.ok(!('ahead' in (gone ?? {})) && !('behind' in (gone ?? {})));
+});

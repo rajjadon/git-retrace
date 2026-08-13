@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCommitUrl, remoteHostLabel } from '../../../src/utils/remoteLinks';
+import { buildCommitUrl, buildRepoUrl, remoteHostLabel } from '../../../src/utils/remoteLinks';
 import type { RemoteInfo } from '../../../src/core/git/types';
 
 const SHA = '5a93a8d3e93fcc0a1f409e89d3aaca4346ced8ec';
@@ -48,4 +48,19 @@ test('buildCommitUrl: a GitHub Enterprise host is not sniffable, so it gets no U
   // Guessing GitHub's URL shape for it would produce a broken link on every non-GHE lookalike.
   assert.equal(remoteHostLabel(remote('github.acme.com')), 'github.acme.com');
   assert.equal(buildCommitUrl(remote('github.acme.com'), SHA), null);
+});
+
+test('buildRepoUrl: builds the repo home page for a known host', () => {
+  assert.equal(buildRepoUrl(remote('github.com')), 'https://github.com/acme/widgets');
+});
+
+test('buildRepoUrl: works for an unrecognized self-hosted host too — no host gating needed for a repo home page', () => {
+  assert.equal(buildRepoUrl(remote('git.acme.dev')), 'https://git.acme.dev/acme/widgets');
+});
+
+test('buildRepoUrl: keeps nested group paths intact', () => {
+  assert.equal(
+    buildRepoUrl(remote('gitlab.com', 'acme/platform/team', 'widgets')),
+    'https://gitlab.com/acme/platform/team/widgets',
+  );
 });

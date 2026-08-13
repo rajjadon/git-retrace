@@ -142,11 +142,11 @@ Extends existing hover/decoration/webview code already in the repo — no new vi
 - [ ] **Full-file gutter blame + heatmap toggle** — whole-file blame overlay in the gutter (distinct from the current-line decoration and the ownership ruler), with a hot→cold recency gradient edge
 
 ### Phase 5 — Repository views
-- [ ] **Sidebar explorer tree** — one view container: Branches, Remotes, Tags, Stashes, Worktrees, Contributors, with ahead/behind status and right-click actions
+- [x] **Sidebar explorer tree** — one view container: Branches, Remotes, Tags, Stashes, Worktrees, Contributors, with ahead/behind status and right-click actions
 
 ### Phase 6 — Visual history & rebase
 - [x] **Visual File History** — author-swimlane bubble timeline (additions/deletions over time), as an alternative to the existing tree-based File History
-- [ ] **Interactive rebase editor** — custom editor webview replacing the `git rebase -i` todo file: drag-reorder, pick/squash/fixup/drop/reword/edit, conflict list, Start/Abort
+- [x] **Interactive rebase editor** — custom editor webview replacing the `git rebase -i` todo file: drag-reorder, pick/squash/fixup/drop/reword/edit, Start/Abort (conflict list deferred — points at Source Control instead, per the design spec's scope cut)
 
 ### Phase 7 — Launchpad (optional, last)
 The only feature that reaches beyond the local repo — needs GitHub PR/CI status, not just `git`. Use VS Code's built-in GitHub authentication session (`vscode.authentication.getSession('github', …)`); never a GitLore backend or proxied key. Revisit whether this belongs in GitLore at all once Phases 4–6 ship.
@@ -171,6 +171,12 @@ Do not start a phase until the previous phase is tested and merged.
 | `gitLore.copySha` | GitLore: Copy Commit SHA |
 | `gitLore.openGraph` | GitLore: Open Commit Graph |
 | `gitLore.showVisualFileHistory` | GitLore: Show Visual File History |
+| `gitLore.rebaseInteractively` | GitLore: Rebase Branch Interactively... |
+| `gitLore.checkoutBranch` | GitLore: Checkout Branch |
+| `gitLore.compareBranchFromExplorer` | GitLore: Compare with Current Branch |
+| `gitLore.openRemote` | GitLore: Open Remote in Browser |
+| `gitLore.applyStash` | GitLore: Apply Stash |
+| `gitLore.dropStash` | GitLore: Drop Stash |
 
 ### Settings (all under `gitLore.*`)
 | Setting | Type | Default | Description |

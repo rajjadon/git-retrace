@@ -14,6 +14,20 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - Docked alongside Commit Graph, Commit Details, and Branch Comparison; also reachable from the Commit Graph panel's toolbar.
 - Respects `gitLore.maxHistoryItems`, same as the tree-based File History view.
 
+**Interactive Rebase Editor** — a GUI for `git rebase -i`
+
+- **GitLore: Rebase Branch Interactively...** picks a target ref and starts an interactive rebase in an integrated terminal. Whenever git opens the rebase todo file, GitLore's own editor takes over automatically: reorder commits (drag or the move up/down buttons), change each one's action (pick/reword/edit/squash/fixup/drop), then Start Rebase or Abort.
+- Works the same way even without the command above, for anyone who already has `code --wait` configured as their own git `sequence.editor`.
+- GitLore never calls `git rebase`, `--abort`, `--continue`, or any reset/checkout command itself — it only ever reads, writes, and closes the one file git already opens for this. If a rebase pauses on a conflict, GitLore points at Source Control rather than building its own conflict-resolution UI.
+- Turn it off with `gitLore.rebaseEditor.enabled: false` to use the plain text editor instead.
+
+**Sidebar Explorer** — one tree for the whole repo, in its own activity bar container
+
+- Branches, Remotes, Tags, Stashes, Worktrees, and Contributors, each as a collapsible section — always visible, no command needed to open it.
+- Branches show ahead/behind counts and mark the checked-out one; right-click a branch to **Checkout** or **Compare with Current Branch** (opens in the existing Branch Comparison view).
+- Right-click a remote to **Open Remote in Browser**; right-click a stash to **Apply** or **Drop** (drop asks for confirmation first — it can't be undone).
+- Contributors are counted across every branch, not just the checked-out one, so the roster doesn't quietly drop anyone.
+
 ### Changed
 
 - **Diffstat bars** — Commit Details and Branch Comparison now show a proportional green/red bar next to each changed file, scaled to the largest file in the list, alongside the existing `+N -M` counts.

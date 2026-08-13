@@ -96,3 +96,13 @@ export const HASH_ICON = icon(
   'cell-icon',
   12,
 );
+
+/** Rebase row drag handle — two columns of grip dots, the standard "drag this" affordance. */
+export const DRAG_HANDLE_ICON = icon(
+  '<circle cx="5.5" cy="4" r="1" /><circle cx="5.5" cy="8" r="1" /><circle cx="5.5" cy="12" r="1" /><circle cx="10.5" cy="4" r="1" /><circle cx="10.5" cy="8" r="1" /><circle cx="10.5" cy="12" r="1" />',
+  'rb-drag-icon',
+  14,
+);
+
+export const CHEVRON_UP_ICON = icon('<path d="M3.5 10.5 8 5.5l4.5 5" />', 'action-icon', 12);
+export const CHEVRON_DOWN_ICON = icon('<path d="M3.5 5.5 8 10.5l4.5-5" />', 'action-icon', 12);

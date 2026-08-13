@@ -12,15 +12,19 @@ interface Manifest {
     commands: Array<{ command: string; title: string; icon?: string }>;
     menus: Record<string, Array<{ command: string; when?: string; group?: string }>>;
     views: Record<string, Array<{ id: string }>>;
+    customEditors?: Array<{ viewType: string }>;
   };
 }
 
 const manifest = JSON.parse(
   readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf8'),
 ) as Manifest;
-const { commands, menus, views } = manifest.contributes;
+const { commands, menus, views, customEditors = [] } = manifest.contributes;
 const commandIds = new Set(commands.map((c) => c.command));
-const viewIds = new Set(Object.values(views).flat().map((v) => v.id));
+// A VIEWS entry is declared through whichever contribution point actually owns it — most are
+// `contributes.views` (tree/webview panels), but a CustomTextEditorProvider's id lives in
+// `contributes.customEditors` instead. Both count as "declared" for typo-checking purposes.
+const viewIds = new Set([...Object.values(views).flat().map((v) => v.id), ...customEditors.map((c) => c.viewType)]);
 
 /*
  * package.json contributions are plain strings that nothing type-checks: a typo'd command id in a
@@ -93,8 +97,8 @@ test('view/item/context: entries name real commands and real views', () => {
   }
 });
 
-test('contributes.views: every VIEWS entry is declared exactly once', () => {
-  const declared = Object.values(views).flat().map((v) => v.id);
+test('contributes.views: every VIEWS entry is declared exactly once (via views or customEditors)', () => {
+  const declared = [...Object.values(views).flat().map((v) => v.id), ...customEditors.map((c) => c.viewType)];
   for (const [key, id] of Object.entries(VIEWS)) {
     assert.equal(declared.filter((d) => d === id).length, 1, `VIEWS.${key} (${id}) must be declared exactly once`);
   }

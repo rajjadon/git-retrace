@@ -16,6 +16,12 @@ export const COMMANDS = {
   explainCommit: 'gitLore.explainCommit',
   explainLine: 'gitLore.explainLine',
   showFileOwnership: 'gitLore.showFileOwnership',
+  rebaseInteractively: 'gitLore.rebaseInteractively',
+  checkoutBranch: 'gitLore.checkoutBranch',
+  compareBranchFromExplorer: 'gitLore.compareBranchFromExplorer',
+  openRemote: 'gitLore.openRemote',
+  applyStash: 'gitLore.applyStash',
+  dropStash: 'gitLore.dropStash',
 } as const;
 
 export const CONFIG = {
@@ -37,6 +43,7 @@ export const CONFIG = {
   aiEnabled: 'ai.enabled',
   aiModelFamily: 'ai.modelFamily',
   aiMaxDiffChars: 'ai.maxDiffChars',
+  rebaseEditorEnabled: 'rebaseEditor.enabled',
 } as const;
 
 export const VIEWS = {
@@ -45,6 +52,8 @@ export const VIEWS = {
   commitGraph: 'gitLore.commitGraph',
   branchComparison: 'gitLore.branchComparison',
   visualFileHistory: 'gitLore.visualFileHistory',
+  rebaseEditor: 'gitLore.rebaseEditor',
+  explorer: 'gitLore.explorer',
 } as const;
 
 /**
@@ -59,6 +68,7 @@ export const MEDIA = {
   commitDetails: 'commitDetails.css',
   branchComparison: 'branchComparison.css',
   visualFileHistory: 'visualFileHistory.css',
+  rebaseEditor: 'rebaseEditor.css',
   panelIcon: 'panel-icon.svg',
 } as const;
 

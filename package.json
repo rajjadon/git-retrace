@@ -68,12 +68,49 @@
         "command": "gitLore.showFileOwnership",
         "title": "GitLore: Show File Ownership",
         "icon": "$(person)"
+      },
+      {
+        "command": "gitLore.rebaseInteractively",
+        "title": "GitLore: Rebase Branch Interactively...",
+        "icon": "$(git-branch)"
+      },
+      {
+        "command": "gitLore.checkoutBranch",
+        "title": "GitLore: Checkout Branch",
+        "icon": "$(check)"
+      },
+      {
+        "command": "gitLore.compareBranchFromExplorer",
+        "title": "GitLore: Compare with Current Branch",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "gitLore.openRemote",
+        "title": "GitLore: Open Remote in Browser",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "gitLore.applyStash",
+        "title": "GitLore: Apply Stash",
+        "icon": "$(check)"
+      },
+      {
+        "command": "gitLore.dropStash",
+        "title": "GitLore: Drop Stash",
+        "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
       "panel": [
         {
           "id": "gitLore",
+          "title": "GitLore",
+          "icon": "media/panel-icon.svg"
+        }
+      ],
+      "activitybar": [
+        {
+          "id": "gitLoreExplorer",
           "title": "GitLore",
           "icon": "media/panel-icon.svg"
         }
@@ -85,6 +122,12 @@
           "id": "gitLore.fileHistory",
           "name": "File History",
           "when": "gitLore.fileHistory.hasContent"
+        }
+      ],
+      "gitLoreExplorer": [
+        {
+          "id": "gitLore.explorer",
+          "name": "Explorer"
         }
       ],
       "gitLore": [
@@ -113,11 +156,46 @@
         }
       ]
     },
+    "customEditors": [
+      {
+        "viewType": "gitLore.rebaseEditor",
+        "displayName": "GitLore Interactive Rebase",
+        "selector": [
+          {
+            "filenamePattern": "**/{rebase-merge,rebase-apply}/git-rebase-todo"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
     "menus": {
       "view/item/context": [
         {
           "command": "gitLore.copySha",
           "when": "view == gitLore.fileHistory && viewItem == gitLore.commit"
+        },
+        {
+          "command": "gitLore.checkoutBranch",
+          "when": "view == gitLore.explorer && (viewItem == gitLore.branch || viewItem == gitLore.branch.remote)",
+          "group": "inline"
+        },
+        {
+          "command": "gitLore.compareBranchFromExplorer",
+          "when": "view == gitLore.explorer && (viewItem == gitLore.branch || viewItem == gitLore.branch.remote)"
+        },
+        {
+          "command": "gitLore.openRemote",
+          "when": "view == gitLore.explorer && viewItem == gitLore.remote",
+          "group": "inline"
+        },
+        {
+          "command": "gitLore.applyStash",
+          "when": "view == gitLore.explorer && viewItem == gitLore.stash",
+          "group": "inline"
+        },
+        {
+          "command": "gitLore.dropStash",
+          "when": "view == gitLore.explorer && viewItem == gitLore.stash"
         }
       ],
       "view/title": [
@@ -174,6 +252,26 @@
         },
         {
           "command": "gitLore.explainLine",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.checkoutBranch",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.compareBranchFromExplorer",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.openRemote",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.applyStash",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.dropStash",
           "when": "false"
         }
       ]
@@ -260,6 +358,11 @@
           "type": "number",
           "default": 8000,
           "description": "Max diff size, in characters, sent to the model for a commit summary. Longer diffs are truncated."
+        },
+        "gitLore.rebaseEditor.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use GitLore's Interactive Rebase Editor for git-rebase-todo files. When disabled, they open in the default text editor."
         }
       }
     }

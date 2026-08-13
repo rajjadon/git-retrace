@@ -82,6 +82,8 @@ Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with
 - **Issue and PR links** — `#123` in a commit message becomes a link, auto-detected from your remote or pointed at any tracker (Jira included) via a regex and URL template.
 - **Stale-code detector** — a CodeLens above functions and methods untouched for longer than `gitLore.staleThresholdDays`, linking straight to the commit that last changed them.
 - **Author ownership heatmap** — an overview-ruler color mark per line, by that line's author (`gitLore.ownership.enabled`, off by default), plus **GitLore: Show File Ownership** for a recency-weighted breakdown of who owns the file.
+- **Interactive Rebase Editor** — reorder, reword, edit, squash, fixup, or drop commits with a real UI instead of hand-editing the `git rebase -i` todo file. **GitLore: Rebase Branch Interactively...** starts one, or it just works if you already use `code --wait` as your `sequence.editor`. GitLore never runs `rebase`/`--abort`/`--continue` itself — only reads, writes, and closes the file git already opens.
+- **Sidebar Explorer** — Branches, Remotes, Tags, Stashes, Worktrees, and Contributors in one always-visible tree, in its own activity bar icon. Checkout or compare a branch, open a remote in your browser, apply or drop a stash, all from the right-click menu.
 
 ## Commands
 
@@ -97,6 +99,12 @@ Every command is also a title-bar button in the GitLore panel.
 | `GitLore: Toggle Inline Blame` | Turn the end-of-line decoration on or off |
 | `GitLore: Copy Commit SHA` | Copy a commit's full SHA (from a commit's context menu) |
 | `GitLore: Show File Ownership` | See a file's authors ranked by recency-weighted ownership share (command palette only, no title-bar button) |
+| `GitLore: Rebase Branch Interactively...` | Pick a target ref and start an interactive rebase, opened in GitLore's own editor |
+| `GitLore: Checkout Branch` | Check out the selected branch (from the Explorer's context menu) |
+| `GitLore: Compare with Current Branch` | Open Branch Comparison against the selected branch (from the Explorer's context menu) |
+| `GitLore: Open Remote in Browser` | Open the selected remote's repo page (from the Explorer's context menu) |
+| `GitLore: Apply Stash` | Re-apply the selected stash without dropping it (from the Explorer's context menu) |
+| `GitLore: Drop Stash` | Permanently delete the selected stash, after confirming (from the Explorer's context menu) |
 
 ## Settings
 

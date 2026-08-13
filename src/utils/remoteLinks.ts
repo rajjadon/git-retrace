@@ -42,3 +42,12 @@ export function buildCommitUrl(remote: RemoteInfo, sha: string): string | null {
       return null;
   }
 }
+
+/**
+ * The repo's own web home page. Unlike a commit URL, this doesn't vary by host — GitHub, GitLab,
+ * Bitbucket, and virtually every self-hosted forge (Gitea, Forgejo, etc.) all serve the repo's
+ * landing page at `/<owner>/<repo>`, so this never needs to hide behind a host check.
+ */
+export function buildRepoUrl(remote: RemoteInfo): string {
+  return `https://${remote.host}/${remote.owner}/${remote.repo}`;
+}

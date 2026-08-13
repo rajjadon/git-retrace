@@ -214,3 +214,43 @@ export function buildOwnershipFixtureRepo(): OwnershipFixtureManifest {
 
   return { repoRoot, trackedFile };
 }
+
+export interface ExplorerFixtureManifest {
+  repoRoot: string;
+  trackedFile: string;
+  currentBranch: string;
+  otherBranch: string;
+  tagName: string;
+  stashMessage: string;
+}
+
+/**
+ * A fresh, isolated repo per call (mutating commands — checkout, stash apply/drop — must never
+ * touch the one shared workspace repo every other integration suite runs against) with one of
+ * everything the Sidebar Explorer lists: two local branches, a tag, and a stash entry.
+ */
+export function buildExplorerFixtureRepo(): ExplorerFixtureManifest {
+  const repoRoot = mkdtempSync(join(tmpdir(), 'gitlore-explorer-fixture-'));
+  git(repoRoot, ['init', '-q', '-b', 'main']);
+  git(repoRoot, ['config', 'user.name', 'Raj Jadon']);
+  git(repoRoot, ['config', 'user.email', 'raj@example.com']);
+
+  const trackedFile = join(repoRoot, 'tracked.txt');
+  writeFileSync(trackedFile, 'line one\n');
+  git(repoRoot, ['add', 'tracked.txt']);
+  git(repoRoot, ['commit', '-q', '-m', 'base commit'], commitEnv('Raj Jadon', 'raj@example.com', '2024-01-01T10:00:00'));
+
+  git(repoRoot, ['tag', 'v1.0.0']);
+
+  git(repoRoot, ['checkout', '-q', '-b', 'feature-y']);
+  writeFileSync(trackedFile, 'line one\nfeature line\n');
+  git(repoRoot, ['add', 'tracked.txt']);
+  git(repoRoot, ['commit', '-q', '-m', 'add feature line'], commitEnv('Amy Dev', 'amy@example.com', '2024-01-02T10:00:00'));
+  git(repoRoot, ['checkout', '-q', 'main']);
+
+  const stashMessage = 'wip explorer test';
+  writeFileSync(trackedFile, 'line one\nuncommitted change\n');
+  git(repoRoot, ['stash', 'push', '-q', '-m', stashMessage]);
+
+  return { repoRoot, trackedFile, currentBranch: 'main', otherBranch: 'feature-y', tagName: 'v1.0.0', stashMessage };
+}

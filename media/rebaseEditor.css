@@ -1,0 +1,151 @@
+/*
+ * Custom-editor replacement for `git-rebase-todo`. Unlike the panel-docked views, this one
+ * occupies a full editor tab — the row list is the whole surface, not a narrow sliver competing
+ * with two other panels, so it can afford real row height and no font-size discount.
+ */
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-editor-background);
+}
+
+.rb-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 0.6rem 1rem;
+  border-bottom: 2px solid;
+  border-image: var(--gitlore-accent-gradient) 1;
+}
+
+.rb-summary {
+  color: var(--vscode-descriptionForeground);
+}
+
+.rb-rows {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 0.5rem 0;
+}
+
+.rb-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 1rem;
+  min-height: 32px;
+}
+
+.rb-row[draggable='true'] {
+  cursor: grab;
+}
+
+.rb-row.rb-dragging {
+  opacity: 0.5;
+}
+
+.rb-row:hover {
+  background-color: var(--vscode-list-hoverBackground);
+}
+
+.rb-drag-handle {
+  flex: 0 0 auto;
+  opacity: 0.5;
+}
+
+.rb-move {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.rb-move .icon-btn {
+  padding: 0.05rem;
+}
+
+.rb-move .icon-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+  pointer-events: none;
+}
+
+.rb-action {
+  flex: 0 0 auto;
+  min-width: 90px;
+  padding: 0.15rem 0.3rem;
+  font-family: inherit;
+  font-size: 0.92em;
+  color: var(--vscode-dropdown-foreground);
+  background-color: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
+  border-radius: 2px;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+
+.rb-action:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+/* A dropped/squashed/fixed-up commit is visually de-emphasized without relying on color alone —
+   the row also loses its normal message weight, so it reads as "will not stand on its own" even
+   without color vision. */
+.rb-row-drop,
+.rb-row-squash,
+.rb-row-fixup {
+  opacity: 0.7;
+}
+
+.rb-row-drop .rb-message {
+  text-decoration: line-through;
+}
+
+.rb-sha {
+  flex: 0 0 auto;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.9em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.rb-message {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rb-row-raw {
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.92em;
+  font-style: italic;
+}
+
+.rb-actions {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
