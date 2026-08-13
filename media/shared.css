@@ -322,8 +322,12 @@ pre.diff {
   background-color: var(--vscode-textCodeBlock-background);
   border-radius: 3px;
   font-family: var(--vscode-editor-font-family);
-  font-size: var(--vscode-editor-font-size, 13px);
-  line-height: 1.5;
+  /* One notch below the editor's own size, same rule the Commit Graph already follows: a docked
+     panel — often a third of the window wide, with two others open beside it — is dense reading
+     chrome, not the main editor. Full editor size + 1.5 line-height was costing real lines of
+     visible code for no legibility gain at this width. */
+  font-size: calc(var(--vscode-editor-font-size, 13px) - 1px);
+  line-height: 1.35;
 }
 
 /* One grid row per diff line: old number, new number, content. */

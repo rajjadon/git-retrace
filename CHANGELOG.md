@@ -22,6 +22,7 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **A visible edge between docked panels** — Commit Graph, Commit Details, Branch Comparison, and Visual File History each now draw their own left border, so opening several side by side no longer reads as one undifferentiated block.
 - **Consistent secondary-text color** — dates, SHAs, author names, empty-state messages, and hint text across every panel now use the theme's own secondary-text color (`descriptionForeground`) instead of a dozen slightly different opacity values accumulated file-by-file. More consistent, and more reliably legible across themes than faking it with opacity.
 - Unified the hover-card corner radius (Commit Graph and Visual File History previously used two different values for the same kind of element).
+- **Denser inline diff view** — Commit Details and Branch Comparison's code diff now renders one notch below the editor's own font size with tighter line spacing, so a narrow docked panel shows more lines of actual code instead of a few oversized ones.
 
 ## [0.3.1] - 2026-08-13
 
