@@ -16,7 +16,8 @@ export interface FileHistoryData {
   now?: Date;
 }
 
-const LANE_HEIGHT = 90;
+/** Exported so tests can verify the jitter-safety invariant against the real value, instead of duplicating it as a second hardcoded number. */
+export const LANE_HEIGHT = 130;
 const LANE_LABEL_WIDTH = 120;
 const CHART_WIDTH = 1100;
 const AXIS_HEIGHT = 36;
@@ -29,9 +30,24 @@ const MIN_AXIS_LABEL_GAP_PX = 70;
 /** A one-line change scaled by magnitude alone can round to a sub-pixel sliver — this floor keeps every non-zero bar actually visible. */
 const MIN_BAR_HEIGHT = 4;
 const BAR_WIDTH = 8;
-/** Vertical nudge per collision tier, and the cap on how far a bubble can be pushed — kept under `LANE_HEIGHT / 2` so a jittered bubble never bleeds into the neighboring lane. */
-const JITTER_STEP = 16;
-const MAX_JITTER = 32;
+/**
+ * Collision-jitter search: a colliding bubble is pushed outward ring by ring (see
+ * `computeCollisionOffsets`) until it clears every already-placed bubble in its lane, or the
+ * search gives up. The two axes have very different budgets because they cost different things:
+ *
+ * - Vertical reach is capped so a bubble's edge can never cross into the neighboring lane — the
+ *   invariant is `MAX_VERTICAL_JITTER + MAX_RADIUS <= LANE_HEIGHT / 2`, not just
+ *   `MAX_VERTICAL_JITTER < LANE_HEIGHT / 2` (an earlier version's bug: that ignores the bubble's
+ *   own radius). At MAX_RADIUS 26 and LANE_HEIGHT 130, the safe ceiling is 65 - 26 = 39.
+ * - Horizontal reach doesn't risk lane-bleed at all, only nudging a bubble's apparent time
+ *   position — a soft, forgiving constraint, so it gets a much larger budget. A cluster tight
+ *   enough to need this is already too dense for pixel-exact timing to matter visually.
+ */
+const MAX_VERTICAL_JITTER = 39;
+const MAX_HORIZONTAL_JITTER = 180;
+const RING_STEP = 8;
+const RING_ANGLES = 24;
+const MAX_RINGS = 26;
 
 function xFor(t: number): number {
   return PADDING_X + t * (CHART_WIDTH - 2 * PADDING_X);
@@ -76,14 +92,145 @@ function radiusFor(point: FileHistoryPoint): number {
   return MIN_RADIUS + point.magnitude * (MAX_RADIUS - MIN_RADIUS);
 }
 
+interface Offset {
+  dx: number;
+  dy: number;
+}
+
+interface PlacedCircle {
+  trueX: number;
+  trueY: number;
+  x: number;
+  y: number;
+  r: number;
+}
+
+/** Signed clearance to the nearest placed circle: positive = gap of that many px, negative = overlapping by that many px. */
+function minClearance(x: number, y: number, r: number, placed: PlacedCircle[]): number {
+  if (placed.length === 0) {
+    return Infinity;
+  }
+  return Math.min(...placed.map((p) => Math.hypot(x - p.x, y - p.y) - (r + p.r)));
+}
+
+/**
+ * Finds a spot for a new circle of radius `r` (true position `trueX`, `trueY`) that doesn't
+ * overlap any already-placed circle in the same lane — genuine circle-packing, not just a vertical
+ * nudge. Tries the true position first, then walks outward ring by ring (`RING_ANGLES` directions
+ * per ring, `RING_STEP` px apart), skipping any candidate that would exceed either axis's jitter
+ * budget or push the bubble past the chart's own left/right edge, and returns as soon as one fully
+ * clears every existing circle.
+ *
+ * A handful of max-radius bubbles landing within the same second, right at the very start of a
+ * file's history, can exhaust every candidate in that bounded search area — there's only so much
+ * room a fixed jitter budget can offer. Rather than fall back to an untested, arbitrary position,
+ * every candidate's worst-case overlap is tracked and the least-bad one is used: still a real
+ * circle-packing result, just not a perfect one, for what is already a rare edge case.
+ */
+function findClearSpot(trueX: number, trueY: number, r: number, placed: PlacedCircle[]): Offset {
+  let best: Offset = { dx: 0, dy: 0 };
+  let bestClearance = minClearance(trueX, trueY, r, placed);
+  if (bestClearance >= 0) {
+    return best;
+  }
+
+  for (let ring = 1; ring <= MAX_RINGS; ring++) {
+    const reach = ring * RING_STEP;
+    for (let i = 0; i < RING_ANGLES; i++) {
+      const angle = (i / RING_ANGLES) * 2 * Math.PI;
+      const dx = Math.cos(angle) * reach;
+      const dy = Math.sin(angle) * reach;
+      if (Math.abs(dx) > MAX_HORIZONTAL_JITTER || Math.abs(dy) > MAX_VERTICAL_JITTER) {
+        continue;
+      }
+      // A cluster near either end of the timeline (t near 0 or 1) can't be allowed to drift past
+      // the chart's own edges — that would place a bubble on top of the lane labels (left) or off
+      // the right edge entirely, not just overlapping a neighbor.
+      if (trueX + dx < 0 || trueX + dx > CHART_WIDTH) {
+        continue;
+      }
+      const clearance = minClearance(trueX + dx, trueY + dy, r, placed);
+      if (clearance > bestClearance) {
+        bestClearance = clearance;
+        best = { dx, dy };
+      }
+      if (clearance >= 0) {
+        return best;
+      }
+    }
+  }
+  return best;
+}
+
+const RELAXATION_PASSES = 8;
+
+/**
+ * Attempts to move `circle` by `(dx, dy)`, rejecting the move if it would exceed that circle's own
+ * jitter budget (relative to its own true position, not the current one) or push it past the
+ * chart's left/right edge. Silently doing nothing on rejection is correct here — the caller is a
+ * relaxation step nudging two circles apart, and one circle being unable to move further just
+ * means the other absorbs more of the separation on the next pass.
+ */
+function tryMove(circle: PlacedCircle, dx: number, dy: number): void {
+  const x = circle.x + dx;
+  const y = circle.y + dy;
+  if (Math.abs(x - circle.trueX) > MAX_HORIZONTAL_JITTER || Math.abs(y - circle.trueY) > MAX_VERTICAL_JITTER) {
+    return;
+  }
+  if (x < 0 || x > CHART_WIDTH) {
+    return;
+  }
+  circle.x = x;
+  circle.y = y;
+}
+
+/**
+ * The greedy placement in `computeCollisionOffsets` only checks a new circle against ones already
+ * placed before it — it never revisits a decision once made, so an adversarial cluster (several
+ * max-radius bubbles within the same second) can leave a later circle with nowhere fully clear left
+ * to go. This is the standard fix: repeatedly find any pair that still overlaps and push both apart
+ * along the line between their centers, each clamped to its own jitter budget. A few passes over a
+ * handful of circles is negligible cost and resolves residual overlap the one-pass greedy placement
+ * couldn't.
+ */
+function relax(placed: PlacedCircle[]): void {
+  for (let pass = 0; pass < RELAXATION_PASSES; pass++) {
+    let movedAny = false;
+    for (let i = 0; i < placed.length; i++) {
+      for (let j = i + 1; j < placed.length; j++) {
+        const a = placed[i];
+        const b = placed[j];
+        if (!a || !b) continue;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist = Math.hypot(dx, dy) || 0.01;
+        const overlap = a.r + b.r - dist;
+        if (overlap <= 0.01) {
+          continue;
+        }
+        movedAny = true;
+        const push = overlap / 2 + 0.1;
+        const ux = dx / dist;
+        const uy = dy / dist;
+        tryMove(a, -ux * push, -uy * push);
+        tryMove(b, ux * push, uy * push);
+      }
+    }
+    if (!movedAny) {
+      break;
+    }
+  }
+}
+
 /**
  * Commits close together in time on the same author lane land at nearly the same x — left alone,
  * their circles fully overlap into an unreadable blob (real-world repos with rebase/squash bursts
- * hit this constantly). Walking each lane in x-order and nudging a colliding point alternately
- * up/down, with the nudge growing every consecutive collision, turns a stacked blob into a small
- * readable cluster instead. Keyed by sha, since points don't otherwise carry a stable index.
+ * hit this constantly). Greedily placing each point (in time order) in the nearest spot that clears
+ * every bubble placed before it gets most of the way there; a relaxation pass afterward resolves
+ * whatever the greedy, never-revisited placement couldn't. Keyed by sha, since points don't
+ * otherwise carry a stable index.
  */
-function computeCollisionOffsets(points: FileHistoryPoint[]): Map<string, number> {
+function computeCollisionOffsets(points: FileHistoryPoint[]): Map<string, Offset> {
   const byLane = new Map<number, FileHistoryPoint[]>();
   for (const point of points) {
     const list = byLane.get(point.lane) ?? [];
@@ -91,22 +238,28 @@ function computeCollisionOffsets(points: FileHistoryPoint[]): Map<string, number
     byLane.set(point.lane, list);
   }
 
-  const offsets = new Map<string, number>();
-  for (const lanePoints of byLane.values()) {
+  const offsets = new Map<string, Offset>();
+  for (const [lane, lanePoints] of byLane) {
+    const laneCenterY = laneY(lane);
     const sorted = [...lanePoints].sort((a, b) => a.t - b.t);
-    let lastX: number | undefined;
-    let lastR = 0;
-    let tier = 0;
+    const placed: PlacedCircle[] = [];
+    const shaByCircle = new Map<PlacedCircle, string>();
     for (const point of sorted) {
-      const x = xFor(point.t);
+      const trueX = xFor(point.t);
       const r = radiusFor(point);
-      const collides = lastX !== undefined && Math.abs(x - lastX) < lastR + r;
-      tier = collides ? tier + 1 : 0;
-      const sign = tier % 2 === 1 ? 1 : -1;
-      const magnitude = Math.min(Math.ceil(tier / 2) * JITTER_STEP, MAX_JITTER);
-      offsets.set(point.entry.sha, tier === 0 ? 0 : sign * magnitude);
-      lastX = x;
-      lastR = r;
+      const offset = findClearSpot(trueX, laneCenterY, r, placed);
+      const circle: PlacedCircle = { trueX, trueY: laneCenterY, x: trueX + offset.dx, y: laneCenterY + offset.dy, r };
+      placed.push(circle);
+      shaByCircle.set(circle, point.entry.sha);
+    }
+
+    relax(placed);
+
+    for (const circle of placed) {
+      const sha = shaByCircle.get(circle);
+      if (sha !== undefined) {
+        offsets.set(sha, { dx: circle.x - circle.trueX, dy: circle.y - circle.trueY });
+      }
     }
   }
   return offsets;
@@ -119,10 +272,10 @@ function computeCollisionOffsets(points: FileHistoryPoint[]): Map<string, number
  * label text above it. The avatar photo still appears once, in the hover tooltip, where there's
  * room for it to mean something.
  */
-function renderBubble(point: FileHistoryPoint, now: Date, yOffset: number): string {
+function renderBubble(point: FileHistoryPoint, now: Date, offset: Offset): string {
   const { entry } = point;
-  const cx = xFor(point.t);
-  const cy = laneY(point.lane) + yOffset;
+  const cx = xFor(point.t) + offset.dx;
+  const cy = laneY(point.lane) + offset.dy;
   const r = radiusFor(point);
   const avatarUrl = buildGravatarUrl(entry.authorEmail, { size: 32 });
   const age = formatAge(new Date(entry.date), now);
@@ -199,7 +352,7 @@ ${styles}
     .join('');
 
   const collisionOffsets = computeCollisionOffsets(points);
-  const bubbles = points.map((p) => renderBubble(p, now, collisionOffsets.get(p.entry.sha) ?? 0)).join('\n');
+  const bubbles = points.map((p) => renderBubble(p, now, collisionOffsets.get(p.entry.sha) ?? { dx: 0, dy: 0 })).join('\n');
   const bars = points.map((p) => renderChangeBar(p, barsY)).join('\n');
   const axisLabels = renderAxisLabels(points, now, axisY);
 

@@ -24,6 +24,11 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - Unified the hover-card corner radius (Commit Graph and Visual File History previously used two different values for the same kind of element).
 - **Denser inline diff view** — Commit Details and Branch Comparison's code diff now renders one notch below the editor's own font size with tighter line spacing, so a narrow docked panel shows more lines of actual code instead of a few oversized ones.
 
+### Fixed
+
+- **Visual File History**: a large bubble pushed to the far edge of its collision jitter could visually cross into the neighboring author's lane. The safety check only accounted for the jitter distance, not the bubble's own radius; fixed by accounting for both and giving lanes more vertical room.
+- **Visual File History**: bubbles from commits made close together in time could still overlap each other after separation, especially for large, similarly-sized changes. Replaced the vertical-only jitter with genuine 2D circle-packing (an outward search plus a relaxation pass), so a dense burst of commits now renders as fully separate, individually legible bubbles instead of a partially-merged cluster.
+
 ## [0.3.1] - 2026-08-13
 
 ### Changed

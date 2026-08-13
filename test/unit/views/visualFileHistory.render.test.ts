@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderFileHistoryHtml } from '../../../src/views/VisualFileHistory/render';
+import { renderFileHistoryHtml, LANE_HEIGHT } from '../../../src/views/VisualFileHistory/render';
 import { layoutFileHistory } from '../../../src/core/graph/fileHistoryLayout';
 import type { FileHistoryEntry } from '../../../src/core/git/types';
 
@@ -91,6 +91,66 @@ test('renderFileHistoryHtml: carries structured, escaped tooltip data for the cl
   assert.match(html, /data-avatar="https:\/\/[^"]+"/);
 });
 
+test('renderFileHistoryHtml: colliding bubbles never overlap each other, even a dense burst of max-radius commits', () => {
+  // Same scenario as the lane-bleed test below, but checking pairwise separation this time: every
+  // bubble's center-to-center distance from every other bubble must be at least the sum of their
+  // radii, i.e. the circles don't overlap at all (not just "distinct", which a 1px difference would
+  // already satisfy).
+  const big = [1, 2, 3, 4, 5].map((n) =>
+    entry(`S${n}`, 'Raj Jadon', 'raj@example.com', `2024-03-01T00:00:0${n}Z`, 200, 0),
+  );
+  const points = layoutFileHistory(big, now);
+  const html = renderFileHistoryHtml({ points, now }, opts);
+
+  const bubbles = Array.from(
+    html.matchAll(/class="fh-bubble" cx="([0-9.]+)" cy="([0-9.]+)" r="([0-9.]+)"/g),
+  ).map((m) => ({ cx: Number(m[1]), cy: Number(m[2]), r: Number(m[3]) }));
+  assert.equal(bubbles.length, 5);
+
+  for (let i = 0; i < bubbles.length; i++) {
+    for (let j = i + 1; j < bubbles.length; j++) {
+      const a = bubbles[i];
+      const b = bubbles[j];
+      if (!a || !b) continue;
+      const distance = Math.hypot(a.cx - b.cx, a.cy - b.cy);
+      const required = a.r + b.r;
+      assert.ok(
+        distance >= required - 0.5,
+        `bubbles ${i} and ${j} overlap: centers ${distance.toFixed(1)}px apart, need ${required}px`,
+      );
+    }
+  }
+});
+
+test("renderFileHistoryHtml: a jittered bubble's edge never crosses into the neighboring lane, even at max radius", () => {
+  // Five large, near-simultaneous commits on one lane force the collision jitter through every
+  // tier up to its cap. An earlier version of this check only verified `jitter < LANE_HEIGHT / 2`,
+  // which ignores the bubble's own radius — a max-radius bubble jittered to the cap could still
+  // visually cross into the next lane's territory. Checked against the module's real exported
+  // LANE_HEIGHT and each bubble's actual rendered radius, not a second hardcoded number.
+  const big = [1, 2, 3, 4, 5].map((n) =>
+    entry(`S${n}`, 'Raj Jadon', 'raj@example.com', `2024-03-01T00:00:0${n}Z`, 200, 0),
+  );
+  const points = layoutFileHistory(big, now);
+  const html = renderFileHistoryHtml({ points, now }, opts);
+
+  const bubbles = Array.from(html.matchAll(/class="fh-bubble" cx="[0-9.]+" cy="([0-9.]+)" r="([0-9.]+)"/g)).map((m) => ({
+    cy: Number(m[1]),
+    r: Number(m[2]),
+  }));
+  assert.equal(bubbles.length, 5);
+
+  // All five are on the same (only) lane, so its un-jittered center is exactly LANE_HEIGHT / 2.
+  const laneCenter = LANE_HEIGHT / 2;
+  for (const bubble of bubbles) {
+    const reach = Math.abs(bubble.cy - laneCenter) + bubble.r;
+    assert.ok(
+      reach <= LANE_HEIGHT / 2,
+      `bubble at cy=${bubble.cy} r=${bubble.r} reaches ${reach}px from its lane center (limit ${LANE_HEIGHT / 2}) — crosses into the neighboring lane`,
+    );
+  }
+});
+
 test('renderFileHistoryHtml: draws a baseline separating the author lanes from the change-bar band', () => {
   const points = layoutFileHistory(
     [entry('A', 'Raj Jadon', 'raj@example.com', '2024-01-01T00:00:00Z', 3, 1)],
@@ -112,7 +172,10 @@ test('renderFileHistoryHtml: sets a strict CSP with no unsafe-inline', () => {
   assert.match(html, /Content-Security-Policy/);
 });
 
-test('renderFileHistoryHtml: commits seconds apart on the same lane render at different cy, not stacked into one blob', () => {
+test('renderFileHistoryHtml: commits seconds apart on the same lane render as separate, non-overlapping bubbles', () => {
+  // Checking actual non-overlap (distance >= sum of radii), not "distinct cy" — the collision
+  // resolver can legitimately separate two same-radius bubbles purely horizontally, leaving them
+  // at the same cy while still not overlapping at all.
   const points = layoutFileHistory(
     [
       entry('C', 'Raj Jadon', 'raj@example.com', '2024-03-01T00:00:03Z', 5, 0),
@@ -122,14 +185,22 @@ test('renderFileHistoryHtml: commits seconds apart on the same lane render at di
     now,
   );
   const html = renderFileHistoryHtml({ points, now }, opts);
-  const cyOf = (sha: string): number => {
-    const re = new RegExp(`data-sha="${sha}"[\\s\\S]*?class="fh-bubble"[^>]*cy="([0-9.]+)"`);
+  const bubbleOf = (sha: string): { cx: number; cy: number; r: number } => {
+    const re = new RegExp(`data-sha="${sha}"[\\s\\S]*?class="fh-bubble" cx="([0-9.]+)" cy="([0-9.]+)" r="([0-9.]+)"`);
     const match = re.exec(html);
     assert.ok(match, `no bubble found for ${sha}`);
-    return Number(match[1]);
+    return { cx: Number(match[1]), cy: Number(match[2]), r: Number(match[3]) };
   };
-  const cys = [cyOf('A'), cyOf('B'), cyOf('C')];
-  assert.equal(new Set(cys).size, 3, `expected 3 distinct cy values, got ${cys.join(', ')}`);
+  const bubbles = [bubbleOf('A'), bubbleOf('B'), bubbleOf('C')];
+  for (let i = 0; i < bubbles.length; i++) {
+    for (let j = i + 1; j < bubbles.length; j++) {
+      const a = bubbles[i];
+      const b = bubbles[j];
+      if (!a || !b) continue;
+      const distance = Math.hypot(a.cx - b.cx, a.cy - b.cy);
+      assert.ok(distance >= a.r + b.r - 0.5, `bubbles ${i} and ${j} overlap: ${distance.toFixed(1)}px apart, need ${a.r + b.r}`);
+    }
+  }
 });
 
 test('renderFileHistoryHtml: axis labels never overlap, even when a burst of commits clusters tightly inside a long history', () => {
