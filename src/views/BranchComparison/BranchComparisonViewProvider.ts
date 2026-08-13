@@ -92,8 +92,18 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
     await this.load(filePath, refs.base, refs.compare);
   }
 
-  /** Called by the "Compare Branches" command — reveals the panel tab and loads the given comparison. */
+  /**
+   * Called by the "Compare Branches" command — reveals the panel tab and loads the given
+   * comparison. Claims `currentBase`/`currentCompare` *before* `.focus()`, not after: focusing
+   * the panel for the first time in a session synchronously triggers `resolveWebviewView`, which
+   * fires `loadDefault()` as an unawaited, independent chain. `loadDefault()`'s only defense
+   * against that race is checking `currentBase` — so it has to already be set by the time
+   * `loadDefault()`'s own (cheaper, 2-call) git fetch resolves, or the two calls end up racing to
+   * decide what the user sees, with no guarantee this explicit call wins.
+   */
   async show(filePath: string, base: string, compare: string): Promise<void> {
+    this.currentBase = base;
+    this.currentCompare = compare;
     await vscode.commands.executeCommand(`${VIEWS.branchComparison}.focus`);
     await waitForWebviewView(() => this.view);
     await this.load(filePath, base, compare);

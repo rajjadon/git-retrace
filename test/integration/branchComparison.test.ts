@@ -37,6 +37,27 @@ suite('Branch comparison webview', () => {
     return api.getBranchComparisonHtml() ?? '';
   }
 
+  test('an explicit show(base, compare) always wins over the panel\'s own default-ref guess, even on its first-ever reveal', async () => {
+    // Regression test for a real race: focusing the panel for the first time in a session
+    // synchronously triggers resolveWebviewView -> loadDefault(), an independent, unawaited
+    // fetch-and-render chain racing this command's own explicit one. `pickDefaultRefs` would
+    // naturally pick the *current* branch ('main', since the fixture checks it out) as `compare`
+    // — this test deliberately requests the opposite pairing (`main` as base) so a lost race is
+    // visibly wrong, not accidentally the same answer.
+    const fixture = buildBranchFixtureRepo();
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+
+    await vscode.commands.executeCommand(COMMANDS.compareBranches, fixture.baseBranch, fixture.featureBranch);
+    await waitFor(() => (api.getBranchComparisonHtml() ?? '').includes('add feature line'));
+
+    const html = api.getBranchComparisonHtml() ?? '';
+    assert.match(html, /<option value="main" selected>main<\/option>/);
+    assert.match(html, /<option value="feature-x" selected>feature-x<\/option>/);
+    assert.match(html, /class="ref-pick ref-base">[\s\S]*?value="main" selected/);
+    assert.match(html, /class="ref-pick ref-compare">[\s\S]*?value="feature-x" selected/);
+  });
+
   test('shows ahead commits, files changed, and diff between two branches', async () => {
     const html = await openComparison();
     assert.match(html, /add feature line/);
