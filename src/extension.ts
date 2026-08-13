@@ -10,7 +10,8 @@ import { StatusBarProvider } from './providers/StatusBarProvider';
 import { GitContentProvider } from './providers/GitContentProvider';
 import { StaleCodeLensProvider } from './providers/CodeLensProvider';
 import { OwnershipDecorationProvider } from './providers/OwnershipDecorationProvider';
-import { handleToggleBlameCommand } from './commands/blameCommands';
+import { FullFileBlameDecorationProvider } from './providers/FullFileBlameDecorationProvider';
+import { handleToggleBlameCommand, handleStepLineHistoryCommand, handleToggleFullFileBlameCommand } from './commands/blameCommands';
 import { handleShowFileHistoryCommand, handleCopyShaCommand } from './commands/fileHistoryCommands';
 import { handleShowCommitCommand } from './commands/commitCommands';
 import { handleOpenGraphCommand } from './commands/graphCommands';
@@ -43,6 +44,7 @@ export interface GitLoreTestApi {
   fileHistoryProvider: FileHistoryProvider;
   statusBarProvider: StatusBarProvider;
   ownershipProvider: OwnershipDecorationProvider;
+  fullFileBlameProvider: FullFileBlameDecorationProvider;
   git: GitService;
   getCommitDetailsHtml: () => string | undefined;
   getCommitGraphHtml: () => string | undefined;
@@ -71,11 +73,13 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
   const languageModelClient = new LanguageModelClient(logger);
   const lineExplanationStore = new LruCache<string, LineExplanationState>(50);
   const lineExplanationService = new LineExplanationService(git, languageModelClient, logger, lineExplanationStore);
+  const lineHistoryNavStore = new LruCache<string, number>(50);
   const blameSource = new BlameSource(git, logger);
   const blameProvider = new BlameDecorationProvider(blameSource);
-  const hoverProvider = new BlameHoverProvider(blameSource, git, lineExplanationStore);
+  const hoverProvider = new BlameHoverProvider(blameSource, git, lineExplanationStore, lineHistoryNavStore);
   const staleCodeLensProvider = new StaleCodeLensProvider(blameSource);
   const ownershipProvider = new OwnershipDecorationProvider(blameSource);
+  const fullFileBlameProvider = new FullFileBlameDecorationProvider(blameSource);
   const fileHistoryProvider = new FileHistoryProvider(git);
   const statusBarProvider = new StatusBarProvider(blameProvider);
   const commitGraphViewProvider = new CommitGraphViewProvider(ctx.extensionUri, git);
@@ -92,7 +96,10 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     statusBarProvider,
     staleCodeLensProvider,
     ownershipProvider,
+    fullFileBlameProvider,
     handleToggleBlameCommand(blameProvider),
+    handleToggleFullFileBlameCommand(fullFileBlameProvider),
+    handleStepLineHistoryCommand(git, lineHistoryNavStore),
     handleShowFileHistoryCommand(fileHistoryProvider),
     handleCopyShaCommand(),
     handleShowCommitCommand(commitDetailsViewProvider),
@@ -137,6 +144,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     fileHistoryProvider,
     statusBarProvider,
     ownershipProvider,
+    fullFileBlameProvider,
     git,
     getCommitDetailsHtml: () => commitDetailsViewProvider.getCurrentHtmlForTest(),
     getCommitGraphHtml: () => commitGraphViewProvider.getCurrentHtmlForTest(),

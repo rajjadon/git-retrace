@@ -17,10 +17,12 @@ import {
   parseContributors,
   parseRemoteUrl,
   parseStatusPorcelain,
+  parseLineHistoryLog,
   LOG_FORMAT,
   COMMIT_DETAIL_FORMAT,
   GRAPH_LOG_FORMAT,
   BRANCH_FORMAT,
+  LINE_HISTORY_FORMAT,
 } from './parsers';
 import type {
   BlameLine,
@@ -178,6 +180,32 @@ export class GitService {
       const stderr = err instanceof Error ? err.message : String(err);
       this.logger?.error(`git log failed for ${filePath}`, err);
       throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /**
+   * Every commit that changed this exact line, newest first, via git's own line-tracking (`-L`)
+   * rather than a naive "which commits touched this file" scan — the blame hover's prev/next
+   * stepper walks this list. `line` is 0-based (matching `BlameLine.line`); git's `-L` is 1-based.
+   *
+   * Doesn't pass `--follow`: combining it with `-L` has been unreliable across git versions, and
+   * stepping through one file's own history is enough for this feature.
+   */
+  async getLineHistory(filePath: string, line: number): Promise<Commit[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    const git = this.gitFor(repoRoot);
+    const rel = toRepoRelativePath(repoRoot, this.toCanonicalPath(filePath));
+    const gitLine = line + 1;
+    const args = ['log', `--format=${LINE_HISTORY_FORMAT}`, '-L', `${gitLine},${gitLine}:${rel}`];
+    try {
+      const raw = await git.raw(args);
+      return parseLineHistoryLog(raw);
+    } catch {
+      // Line out of range, file deleted, or an unborn HEAD — nothing to step through, not an error.
+      return [];
     }
   }
 

@@ -1,4 +1,5 @@
 import * as assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import * as vscode from 'vscode';
 import { buildBranchFixtureRepo } from '../fixtures/build-fixture-repo';
 import type { GitLoreTestApi } from '../../src/extension';
@@ -74,5 +75,30 @@ suite('Branch comparison webview', () => {
     // nothing to compare it against, so the command reports that and stops.
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     await vscode.commands.executeCommand(COMMANDS.compareBranches);
+  });
+
+  test('shows an Open all changes button alongside the per-file diff actions', async () => {
+    const html = await openComparison();
+    assert.match(html, /id="open-all"/);
+  });
+
+  test('no Create PR button when the repo has no remote configured', async () => {
+    const html = await openComparison();
+    assert.ok(!html.includes('id="create-pr"'));
+  });
+
+  test('shows a Create PR button pointed at the compare URL when the repo has a recognized-host remote', async () => {
+    const fixture = buildBranchFixtureRepo();
+    execFileSync('git', ['remote', 'add', 'origin', 'https://github.com/acme/widgets.git'], { cwd: fixture.repoRoot });
+
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand(COMMANDS.compareBranches, fixture.baseBranch, fixture.featureBranch);
+    await waitFor(() => (api.getBranchComparisonHtml() ?? '').includes('add feature line'));
+
+    const html = api.getBranchComparisonHtml() ?? '';
+    assert.match(html, /id="create-pr"/);
+    assert.match(html, /Create a PR on GitHub/);
+    assert.match(html, /type: 'createPr'/);
   });
 });

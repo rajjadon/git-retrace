@@ -1,17 +1,27 @@
 import * as vscode from 'vscode';
 import { GitService } from '../core/git/GitService';
 import type { BlameSource } from './BlameSource';
-import { formatBlameHover } from '../utils/format';
+import { formatBlameHover, formatLineHistoryHover } from '../utils/format';
 import { resolveIssueLinking } from './issueLinking';
 import { CONFIG, COMMANDS, DEFAULT_MAX_BLAME_FILE_SIZE } from '../constants';
 import { buildLineExplanationKey, type LineExplanationState } from '../core/ai/lineExplanationKey';
+import { buildCacheKey } from '../utils/path';
 import type { LruCache } from '../core/cache/LruCache';
+
+const HOVER_ENABLED_COMMANDS = [
+  COMMANDS.explainLine,
+  COMMANDS.stepLineHistory,
+  COMMANDS.compareBranches,
+  COMMANDS.showFileHistory,
+  COMMANDS.copySha,
+];
 
 export class BlameHoverProvider implements vscode.HoverProvider {
   constructor(
     private readonly source: BlameSource,
     private readonly git: GitService,
     private readonly lineExplanationStore: LruCache<string, LineExplanationState>,
+    private readonly lineHistoryNavStore: LruCache<string, number>,
   ) {}
 
   async provideHover(doc: vscode.TextDocument, pos: vscode.Position): Promise<vscode.Hover | undefined> {
@@ -32,8 +42,32 @@ export class BlameHoverProvider implements vscode.HoverProvider {
         return undefined;
       }
 
-      const diffStat = entry.isUncommitted ? null : await this.git.getFileDiffStat(doc.uri.fsPath, entry.sha);
       const issueLinking = await resolveIssueLinking(this.git, doc.uri.fsPath);
+
+      if (!entry.isUncommitted) {
+        const repoRoot = await this.git.getRepoRoot(doc.uri.fsPath);
+        const navKey = buildCacheKey(repoRoot ?? doc.uri.fsPath, doc.uri.fsPath, String(pos.line));
+        const navIndex = this.lineHistoryNavStore.get(navKey) ?? 0;
+
+        if (navIndex > 0) {
+          const history = await this.git.getLineHistory(doc.uri.fsPath, pos.line);
+          const clampedIndex = Math.min(navIndex, history.length - 1);
+          const commit = history[clampedIndex];
+          // A history of only one entry (or none — e.g. the file changed on disk since the
+          // stepper last ran) has nothing to step *to*; fall through to the live card instead.
+          if (commit && history.length > 1) {
+            const diffStat = await this.git.getFileDiffStat(doc.uri.fsPath, commit.sha);
+            const markdown = new vscode.MarkdownString(
+              formatLineHistoryHover(commit, diffStat, doc.uri.fsPath, pos.line, clampedIndex, history.length, undefined, issueLinking),
+            );
+            markdown.isTrusted = { enabledCommands: HOVER_ENABLED_COMMANDS };
+            markdown.supportThemeIcons = true;
+            return new vscode.Hover(markdown);
+          }
+        }
+      }
+
+      const diffStat = entry.isUncommitted ? null : await this.git.getFileDiffStat(doc.uri.fsPath, entry.sha);
       const lineContent = doc.lineAt(pos.line).text.slice(0, 500);
 
       let lineExplanation: LineExplanationState | undefined;
@@ -46,7 +80,7 @@ export class BlameHoverProvider implements vscode.HoverProvider {
       const markdown = new vscode.MarkdownString(
         formatBlameHover(entry, diffStat, doc.uri.fsPath, lineContent, lineExplanation, undefined, issueLinking),
       );
-      markdown.isTrusted = { enabledCommands: [COMMANDS.explainLine] };
+      markdown.isTrusted = { enabledCommands: HOVER_ENABLED_COMMANDS };
       markdown.supportThemeIcons = true;
       return new vscode.Hover(markdown);
     } catch {

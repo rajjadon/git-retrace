@@ -98,6 +98,16 @@
         "command": "gitLore.dropStash",
         "title": "GitLore: Drop Stash",
         "icon": "$(trash)"
+      },
+      {
+        "command": "gitLore.stepLineHistory",
+        "title": "GitLore: Step Through This Line's History",
+        "icon": "$(chevron-left)"
+      },
+      {
+        "command": "gitLore.toggleFullFileBlame",
+        "title": "GitLore: Toggle Full-File Blame Heatmap",
+        "icon": "$(flame)"
       }
     ],
     "viewsContainers": {
@@ -273,6 +283,10 @@
         {
           "command": "gitLore.dropStash",
           "when": "false"
+        },
+        {
+          "command": "gitLore.stepLineHistory",
+          "when": "false"
         }
       ]
     },
@@ -328,6 +342,11 @@
           "type": "boolean",
           "default": false,
           "description": "Show a color mark per line in the editor's overview ruler for that line's author. A more opinionated visual than inline blame, so it's off by default."
+        },
+        "gitLore.fullFileBlame.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show a hot-to-cold recency gradient as a left-edge mark per line, across the whole file. A more opinionated visual than inline blame, so it's off by default."
         },
         "gitLore.issueLinking.enabled": {
           "type": "boolean",

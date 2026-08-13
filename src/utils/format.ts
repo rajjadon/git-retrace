@@ -1,4 +1,4 @@
-import type { BlameLine, FileChange } from '../core/git/types';
+import type { BlameLine, Commit, FileChange } from '../core/git/types';
 import { formatAge, formatAbsolute } from './date';
 import { buildGravatarUrl } from './gravatar';
 import { linkifyIssues, type IssueLinkOptions } from './issueLinks';
@@ -34,6 +34,42 @@ function buildExplainLineLink(filePath: string, sha: string, lineContent: string
   return `[$(sparkle) Explain this line](command:${COMMANDS.explainLine}?${linkArgs})`;
 }
 
+/** Compare / File History / Copy SHA — all three already exist as standalone commands; the hover just links to them rather than duplicating their behavior. Compare and File History act on the file, not the specific commit, so they take no arguments; only Copy SHA needs one. */
+function buildQuickActionsRow(sha: string): string {
+  const copyArgs = encodeURIComponent(JSON.stringify([sha]));
+  return [
+    `[$(git-compare) Compare](command:${COMMANDS.compareBranches})`,
+    `[$(history) File History](command:${COMMANDS.showFileHistory})`,
+    `[$(copy) Copy SHA](command:${COMMANDS.copySha}?${copyArgs})`,
+  ].join(' · ');
+}
+
+/**
+ * The lone "Older" link shown on the *live* blame card (nothing to page through yet — going
+ * "forward" from the current line doesn't mean anything). Deliberately doesn't show a "N of M"
+ * count: that would require fetching the line's full `-L` history — a meaningfully more
+ * expensive git call than a blame lookup — on every hover, whether or not the user ever clicks
+ * it. Cost is paid only once they actually navigate; see `buildLineHistoryNavRow`.
+ */
+function buildLineHistoryNavLink(filePath: string, line: number): string {
+  const args = encodeURIComponent(JSON.stringify([filePath, line, 'prev']));
+  return `[$(chevron-left) Older](command:${COMMANDS.stepLineHistory}?${args})`;
+}
+
+/**
+ * The full prev/next row shown once the stepper has actually navigated — at that point the
+ * caller already paid for the `-L` history fetch, so the total count is known and both
+ * directions can be rendered precisely: "next" is always a link (going to index 0, the live
+ * entry, is always valid), "prev" becomes plain (non-link) text once the oldest revision is reached.
+ */
+function buildLineHistoryNavRow(filePath: string, line: number, index: number, total: number): string {
+  const prevArgs = encodeURIComponent(JSON.stringify([filePath, line, 'prev']));
+  const nextArgs = encodeURIComponent(JSON.stringify([filePath, line, 'next']));
+  const prev = index < total - 1 ? `[$(chevron-left)](command:${COMMANDS.stepLineHistory}?${prevArgs})` : '$(chevron-left)';
+  const next = `[$(chevron-right)](command:${COMMANDS.stepLineHistory}?${nextArgs})`;
+  return `${prev} ${index + 1} of ${total} ${next}`;
+}
+
 /**
  * Renders the line-explanation section of the hover based on its current state. A `Hover` can't
  * be updated after it's returned (no live-streaming API), so "in progress" and "finished" are
@@ -67,10 +103,12 @@ function formatLineExplanation(
 }
 
 /**
- * Builds the markdown body for the blame hover card. Pure — the caller wraps the result in
- * a `vscode.MarkdownString` and must set both `isTrusted = { enabledCommands: [COMMANDS.explainLine] }`
- * (for the command link to be clickable) and `supportThemeIcons = true` (for `$(sparkle)` etc. to
- * render as icons instead of literal text) — VS Code ignores both by default.
+ * Builds the markdown body for the blame hover card. Pure — the caller wraps the result in a
+ * `vscode.MarkdownString` and must set both `isTrusted = { enabledCommands: [...] }` (listing
+ * every command a link in this output points at — `explainLine`, `compareBranches`,
+ * `showFileHistory`, `copySha`, `stepLineHistory` — for the links to be clickable) and
+ * `supportThemeIcons = true` (for `$(sparkle)` etc. to render as icons instead of literal text) —
+ * VS Code ignores both by default.
  *
  * Every return path ends with a trailing `---` thematic break. GitLore cannot suppress or control
  * other hover providers (VS Code's own native git blame, TypeScript's type-info hover, etc.) that
@@ -118,7 +156,54 @@ export function formatBlameHover(
     lines.push(`$(diff) +${diffStat.insertions} -${diffStat.deletions} in this file`);
   }
 
+  lines.push('', buildQuickActionsRow(entry.sha));
+  lines.push('', buildLineHistoryNavLink(filePath, entry.line));
   lines.push('', formatLineExplanation(lineExplanation, filePath, entry.sha, lineContent));
+  lines.push('', '---');
+
+  return lines.join('\n');
+}
+
+/**
+ * Renders the card shown once the hover's prev/next stepper has navigated away from the live
+ * blame entry. Same avatar/author/message/date/sha/diffstat layout as `formatBlameHover`, but no
+ * AI-explain section — that feature is keyed to the *current* file's line content, which doesn't
+ * correspond to a historical revision's version of the line — and a full nav row instead of the
+ * single "Older" link, now that the caller already knows the total step count.
+ */
+export function formatLineHistoryHover(
+  commit: Commit,
+  diffStat: FileChange | null,
+  filePath: string,
+  line: number,
+  index: number,
+  total: number,
+  now: Date = new Date(),
+  issueLinking: IssueLinkOptions | null = null,
+): string {
+  const date = new Date(commit.date);
+  const avatarUrl = buildGravatarUrl(commit.authorEmail, { size: 20 });
+  const author = escapeMarkdown(commit.author);
+  const message = formatMessage(commit.message, issueLinking);
+  const age = formatAge(date, now);
+  const absoluteDate = formatAbsolute(date, 'yyyy-MM-dd HH:mm');
+  const shortSha = commit.sha.slice(0, 7);
+
+  const lines = [
+    `| ![](${avatarUrl}) | **${author}** |`,
+    '| :--- | :--- |',
+    '',
+    message,
+    '',
+    `${age} · ${absoluteDate} · \`${shortSha}\``,
+  ];
+
+  if (diffStat && !diffStat.binary) {
+    lines.push(`$(diff) +${diffStat.insertions} -${diffStat.deletions} in this file`);
+  }
+
+  lines.push('', buildQuickActionsRow(commit.sha));
+  lines.push('', buildLineHistoryNavRow(filePath, line, index, total));
   lines.push('', '---');
 
   return lines.join('\n');

@@ -31,3 +31,17 @@ export function chartCssVarForIndex(index: number): string {
 export function chartThemeColorIdForIndex(index: number): string {
   return idForIndex(index);
 }
+
+/**
+ * Ordered hot → cold, unlike `CHART_THEME_COLOR_IDS` (categorical, order carries no meaning) —
+ * for the full-file gutter blame's recency gradient, where index 0 must read as "most recent"
+ * and the last index as "oldest". Still theme-native ThemeColor ids, never hardcoded hex, so the
+ * gradient stays legible across light, dark, and high-contrast themes.
+ */
+export const RECENCY_GRADIENT_COLOR_IDS = ['charts.red', 'charts.orange', 'charts.yellow', 'charts.green', 'charts.blue'];
+
+/** VS Code theme color id for a recency bucket index (0 = hottest/most recent). Clamped, not wrapped — bucket indices are already bounded by the caller. */
+export function recencyGradientColorIdForBucket(index: number): string {
+  const clamped = Math.max(0, Math.min(RECENCY_GRADIENT_COLOR_IDS.length - 1, index));
+  return RECENCY_GRADIENT_COLOR_IDS[clamped] ?? 'charts.foreground';
+}

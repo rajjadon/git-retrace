@@ -1,7 +1,7 @@
 import * as assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as vscode from 'vscode';
-import { MANIFEST_PATH, type FixtureManifest } from '../fixtures/build-fixture-repo';
+import { MANIFEST_PATH, type FixtureManifest, buildLineHistoryFixtureRepo } from '../fixtures/build-fixture-repo';
 import type { GitLoreTestApi } from '../../src/extension';
 import { EXTENSION_ID } from './extensionId';
 import { COMMANDS } from '../../src/constants';
@@ -57,7 +57,8 @@ suite('Blame hover card', () => {
     assert.ok(hover, 'expected at least one hover');
     const content = hover.contents[0] as vscode.MarkdownString;
     assert.match(content.value, new RegExp(`command:${COMMANDS.explainLine}\\?`));
-    assert.deepEqual(content.isTrusted, { enabledCommands: [COMMANDS.explainLine] });
+    const trusted = content.isTrusted as { enabledCommands: string[] } | undefined;
+    assert.ok(trusted?.enabledCommands.includes(COMMANDS.explainLine));
   });
 
   test('shows no hover for an untracked file', async () => {
@@ -250,5 +251,173 @@ suite('Blame hover card', () => {
 
     const state = await api.getLineExplanationStateForTest(manifest.trackedFile, badSha, 'line three');
     assert.equal(state?.status, 'error');
+  });
+
+  test('shows Compare / File History / Copy SHA quick actions for a committed line', async () => {
+    const doc = await vscode.workspace.openTextDocument(manifest.trackedFile);
+    await vscode.window.showTextDocument(doc);
+
+    const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+      'vscode.executeHoverProvider',
+      doc.uri,
+      new vscode.Position(2, 0),
+    );
+    const content = hovers?.[0]?.contents[0] as vscode.MarkdownString;
+    assert.match(content.value, new RegExp(`command:${COMMANDS.compareBranches}\\)`));
+    assert.match(content.value, new RegExp(`command:${COMMANDS.showFileHistory}\\)`));
+    assert.match(content.value, new RegExp(`command:${COMMANDS.copySha}\\?`));
+    const trusted = content.isTrusted as { enabledCommands: string[] } | undefined;
+    for (const id of [COMMANDS.compareBranches, COMMANDS.showFileHistory, COMMANDS.copySha, COMMANDS.stepLineHistory]) {
+      assert.ok(trusted?.enabledCommands.includes(id), `expected ${id} in enabledCommands`);
+    }
+  });
+
+  test('shows a lone "Older" link with no count on the live card', async () => {
+    const doc = await vscode.workspace.openTextDocument(manifest.trackedFile);
+    await vscode.window.showTextDocument(doc);
+
+    const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+      'vscode.executeHoverProvider',
+      doc.uri,
+      new vscode.Position(2, 0),
+    );
+    const content = hovers?.[0]?.contents[0] as vscode.MarkdownString;
+    assert.match(content.value, new RegExp(`command:${COMMANDS.stepLineHistory}\\?`));
+    assert.ok(!/\d+ of \d+/.test(content.value));
+  });
+
+  suite('line-history revision nav', () => {
+    let fixture: ReturnType<typeof buildLineHistoryFixtureRepo>;
+
+    setup(() => {
+      fixture = buildLineHistoryFixtureRepo();
+    });
+
+    teardown(async () => {
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    });
+
+    async function hoverAt(line: number): Promise<vscode.MarkdownString> {
+      const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+      await vscode.window.showTextDocument(doc);
+      const hovers = await vscode.commands.executeCommand<vscode.Hover[]>(
+        'vscode.executeHoverProvider',
+        doc.uri,
+        new vscode.Position(line, 0),
+      );
+      const content = hovers?.[0]?.contents[0];
+      assert.ok(content, 'expected a hover');
+      return content as vscode.MarkdownString;
+    }
+
+    test('gitLore.stepLineHistory with missing arguments does not throw', async () => {
+      await vscode.commands.executeCommand(COMMANDS.stepLineHistory);
+    });
+
+    test('stepping "prev" shows the older commit\'s author and message, with no AI-explain link', async () => {
+      const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(fixture.trackedFile));
+      editor.selection = new vscode.Selection(fixture.line, 0, fixture.line, 0);
+
+      await vscode.commands.executeCommand(COMMANDS.stepLineHistory, fixture.trackedFile, fixture.line, 'prev');
+
+      const content = await hoverAt(fixture.line);
+      const older = fixture.commits[1];
+      assert.ok(older);
+      assert.match(content.value, new RegExp(older.author));
+      assert.match(content.value, new RegExp(older.message));
+      assert.match(content.value, /2 of 3/);
+      assert.ok(!content.value.includes('command:gitLore.explainLine'));
+      // Three revisions total, one more to go — "prev" is still a link here.
+      assert.ok(content.value.includes(`?${encodeURIComponent(JSON.stringify([fixture.trackedFile, fixture.line, 'prev']))}`));
+    });
+
+    test('stepping "prev" all the way back reaches the oldest revision, where "prev" has no link', async () => {
+      const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(fixture.trackedFile));
+      editor.selection = new vscode.Selection(fixture.line, 0, fixture.line, 0);
+
+      await vscode.commands.executeCommand(COMMANDS.stepLineHistory, fixture.trackedFile, fixture.line, 'prev');
+      await vscode.commands.executeCommand(COMMANDS.stepLineHistory, fixture.trackedFile, fixture.line, 'prev');
+
+      const content = await hoverAt(fixture.line);
+      const oldest = fixture.commits[2];
+      assert.ok(oldest);
+      assert.match(content.value, new RegExp(oldest.author));
+      assert.match(content.value, new RegExp(oldest.message));
+      assert.match(content.value, /3 of 3/);
+      // Already at the oldest revision — "prev" has no link, just the plain glyph.
+      assert.ok(!content.value.includes(`?${encodeURIComponent(JSON.stringify([fixture.trackedFile, fixture.line, 'prev']))}`));
+
+      // One more "prev" click should be a no-op (clamped), not go out of bounds.
+      await vscode.commands.executeCommand(COMMANDS.stepLineHistory, fixture.trackedFile, fixture.line, 'prev');
+      const stillOldest = await hoverAt(fixture.line);
+      assert.match(stillOldest.value, /3 of 3/);
+    });
+
+    test('stepping "prev" then "next" returns to the live card', async () => {
+      const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(fixture.trackedFile));
+      editor.selection = new vscode.Selection(fixture.line, 0, fixture.line, 0);
+
+      await vscode.commands.executeCommand(COMMANDS.stepLineHistory, fixture.trackedFile, fixture.line, 'prev');
+      await vscode.commands.executeCommand(COMMANDS.stepLineHistory, fixture.trackedFile, fixture.line, 'next');
+
+      const content = await hoverAt(fixture.line);
+      const newest = fixture.commits[0];
+      assert.ok(newest);
+      assert.match(content.value, new RegExp(newest.author));
+      assert.ok(!/\d+ of \d+/.test(content.value));
+      assert.match(content.value, new RegExp(`command:${COMMANDS.explainLine}\\?`));
+    });
+
+    test('auto-reopens the hover when the cursor is still on the stepped line', async () => {
+      const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(fixture.trackedFile));
+      editor.selection = new vscode.Selection(fixture.line, 0, fixture.line, 0);
+
+      let showHoverCalled = false;
+      const original = vscode.commands.executeCommand;
+      (vscode.commands as { executeCommand: typeof vscode.commands.executeCommand }).executeCommand = ((
+        cmd: string,
+        ...args: unknown[]
+      ) => {
+        if (cmd === 'editor.action.showHover') {
+          showHoverCalled = true;
+          return Promise.resolve(undefined);
+        }
+        return original(cmd, ...args);
+      }) as typeof vscode.commands.executeCommand;
+
+      try {
+        await vscode.commands.executeCommand(COMMANDS.stepLineHistory, fixture.trackedFile, fixture.line, 'prev');
+      } finally {
+        (vscode.commands as { executeCommand: typeof vscode.commands.executeCommand }).executeCommand = original;
+      }
+
+      assert.ok(showHoverCalled, 'expected editor.action.showHover to be invoked');
+    });
+
+    test('does not reopen the hover when the cursor has moved to a different line', async () => {
+      const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(fixture.trackedFile));
+      editor.selection = new vscode.Selection(0, 0, 0, 0);
+
+      let showHoverCalled = false;
+      const original = vscode.commands.executeCommand;
+      (vscode.commands as { executeCommand: typeof vscode.commands.executeCommand }).executeCommand = ((
+        cmd: string,
+        ...args: unknown[]
+      ) => {
+        if (cmd === 'editor.action.showHover') {
+          showHoverCalled = true;
+          return Promise.resolve(undefined);
+        }
+        return original(cmd, ...args);
+      }) as typeof vscode.commands.executeCommand;
+
+      try {
+        await vscode.commands.executeCommand(COMMANDS.stepLineHistory, fixture.trackedFile, fixture.line, 'prev');
+      } finally {
+        (vscode.commands as { executeCommand: typeof vscode.commands.executeCommand }).executeCommand = original;
+      }
+
+      assert.ok(!showHoverCalled, 'expected editor.action.showHover NOT to be invoked');
+    });
   });
 });

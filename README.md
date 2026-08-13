@@ -55,6 +55,8 @@ Requires **VS Code 1.85+** and `git` on your `PATH`. Works in Cursor and other V
 
 The current line's author and age, as a muted end-of-line decoration. It updates when you change lines — not on every cursor move — and the hover card adds the full message, relative *and* absolute dates, that commit's diff stat for this file, and the short SHA. Customise the text with `gitLore.blame.format`, or turn it off entirely.
 
+The hover card also has **Compare** / **File History** / **Copy SHA** quick actions, and an **Older** link that steps backward through that exact line's own history (real per-line tracking, not just "commits that touched this file") — ◀ prev / next ▶ through every revision that changed the line, without leaving the hover.
+
 ### An interactive commit graph, in the panel
 
 <img src="media/screenshots/commit-graph.png" alt="The GitLore panel showing the commit graph with branch labels, a working-changes row, and commit details beside it" />
@@ -75,6 +77,8 @@ Each changed file is its own collapsible section holding only that file's hunks,
 
 Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with counts. It opens on your current branch versus its upstream, so it's useful immediately — retarget either side in place. Diffs are taken against the merge-base, matching what a GitHub or GitLab pull request shows you.
 
+**Create PR** opens your host's compare/create-PR page pre-filled with both branches (GitHub, GitLab, Bitbucket — hidden on hosts GitLore doesn't recognize, rather than guessing a URL that might 404). **Open all changes** opens every changed file's diff at once instead of one at a time, all against the same common base.
+
 ### Also
 
 - **File history** — every commit that touched the current file, following renames, in the Explorer.
@@ -82,6 +86,7 @@ Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with
 - **Issue and PR links** — `#123` in a commit message becomes a link, auto-detected from your remote or pointed at any tracker (Jira included) via a regex and URL template.
 - **Stale-code detector** — a CodeLens above functions and methods untouched for longer than `gitLore.staleThresholdDays`, linking straight to the commit that last changed them.
 - **Author ownership heatmap** — an overview-ruler color mark per line, by that line's author (`gitLore.ownership.enabled`, off by default), plus **GitLore: Show File Ownership** for a recency-weighted breakdown of who owns the file.
+- **Full-file blame heatmap** — a hot-to-cold recency gradient as a left-edge mark per line, across the whole file (`gitLore.fullFileBlame.enabled`, off by default) — distinct from the current-line decoration and the ownership ruler above.
 - **Interactive Rebase Editor** — reorder, reword, edit, squash, fixup, or drop commits with a real UI instead of hand-editing the `git rebase -i` todo file. **GitLore: Rebase Branch Interactively...** starts one, or it just works if you already use `code --wait` as your `sequence.editor`. GitLore never runs `rebase`/`--abort`/`--continue` itself — only reads, writes, and closes the file git already opens.
 - **Sidebar Explorer** — Branches, Remotes, Tags, Stashes, Worktrees, and Contributors in one always-visible tree, in its own activity bar icon. Checkout or compare a branch, open a remote in your browser, apply or drop a stash, all from the right-click menu.
 
@@ -105,6 +110,8 @@ Every command is also a title-bar button in the GitLore panel.
 | `GitLore: Open Remote in Browser` | Open the selected remote's repo page (from the Explorer's context menu) |
 | `GitLore: Apply Stash` | Re-apply the selected stash without dropping it (from the Explorer's context menu) |
 | `GitLore: Drop Stash` | Permanently delete the selected stash, after confirming (from the Explorer's context menu) |
+| `GitLore: Step Through This Line's History` | Move the hover's line-history stepper (from the hover's Older/prev/next links) |
+| `GitLore: Toggle Full-File Blame Heatmap` | Turn the whole-file recency gradient on or off |
 
 ## Settings
 
@@ -120,6 +127,7 @@ Every command is also a title-bar button in the GitLore panel.
 | `gitLore.staleCode.enabled` | boolean | `true` | Show a CodeLens above functions and methods that haven't changed in longer than staleThresholdDays. |
 | `gitLore.staleThresholdDays` | number | `180` | Days since a function's or method's last change before it's flagged as stale. |
 | `gitLore.ownership.enabled` | boolean | `false` | Show a color mark per line in the editor's overview ruler for that line's author. |
+| `gitLore.fullFileBlame.enabled` | boolean | `false` | Show a hot-to-cold recency gradient as a left-edge mark per line, across the whole file. |
 | `gitLore.issueLinking.enabled` | boolean | `true` | Auto-link issue/PR references in commit messages. |
 | `gitLore.issueLinking.pattern` | string | `"#(\\d+)"` | Regex matching issue references. The first capture group (or the whole match) fills `{issue}` in the URL template. |
 | `gitLore.issueLinking.urlTemplate` | string | `""` | `{issue}`-templated issue URL. Empty = auto-detect from the repo's GitHub/GitLab remote. |
@@ -130,7 +138,7 @@ GitLore runs entirely locally. Your git data never leaves your machine.
 
 The one network request it makes on its own: author avatars from `gravatar.com`, keyed by an MD5 hash of the commit email — that's Gravatar's own lookup spec, not a security-relevant use of the hash.
 
-Two things open your browser, and only when you click them: **Open on GitHub/GitLab/Bitbucket**, and issue links. Both URLs are built locally from your `origin` remote; GitLore doesn't contact the host to construct them.
+A few things open your browser, and only when you click them: **Open on GitHub/GitLab/Bitbucket**, **Create PR**, **Open Remote in Browser**, and issue links. Every one of those URLs is built locally from your git remote; GitLore doesn't contact the host to construct them.
 
 No telemetry. No analytics. No account.
 

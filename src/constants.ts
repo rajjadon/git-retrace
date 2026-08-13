@@ -22,6 +22,8 @@ export const COMMANDS = {
   openRemote: 'gitLore.openRemote',
   applyStash: 'gitLore.applyStash',
   dropStash: 'gitLore.dropStash',
+  stepLineHistory: 'gitLore.stepLineHistory',
+  toggleFullFileBlame: 'gitLore.toggleFullFileBlame',
 } as const;
 
 export const CONFIG = {
@@ -37,6 +39,7 @@ export const CONFIG = {
   staleCodeEnabled: 'staleCode.enabled',
   staleThresholdDays: 'staleThresholdDays',
   ownershipEnabled: 'ownership.enabled',
+  fullFileBlameEnabled: 'fullFileBlame.enabled',
   issueLinkingEnabled: 'issueLinking.enabled',
   issueLinkingPattern: 'issueLinking.pattern',
   issueLinkingUrlTemplate: 'issueLinking.urlTemplate',

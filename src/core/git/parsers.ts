@@ -48,6 +48,15 @@ export const GRAPH_LOG_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FI
 export const BRANCH_FORMAT = `%(refname)${LOG_FIELD_SEP}%(HEAD)${LOG_FIELD_SEP}%(upstream:track)`;
 
 /**
+ * Pass to `git log --format=<this> -L <n>,<n>:<file>` for the hover's line-history stepper.
+ * Unlike `LOG_FORMAT`, the record separator comes *first*: `-L` always follows each commit's
+ * formatted line with a unified-diff hunk, so there's no clean spot after the fields to end the
+ * record. Leading with the separator instead means the fields are always the first line of the
+ * chunk that follows it — `parseLineHistoryLog` takes that line and discards the hunk after it.
+ */
+export const LINE_HISTORY_FORMAT = `${LOG_RECORD_SEP}%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SEP}%ae${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%s`;
+
+/**
  * Parses `git blame --line-porcelain` output. Pure — no I/O.
  *
  * With `--line-porcelain` (unlike plain `--porcelain`) git always repeats full
@@ -131,6 +140,30 @@ export function parseLog(raw: string): Commit[] {
     .filter((record) => record.length > 0)
     .map((record) => {
       const [sha, shortSha, author, authorEmail, date, message] = record.split(LOG_FIELD_SEP);
+      return {
+        sha: sha ?? '',
+        shortSha: shortSha ?? '',
+        author: author ?? '',
+        authorEmail: authorEmail ?? '',
+        date: date ?? '',
+        message: message ?? '',
+      };
+    });
+}
+
+/**
+ * Parses `git log --format=LINE_HISTORY_FORMAT -L <n>,<n>:<file>` output: one commit's fields
+ * per chunk, immediately followed by a unified-diff hunk this parser discards — the hover's
+ * prev/next stepper only needs commit metadata, not the hunk text. Newest first, same as
+ * `parseLog`. Pure — no I/O.
+ */
+export function parseLineHistoryLog(raw: string): Commit[] {
+  return raw
+    .split(LOG_RECORD_SEP)
+    .map((chunk) => chunk.split('\n')[0] ?? '')
+    .filter((line) => line.includes(LOG_FIELD_SEP))
+    .map((fieldsLine) => {
+      const [sha, shortSha, author, authorEmail, date, message] = fieldsLine.split(LOG_FIELD_SEP);
       return {
         sha: sha ?? '',
         shortSha: shortSha ?? '',

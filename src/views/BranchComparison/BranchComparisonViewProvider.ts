@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { GitService } from '../../core/git/GitService';
-import { renderBranchComparisonHtml } from './render';
+import { renderBranchComparisonHtml, type PrTarget } from './render';
 import { escapeHtml } from '../escapeHtml';
 import { openFileDiff } from '../../providers/GitContentProvider';
 import { pickDefaultRefs } from '../../utils/branchDefaults';
@@ -8,6 +8,11 @@ import { resolveRepoContextPath } from '../CommitGraph/CommitGraphViewProvider';
 import { renderPlaceholderHtml } from '../placeholder';
 import { waitForWebviewView } from '../waitForWebviewView';
 import { COMMANDS, MEDIA, VIEWS } from '../../constants';
+import { buildCreatePrUrl, remoteHostLabel } from '../../utils/remoteLinks';
+import type { FileChange } from '../../core/git/types';
+
+/** Above this, "Open all changes" confirms first — opening dozens of diff editors in one click is more likely a misclick than the intent. */
+const OPEN_ALL_CONFIRM_THRESHOLD = 20;
 
 function createNonce(): string {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -28,6 +33,8 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
   private currentFilePath: string | undefined;
   private currentBase: string | undefined;
   private currentCompare: string | undefined;
+  private currentFiles: FileChange[] = [];
+  private currentPrUrl: string | undefined;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -107,13 +114,21 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
     this.view.webview.html = shellHtml('<p>Loading comparison…</p>');
 
     try {
-      const [aheadCommits, behindCommits, files, diff, branches] = await Promise.all([
+      const [aheadCommits, behindCommits, files, diff, branches, remoteInfo] = await Promise.all([
         this.git.getCommitsBetween(filePath, base, compare),
         this.git.getCommitsBetween(filePath, compare, base),
         this.git.getFilesBetweenRefs(filePath, base, compare),
         this.git.getDiffBetweenRefs(filePath, base, compare),
         this.git.getBranches(filePath),
+        this.git.resolveRemoteInfo(filePath),
       ]);
+      this.currentFiles = files;
+
+      // Only offer "Create PR" when we know that host's compare-URL shape — a button that
+      // reliably 404s is worse than no button.
+      const prUrl = remoteInfo ? buildCreatePrUrl(remoteInfo, base, compare) : null;
+      const createPr: PrTarget | null = remoteInfo && prUrl ? { label: remoteHostLabel(remoteInfo), url: prUrl } : null;
+      this.currentPrUrl = prUrl ?? undefined;
 
       const editorFontFamily = vscode.workspace
         .getConfiguration('editor')
@@ -126,6 +141,7 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
           cspSource: this.view.webview.cspSource,
           styleUris: [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.branchComparison)],
           editorFontFamily,
+          createPr,
         },
       );
     } catch (err) {
@@ -169,6 +185,43 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
         beforeRef: mergeBase ?? this.currentBase,
         afterRef: this.currentCompare,
         label: `${this.currentBase}...${this.currentCompare}`,
+      });
+      return;
+    }
+    if (type === 'createPr' && this.currentPrUrl) {
+      await vscode.env.openExternal(vscode.Uri.parse(this.currentPrUrl));
+      return;
+    }
+    if (type === 'openAllChanges' && filePath && this.currentBase && this.currentCompare) {
+      await this.openAllChanges(filePath, this.currentBase, this.currentCompare);
+    }
+  }
+
+  private async openAllChanges(filePath: string, base: string, compare: string): Promise<void> {
+    const files = this.currentFiles.filter((f) => !f.binary);
+    if (files.length === 0) {
+      return;
+    }
+    if (files.length > OPEN_ALL_CONFIRM_THRESHOLD) {
+      const confirmed = await vscode.window.showWarningMessage(
+        `Open ${files.length} diff editors? This opens one tab per changed file.`,
+        { modal: true },
+        'Open All',
+      );
+      if (confirmed !== 'Open All') {
+        return;
+      }
+    }
+    // Same merge-base rule as a single "Open changes" click — diffs against `base` itself would
+    // also surface base's own commits as differences on diverged branches.
+    const mergeBase = await this.git.getMergeBase(filePath, base, compare);
+    for (const file of files) {
+      await openFileDiff({
+        repoPath: filePath,
+        path: file.path,
+        beforeRef: mergeBase ?? base,
+        afterRef: compare,
+        label: `${base}...${compare}`,
       });
     }
   }

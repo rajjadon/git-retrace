@@ -137,9 +137,9 @@ Never let a `vscode` import leak into `core/`. If you're tempted, the logic belo
 
 ### Phase 4 — Editor surface depth
 Extends existing hover/decoration/webview code already in the repo — no new view containers.
-- [ ] **Hover quick-actions + revision nav** — Compare / File History / Copy SHA buttons in the blame hover card, plus ◀ prev/next ▶ stepping through a line's blame history without leaving the hover
-- [ ] **Branch Compare polish** — per-file diffstat bars, "Create PR" button (opens the remote's compare/PR URL), "Open all changes with common base"
-- [ ] **Full-file gutter blame + heatmap toggle** — whole-file blame overlay in the gutter (distinct from the current-line decoration and the ownership ruler), with a hot→cold recency gradient edge
+- [x] **Hover quick-actions + revision nav** — Compare / File History / Copy SHA buttons in the blame hover card, plus ◀ prev/next ▶ stepping through a line's blame history without leaving the hover
+- [x] **Branch Compare polish** — per-file diffstat bars, "Create PR" button (opens the remote's compare/PR URL), "Open all changes with common base"
+- [x] **Full-file gutter blame + heatmap toggle** — whole-file blame overlay in the gutter (distinct from the current-line decoration and the ownership ruler), with a hot→cold recency gradient edge
 
 ### Phase 5 — Repository views
 - [x] **Sidebar explorer tree** — one view container: Branches, Remotes, Tags, Stashes, Worktrees, Contributors, with ahead/behind status and right-click actions
@@ -177,6 +177,8 @@ Do not start a phase until the previous phase is tested and merged.
 | `gitLore.openRemote` | GitLore: Open Remote in Browser |
 | `gitLore.applyStash` | GitLore: Apply Stash |
 | `gitLore.dropStash` | GitLore: Drop Stash |
+| `gitLore.stepLineHistory` | GitLore: Step Through This Line's History |
+| `gitLore.toggleFullFileBlame` | GitLore: Toggle Full-File Blame Heatmap |
 
 ### Settings (all under `gitLore.*`)
 | Setting | Type | Default | Description |
@@ -192,6 +194,7 @@ Do not start a phase until the previous phase is tested and merged.
 | `gitLore.maxHistoryItems` | number | `200` | Max commits loaded per file history |
 | `gitLore.maxBlameFileSize` | number | `1048576` | Skip blame for files larger than this (bytes) |
 | `gitLore.dateFormat` | string | `"relative"` | `relative` or an absolute date-fns pattern |
+| `gitLore.fullFileBlame.enabled` | boolean | `false` | Show a hot-to-cold recency gradient as a left-edge mark per line, across the whole file |
 
 ### Views
 Register a TreeView **only when it has content**. Contributed view: `gitLore.fileHistory` in the SCM or Explorer container (decide via config, default Explorer).

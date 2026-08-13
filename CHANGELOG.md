@@ -28,6 +28,22 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - Right-click a remote to **Open Remote in Browser**; right-click a stash to **Apply** or **Drop** (drop asks for confirmation first — it can't be undone).
 - Contributors are counted across every branch, not just the checked-out one, so the roster doesn't quietly drop anyone.
 
+**Hover quick-actions and revision nav** — act on a blamed line without leaving the hover
+
+- The blame hover card now has a **Compare** / **File History** / **Copy SHA** row, so acting on a line's commit no longer means opening a different panel first.
+- An **Older** link starts stepping backward through that exact line's own history (via git's real per-line tracking, not just "commits that touched this file") — ◀ prev / next ▶ walk through every revision that changed the line, with a "N of M" position, all rendered in the same hover.
+- The line-history cards skip the AI-explain section (it's tied to the *current* line content, which doesn't correspond to an older revision) but keep the same quick actions, scoped to that revision's own commit.
+
+**Branch Compare: Create PR, and Open all changes with the common base**
+
+- A **Create PR** button appears in the ref bar when the repo's remote is on a host GitLore recognizes (GitHub, GitLab, Bitbucket) — it opens that host's compare/create-PR page pre-filled with the two branches. Hidden on unrecognized hosts rather than guessing a URL shape that might 404.
+- **Open all changes** opens every changed file's diff at once, each against the same common base the inline diff already uses — instead of clicking "Open changes" file by file. Asks for confirmation first when there are more than 20 files.
+
+**Full-file blame heatmap** — a hot-to-cold recency gradient across the whole file
+
+- **GitLore: Toggle Full-File Blame Heatmap** (`gitLore.fullFileBlame.enabled`, off by default) marks every line with a colored left edge, gradiented from hot (recently changed) to cold (long untouched) — relative to the file's own age range, so even an entirely old file still shows which of its lines are relatively newer.
+- Distinct from the current-line inline blame decoration and the author-ownership ruler: this is a third, independent visual, not a mode of either.
+
 ### Changed
 
 - **Diffstat bars** — Commit Details and Branch Comparison now show a proportional green/red bar next to each changed file, scaled to the largest file in the list, alongside the existing `+N -M` counts.

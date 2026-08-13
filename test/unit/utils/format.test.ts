@@ -1,8 +1,8 @@
 // test/unit/utils/format.test.ts
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatBlameHover } from '../../../src/utils/format';
-import type { BlameLine, FileChange } from '../../../src/core/git/types';
+import { formatBlameHover, formatLineHistoryHover } from '../../../src/utils/format';
+import type { BlameLine, Commit, FileChange } from '../../../src/core/git/types';
 import type { LineExplanationState } from '../../../src/core/ai/lineExplanationKey';
 
 process.env.TZ = 'UTC';
@@ -180,4 +180,90 @@ test('formatBlameHover: diffstat includes "in this file" scope label', () => {
   const md = formatBlameHover(entry, diffStat, 'tracked.txt', 'line three', undefined, now);
   assert.match(md, /in this file/);
   assert.match(md, /\$\(diff\)/);
+});
+
+test('formatBlameHover: includes Compare / File History / Copy SHA quick actions', () => {
+  const md = formatBlameHover(entry, diffStat, 'tracked.txt', 'line three', undefined, now);
+  assert.match(md, /\[\$\(git-compare\) Compare\]\(command:gitLore\.compareBranches\)/);
+  assert.match(md, /\[\$\(history\) File History\]\(command:gitLore\.showFileHistory\)/);
+  const match = /\[\$\(copy\) Copy SHA\]\(command:gitLore\.copySha\?(\S+)\)/.exec(md);
+  assert.ok(match, 'expected a Copy SHA command link');
+  assert.deepEqual(JSON.parse(decodeURIComponent(match[1] ?? '')), [entry.sha]);
+});
+
+test('formatBlameHover: uncommitted lines get no quick actions — there is no committed sha to act on', () => {
+  const md = formatBlameHover({ ...entry, isUncommitted: true }, null, 'tracked.txt', 'line three', undefined, now);
+  assert.ok(!md.includes('command:gitLore.compareBranches'));
+  assert.ok(!md.includes('command:gitLore.copySha'));
+});
+
+test('formatBlameHover: shows a lone "Older" link to start stepping through the line\'s history', () => {
+  const md = formatBlameHover(entry, diffStat, 'tracked.txt', 'line three', undefined, now);
+  const match = /\[\$\(chevron-left\) Older\]\(command:gitLore\.stepLineHistory\?(\S+)\)/.exec(md);
+  assert.ok(match, 'expected an Older command link');
+  assert.deepEqual(JSON.parse(decodeURIComponent(match[1] ?? '')), ['tracked.txt', entry.line, 'prev']);
+  // No count shown yet — that would require fetching the full -L history on every hover.
+  assert.ok(!/\d+ of \d+/.test(md));
+});
+
+const historicalCommit: Commit = {
+  sha: '4096af71a8a482397d0a44565e6262b1222986ac',
+  shortSha: '4096af7',
+  author: 'Raj Jadon',
+  authorEmail: 'raj@example.com',
+  date: '2024-01-01T10:00:00Z',
+  message: 'first commit',
+};
+
+test('formatLineHistoryHover: includes gravatar, author, message, date, sha, and diff stat', () => {
+  const md = formatLineHistoryHover(historicalCommit, diffStat, 'tracked.txt', 2, 1, 3, now);
+  assert.match(md, /!\[\]\(https:\/\/www\.gravatar\.com\/avatar\/[0-9a-f]{32}\?s=20&d=identicon\)/);
+  assert.match(md, /\*\*Raj Jadon\*\*/);
+  assert.match(md, /first commit/);
+  assert.match(md, /2024-01-01/);
+  assert.match(md, /`4096af7`/);
+  assert.match(md, /\+3 -1/);
+});
+
+test('formatLineHistoryHover: has no AI-explain link — it only applies to the live line content', () => {
+  const md = formatLineHistoryHover(historicalCommit, diffStat, 'tracked.txt', 2, 1, 3, now);
+  assert.ok(!md.includes('command:gitLore.explainLine'));
+  assert.ok(!md.includes('$(sparkle)'));
+});
+
+test('formatLineHistoryHover: includes quick actions scoped to the historical commit\'s sha', () => {
+  const md = formatLineHistoryHover(historicalCommit, diffStat, 'tracked.txt', 2, 1, 3, now);
+  const match = /\[\$\(copy\) Copy SHA\]\(command:gitLore\.copySha\?(\S+)\)/.exec(md);
+  assert.ok(match);
+  assert.deepEqual(JSON.parse(decodeURIComponent(match[1] ?? '')), [historicalCommit.sha]);
+});
+
+test('formatLineHistoryHover: shows "N of M" with both prev and next as links in the middle of history', () => {
+  const md = formatLineHistoryHover(historicalCommit, diffStat, 'tracked.txt', 2, 1, 3, now);
+  assert.match(md, /2 of 3/);
+  const prev = /\[\$\(chevron-left\)\]\(command:gitLore\.stepLineHistory\?(\S+)\)/.exec(md);
+  const next = /\[\$\(chevron-right\)\]\(command:gitLore\.stepLineHistory\?(\S+)\)/.exec(md);
+  assert.ok(prev, 'expected prev to be a link in the middle of history');
+  assert.ok(next, 'expected next to always be a link');
+  assert.deepEqual(JSON.parse(decodeURIComponent(prev[1] ?? '')), ['tracked.txt', 2, 'prev']);
+  assert.deepEqual(JSON.parse(decodeURIComponent(next[1] ?? '')), ['tracked.txt', 2, 'next']);
+});
+
+test('formatLineHistoryHover: prev becomes plain (non-link) text at the oldest revision', () => {
+  const md = formatLineHistoryHover(historicalCommit, diffStat, 'tracked.txt', 2, 2, 3, now);
+  assert.match(md, /3 of 3/);
+  assert.ok(!md.includes('"prev"'));
+  assert.match(md, /(?<!\[)\$\(chevron-left\)(?!\])/);
+});
+
+test('formatLineHistoryHover: ends with a trailing --- divider, like the live card', () => {
+  const md = formatLineHistoryHover(historicalCommit, diffStat, 'tracked.txt', 2, 1, 3, now);
+  assert.ok(md.trimEnd().endsWith('---'));
+});
+
+test('formatLineHistoryHover: escapes markdown special characters from git-sourced fields', () => {
+  const malicious: Commit = { ...historicalCommit, author: '[Evil](http://evil.com)', message: 'click **here**' };
+  const md = formatLineHistoryHover(malicious, null, 'tracked.txt', 2, 1, 3, now);
+  assert.ok(!md.includes('[Evil](http://evil.com)'));
+  assert.ok(!md.includes('**here**'));
 });
