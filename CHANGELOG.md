@@ -29,6 +29,8 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 - **Visual File History**: a large bubble pushed to the far edge of its collision jitter could visually cross into the neighboring author's lane. The safety check only accounted for the jitter distance, not the bubble's own radius; fixed by accounting for both and giving lanes more vertical room.
 - **Visual File History**: bubbles from commits made close together in time could still overlap each other after separation, especially for large, similarly-sized changes. Replaced the vertical-only jitter with genuine 2D circle-packing (an outward search plus a relaxation pass), so a dense burst of commits now renders as fully separate, individually legible bubbles instead of a partially-merged cluster.
+- **Commit Details**: Copy SHA / Copy message / Open on remote had `border: none` and relied entirely on `--vscode-button-secondaryBackground` for contrast — in themes where that color is close to the panel background, they rendered with no visible button shape at all. Added a guaranteed-visible border so they read as buttons regardless of theme.
+- **Branch Comparison**: the base/compare ref pickers had the same underlying bug — `border: 1px solid transparent` by default, only gaining a visible border on hover. In a low-contrast theme they read as plain colored text with no dropdown affordance until the mouse found them. Now visible by default.
 
 ## [0.3.1] - 2026-08-13
 

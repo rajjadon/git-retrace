@@ -62,6 +62,12 @@ body {
   opacity: 0.9;
 }
 
+/*
+ * `border` is deliberate, not decorative — same reasoning as Commit Details' `.btn`:
+ * `--vscode-dropdown-background` can be nearly identical to the surrounding background in some
+ * themes, and this used to only reveal a border on hover, leaving it looking like plain text with
+ * no dropdown affordance at all until the mouse found it. Visible by default now.
+ */
 .ref-pick select {
   font-family: var(--vscode-editor-font-family);
   font-size: 0.92em;
@@ -71,13 +77,9 @@ body {
   padding: 0.1rem 0.15rem;
   color: inherit;
   background-color: var(--vscode-dropdown-background);
-  border: 1px solid transparent;
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
   border-radius: 2px;
   cursor: pointer;
-}
-
-.ref-pick select:hover {
-  border-color: var(--vscode-dropdown-border, var(--vscode-panel-border));
 }
 
 .ref-pick select:focus-visible {
