@@ -143,6 +143,13 @@ export class LaunchpadViewProvider implements vscode.Disposable {
   }
 
   /** Every workspace folder's git remote, resolved to a forge repo — deduped, since a multi-root workspace can have several folders pointing at the same repo. */
+  /**
+   * Every *named* remote in every workspace folder — not just `origin`. A fork's `upstream`, a
+   * second `origin`-like remote, or anything else the user has added all get scanned the same
+   * way, deduped by resolved repo identity (two remotes, or two workspace folders, can easily
+   * point at the same actual repo). Credentials are still resolved once per *host*, not per
+   * remote, so having several remotes on the same host never means re-authenticating per remote.
+   */
   private async resolveWorkspaceRepos(
     customHosts: ForgeHostConfig[],
   ): Promise<Array<{ repo: ForgeRepoRef; detected: DetectedForgeHost }>> {
@@ -155,28 +162,27 @@ export class LaunchpadViewProvider implements vscode.Disposable {
       if (!repoRoot) {
         continue;
       }
-      const remoteUrl = await this.git.getRemoteUrl(repoRoot);
-      if (!remoteUrl) {
-        continue;
+      const remotes = await this.git.getRemotes(repoRoot);
+      for (const remote of remotes) {
+        const parsedHost = parseRemoteUrl(remote.url)?.host;
+        if (!parsedHost) {
+          continue;
+        }
+        const detected = detectForgeHost(parsedHost, customHosts);
+        if (!detected) {
+          continue;
+        }
+        const repo = resolveForgeRepoRef(remote.url, customHosts);
+        if (!repo) {
+          continue;
+        }
+        const key = `${repo.host}:${repo.identity}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        results.push({ repo, detected });
       }
-      const parsedHost = parseRemoteUrl(remoteUrl)?.host;
-      if (!parsedHost) {
-        continue;
-      }
-      const detected = detectForgeHost(parsedHost, customHosts);
-      if (!detected) {
-        continue;
-      }
-      const repo = resolveForgeRepoRef(remoteUrl, customHosts);
-      if (!repo) {
-        continue;
-      }
-      const key = `${repo.host}:${repo.identity}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      results.push({ repo, detected });
     }
     return results;
   }

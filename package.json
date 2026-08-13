@@ -240,6 +240,11 @@
           "group": "navigation@5"
         },
         {
+          "command": "gitLore.openLaunchpad",
+          "when": "view == gitLore.commitGraph",
+          "group": "navigation@6"
+        },
+        {
           "command": "gitLore.compareBranches",
           "when": "view == gitLore.branchComparison",
           "group": "navigation@1"

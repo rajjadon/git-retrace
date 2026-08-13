@@ -87,7 +87,7 @@ The only GitLore feature that reaches beyond your local `.git` — everything el
 
 Not GitHub-only: GitHub, GitLab, Bitbucket, and Azure DevOps are supported out of the box, plus self-hosted or custom instances (GitHub Enterprise Server, Gitea, Forgejo, self-hosted GitLab) via `gitLore.launchpad.customHosts`. GitHub uses VS Code's own built-in sign-in; every other host needs a Personal Access Token, entered once and stored in VS Code's encrypted secret storage — never a GitLore backend, never a key GitLore itself handles.
 
-Off by default (`gitLore.launchpad.enabled`) — it's opt-in, same as AI, since it's the one feature that calls out to a remote host at all.
+Off by default (`gitLore.launchpad.enabled`) — it's opt-in, same as AI, since it's the one feature that calls out to a remote host at all. Scans every remote on every repo in the workspace, not just `origin` (a fork's `upstream` included), deduped when two remotes point at the same actual repo. Once enabled, it's also one click away from the Commit Graph panel's toolbar, not just the Command Palette.
 
 ### Also
 

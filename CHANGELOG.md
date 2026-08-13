@@ -53,6 +53,7 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 - **GitLore: Open Launchpad** (`gitLore.launchpad.enabled`, off by default) opens a 6-column board — Needs Review, Ready to Merge, Waiting, Blocked, Drafts, Snoozed — pooling open PRs from every recognized git remote across your workspace's repos into one place. Off by default: it's the only GitLore feature that calls out to a remote host at all, unlike everything else, which works entirely from your local `.git`.
 - Not GitHub-only: GitHub, GitLab, Bitbucket, and Azure DevOps are all supported out of the box, plus self-hosted/custom instances (GitHub Enterprise Server, Gitea, Forgejo, self-hosted GitLab) via `gitLore.launchpad.customHosts`.
+- Scans every remote you've added per repo, not just `origin` — a fork's `upstream`, a second remote, anything — deduped when two remotes point at the same actual repo. Also reachable from the Commit Graph panel's toolbar, not just the Command Palette.
 - GitHub uses VS Code's own built-in sign-in — no GitLore backend, no key GitLore ever handles. Every other host needs a Personal Access Token, entered once and stored in VS Code's encrypted secret storage.
 - Snoozing a PR is a local-only override (there's no such concept on any of these hosts' APIs) — it hides a PR from its normal column until you unsnooze it.
 
