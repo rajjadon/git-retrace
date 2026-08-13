@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { basename } from 'node:path';
 import type { GitService } from '../core/git/GitService';
 import type { BranchInfo } from '../core/git/types';
 import {
@@ -7,6 +8,16 @@ import {
   type ExplorerNode,
   type ExplorerSectionNode,
 } from '../core/explorer/buildExplorerTree';
+
+/** One ThemeIcon per section, so the tree scans at a glance instead of reading every label. Keyed by `ExplorerSectionNode.id`. */
+const SECTION_ICONS: Record<string, string> = {
+  branches: 'git-branch',
+  remotes: 'cloud',
+  tags: 'tag',
+  stashes: 'archive',
+  worktrees: 'file-submodule',
+  contributors: 'organization',
+};
 
 /**
  * Single tree for the Sidebar Explorer's six sections — Branches, Remotes, Tags, Stashes,
@@ -68,9 +79,14 @@ export class RepoExplorerProvider implements vscode.TreeDataProvider<ExplorerNod
 
   getTreeItem(element: ExplorerNode): vscode.TreeItem {
     if (element.kind === 'section') {
-      const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.Expanded);
+      // Empty sections start collapsed — the count is still visible, but an expanded section
+      // with nothing under it is exactly the "empty placeholder" look the rest of GitLore avoids.
+      const collapsibleState =
+        element.children.length > 0 ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed;
+      const item = new vscode.TreeItem(element.label, collapsibleState);
       item.id = element.id;
       item.description = String(element.children.length);
+      item.iconPath = new vscode.ThemeIcon(SECTION_ICONS[element.id] ?? 'folder');
       return item;
     }
     return this.leafTreeItem(element);
@@ -84,6 +100,7 @@ export class RepoExplorerProvider implements vscode.TreeDataProvider<ExplorerNod
         const item = new vscode.TreeItem(node.remote.name, vscode.TreeItemCollapsibleState.None);
         item.iconPath = new vscode.ThemeIcon('cloud');
         item.description = node.remote.url;
+        item.tooltip = node.remote.url;
         item.contextValue = 'gitLore.remote';
         return item;
       }
@@ -100,9 +117,14 @@ export class RepoExplorerProvider implements vscode.TreeDataProvider<ExplorerNod
         return item;
       }
       case 'worktree': {
-        const item = new vscode.TreeItem(node.worktree.path, vscode.TreeItemCollapsibleState.None);
+        // The full absolute path as the label crowds out the description entirely in a narrow
+        // sidebar (it's almost always longer than the visible width) — the folder name is enough
+        // to tell worktrees apart at a glance, with the full path still one hover away.
+        const item = new vscode.TreeItem(basename(node.worktree.path), vscode.TreeItemCollapsibleState.None);
         item.iconPath = new vscode.ThemeIcon('file-submodule');
-        item.description = node.worktree.branch ?? '(detached)';
+        const branch = node.worktree.branch ?? '(detached)';
+        item.description = node.worktree.isMain ? `${branch} (main)` : branch;
+        item.tooltip = node.worktree.path;
         item.contextValue = 'gitLore.worktree';
         return item;
       }
@@ -110,6 +132,7 @@ export class RepoExplorerProvider implements vscode.TreeDataProvider<ExplorerNod
         const item = new vscode.TreeItem(node.contributor.name, vscode.TreeItemCollapsibleState.None);
         item.iconPath = new vscode.ThemeIcon('account');
         item.description = `${node.contributor.commitCount} ${node.contributor.commitCount === 1 ? 'commit' : 'commits'}`;
+        item.tooltip = node.contributor.email;
         return item;
       }
     }
@@ -118,8 +141,10 @@ export class RepoExplorerProvider implements vscode.TreeDataProvider<ExplorerNod
   private branchTreeItem(branch: BranchInfo): vscode.TreeItem {
     const item = new vscode.TreeItem(branch.name, vscode.TreeItemCollapsibleState.None);
     // No colored "current" pill is possible on a native TreeItem — a distinct icon plus a text
-    // marker in the description are the two levers actually available.
-    item.iconPath = new vscode.ThemeIcon(branch.isCurrent ? 'check' : 'git-branch');
+    // marker in the description are the two levers actually available. Remote-tracking branches
+    // get the same icon as the Remotes section itself, so a long, mixed local/remote list still
+    // separates into two visual groups at a glance instead of one undifferentiated list of names.
+    item.iconPath = new vscode.ThemeIcon(branch.isCurrent ? 'check' : branch.isRemote ? 'cloud' : 'git-branch');
     const track = [branch.ahead ? `↑${branch.ahead}` : undefined, branch.behind ? `↓${branch.behind}` : undefined]
       .filter((part): part is string => part !== undefined)
       .join(' ');

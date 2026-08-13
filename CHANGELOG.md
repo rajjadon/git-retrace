@@ -54,6 +54,7 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **Consistent secondary-text color** — dates, SHAs, author names, empty-state messages, and hint text across every panel now use the theme's own secondary-text color (`descriptionForeground`) instead of a dozen slightly different opacity values accumulated file-by-file. More consistent, and more reliably legible across themes than faking it with opacity.
 - Unified the hover-card corner radius (Commit Graph and Visual File History previously used two different values for the same kind of element).
 - **Denser inline diff view** — Commit Details and Branch Comparison's code diff now renders one notch below the editor's own font size with tighter line spacing, so a narrow docked panel shows more lines of actual code instead of a few oversized ones.
+- **Sidebar Explorer** — each section now has its own icon (Branches, Remotes, Tags, Stashes, Worktrees, Contributors) so the tree scans at a glance instead of reading every label; a section with nothing in it starts collapsed instead of expanded-but-empty; a worktree row shows its folder name instead of the full absolute path (the full path is still there as a tooltip), and a remote-tracking branch gets the same cloud icon as the Remotes section so a long, mixed branch list separates into local vs. remote at a glance.
 
 ### Fixed
 
@@ -61,6 +62,7 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **Visual File History**: bubbles from commits made close together in time could still overlap each other after separation, especially for large, similarly-sized changes. Replaced the vertical-only jitter with genuine 2D circle-packing (an outward search plus a relaxation pass), so a dense burst of commits now renders as fully separate, individually legible bubbles instead of a partially-merged cluster.
 - **Commit Details**: Copy SHA / Copy message / Open on remote had `border: none` and relied entirely on `--vscode-button-secondaryBackground` for contrast — in themes where that color is close to the panel background, they rendered with no visible button shape at all. Added a guaranteed-visible border so they read as buttons regardless of theme.
 - **Branch Comparison**: the base/compare ref pickers had the same underlying bug — `border: 1px solid transparent` by default, only gaining a visible border on hover. In a low-contrast theme they read as plain colored text with no dropdown affordance until the mouse found them. Now visible by default.
+- **Blame hover**: clicking the **Older** link appeared to do nothing when there was no earlier revision to step to, or when the mouse was hovering a line the text cursor wasn't actually on (the normal way to peek at blame without moving your cursor) — both cases silently updated internal state with no visible reaction. Both now show a message explaining what happened instead of looking broken.
 
 ## [0.3.1] - 2026-08-13
 

@@ -347,8 +347,23 @@ suite('Blame hover card', () => {
       // Already at the oldest revision — "prev" has no link, just the plain glyph.
       assert.ok(!content.value.includes(`?${encodeURIComponent(JSON.stringify([fixture.trackedFile, fixture.line, 'prev']))}`));
 
-      // One more "prev" click should be a no-op (clamped), not go out of bounds.
-      await vscode.commands.executeCommand(COMMANDS.stepLineHistory, fixture.trackedFile, fixture.line, 'prev');
+      // One more "prev" click should be a no-op (clamped, not out of bounds) — and say so, rather
+      // than silently doing nothing, which reads as "this button doesn't work".
+      let message: string | undefined;
+      const original = vscode.window.showInformationMessage;
+      (vscode.window as { showInformationMessage: typeof vscode.window.showInformationMessage }).showInformationMessage = ((
+        msg: string,
+      ) => {
+        message = msg;
+        return Promise.resolve(undefined);
+      }) as typeof vscode.window.showInformationMessage;
+      try {
+        await vscode.commands.executeCommand(COMMANDS.stepLineHistory, fixture.trackedFile, fixture.line, 'prev');
+      } finally {
+        vscode.window.showInformationMessage = original;
+      }
+      assert.match(message ?? '', /only revision/);
+
       const stillOldest = await hoverAt(fixture.line);
       assert.match(stillOldest.value, /3 of 3/);
     });
@@ -394,12 +409,12 @@ suite('Blame hover card', () => {
       assert.ok(showHoverCalled, 'expected editor.action.showHover to be invoked');
     });
 
-    test('does not reopen the hover when the cursor has moved to a different line', async () => {
+    test('does not reopen the hover when the cursor has moved to a different line, but says so instead of doing nothing', async () => {
       const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(fixture.trackedFile));
       editor.selection = new vscode.Selection(0, 0, 0, 0);
 
       let showHoverCalled = false;
-      const original = vscode.commands.executeCommand;
+      const originalExecute = vscode.commands.executeCommand;
       (vscode.commands as { executeCommand: typeof vscode.commands.executeCommand }).executeCommand = ((
         cmd: string,
         ...args: unknown[]
@@ -408,16 +423,27 @@ suite('Blame hover card', () => {
           showHoverCalled = true;
           return Promise.resolve(undefined);
         }
-        return original(cmd, ...args);
+        return originalExecute(cmd, ...args);
       }) as typeof vscode.commands.executeCommand;
+
+      let message: string | undefined;
+      const originalShowInfo = vscode.window.showInformationMessage;
+      (vscode.window as { showInformationMessage: typeof vscode.window.showInformationMessage }).showInformationMessage = ((
+        msg: string,
+      ) => {
+        message = msg;
+        return Promise.resolve(undefined);
+      }) as typeof vscode.window.showInformationMessage;
 
       try {
         await vscode.commands.executeCommand(COMMANDS.stepLineHistory, fixture.trackedFile, fixture.line, 'prev');
       } finally {
-        (vscode.commands as { executeCommand: typeof vscode.commands.executeCommand }).executeCommand = original;
+        (vscode.commands as { executeCommand: typeof vscode.commands.executeCommand }).executeCommand = originalExecute;
+        vscode.window.showInformationMessage = originalShowInfo;
       }
 
       assert.ok(!showHoverCalled, 'expected editor.action.showHover NOT to be invoked');
+      assert.match(message ?? '', /hover the line again/);
     });
   });
 });

@@ -40,7 +40,17 @@ export function handleStepLineHistoryCommand(git: GitService, navStore: LruCache
       const key = buildCacheKey(repoRoot ?? filePath, filePath, String(line));
       const current = navStore.get(key) ?? 0;
       const proposed = direction === 'prev' ? current + 1 : current - 1;
-      navStore.set(key, Math.max(0, Math.min(history.length - 1, proposed)));
+      const clamped = Math.max(0, Math.min(history.length - 1, proposed));
+
+      // Already at the edge (only revision, or back at the live one) — say so instead of a click
+      // that silently does nothing, which reads as "this button is broken".
+      if (clamped === current) {
+        void vscode.window.showInformationMessage(
+          direction === 'prev' ? 'GitLore: this is the only revision of this line.' : 'GitLore: already at the current revision.',
+        );
+        return;
+      }
+      navStore.set(key, clamped);
 
       const editor = vscode.window.activeTextEditor;
       const stillOnSameLine =
@@ -49,6 +59,11 @@ export function handleStepLineHistoryCommand(git: GitService, navStore: LruCache
         // Closest achievable approximation of "the hover updates in place" — see the identical
         // note on gitLore.explainLine, which established this pattern first.
         await vscode.commands.executeCommand('editor.action.showHover');
+      } else {
+        // The common case: a hover link click doesn't move the text cursor, so if the user was
+        // just mousing over a line their cursor isn't on (the normal way to peek at blame), there
+        // is no cursor position VS Code will reopen a hover at that matches what was clicked.
+        void vscode.window.showInformationMessage('GitLore: line history updated — hover the line again to view it.');
       }
     },
   );

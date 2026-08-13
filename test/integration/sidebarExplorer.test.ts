@@ -100,6 +100,59 @@ suite('Sidebar Explorer', () => {
     assert.ok(worktrees[0]?.kind === 'worktree' && worktrees[0].worktree.isMain);
   });
 
+  test('empty sections start collapsed; populated sections start expanded, both with an icon', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    const sections = await openExplorerFor(fixture);
+
+    const branchesItem = api.repoExplorerProvider.getTreeItem(section(sections, 'branches'));
+    assert.equal(branchesItem.collapsibleState, vscode.TreeItemCollapsibleState.Expanded);
+    assert.equal((branchesItem.iconPath as vscode.ThemeIcon).id, 'git-branch');
+
+    // The fixture has no configured remote, so Remotes is the empty one here.
+    const remotesItem = api.repoExplorerProvider.getTreeItem(section(sections, 'remotes'));
+    assert.equal(remotesItem.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
+    assert.equal((remotesItem.iconPath as vscode.ThemeIcon).id, 'cloud');
+    assert.equal(remotesItem.description, '0');
+  });
+
+  test('a worktree item shows the folder name (not the full path) as its label, with the full path as a tooltip', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    const sections = await openExplorerFor(fixture);
+    const worktreeNode = section(sections, 'worktrees').children[0];
+    assert.ok(worktreeNode?.kind === 'worktree');
+
+    const item = api.repoExplorerProvider.getTreeItem(worktreeNode);
+    assert.equal(item.label, worktreeNode.worktree.path.split('/').pop());
+    assert.equal(item.tooltip, worktreeNode.worktree.path);
+    assert.match(String(item.description), /\(main\)/);
+  });
+
+  test('a remote-tracking branch gets the cloud icon, matching the Remotes section', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    const sections = await openExplorerFor(fixture);
+    // Local branches only in this fixture — build a synthetic remote-tracking node to check the
+    // icon-selection logic directly, since the fixture repo has no remote configured.
+    const localBranch = findBranch(sections, fixture.currentBranch);
+    assert.ok(localBranch.kind === 'branch');
+    const remoteBranchNode: typeof localBranch = {
+      kind: 'branch',
+      branch: { ...localBranch.branch, name: `origin/${fixture.currentBranch}`, isRemote: true, isCurrent: false },
+    };
+    const item = api.repoExplorerProvider.getTreeItem(remoteBranchNode);
+    assert.equal((item.iconPath as vscode.ThemeIcon).id, 'cloud');
+    assert.equal(item.contextValue, 'gitLore.branch.remote');
+  });
+
+  test('a contributor item shows their email as a tooltip', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    const sections = await openExplorerFor(fixture);
+    const contributorNode = section(sections, 'contributors').children.find((n) => n.kind === 'contributor');
+    assert.ok(contributorNode?.kind === 'contributor');
+
+    const item = api.repoExplorerProvider.getTreeItem(contributorNode);
+    assert.equal(item.tooltip, contributorNode.contributor.email);
+  });
+
   test('gitLore.checkoutBranch switches the current branch', async () => {
     const fixture = buildExplorerFixtureRepo();
     const sections = await openExplorerFor(fixture);
