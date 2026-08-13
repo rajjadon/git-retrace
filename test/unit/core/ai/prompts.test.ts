@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCommitSummaryPrompt } from '../../../../src/core/ai/prompts';
+import { buildCommitSummaryPrompt, buildCommitMessagePrompt } from '../../../../src/core/ai/prompts';
 import type { CommitDetail } from '../../../../src/core/git/types';
 
 const commit: CommitDetail = {
@@ -37,4 +37,24 @@ test('buildCommitSummaryPrompt: truncates a diff over the limit and marks it', (
 test('buildCommitSummaryPrompt: handles an empty diff (e.g. a merge commit)', () => {
   const prompt = buildCommitSummaryPrompt(commit, '', 8000);
   assert.match(prompt, /fix: handle empty repo/);
+});
+
+test('buildCommitMessagePrompt: includes the staged diff', () => {
+  const diff = '+line three\n-line two\n';
+  const prompt = buildCommitMessagePrompt(diff, 8000);
+  assert.match(prompt, /\+line three/);
+});
+
+test('buildCommitMessagePrompt: passes a diff under the limit through unchanged', () => {
+  const diff = 'short diff';
+  const prompt = buildCommitMessagePrompt(diff, 8000);
+  assert.match(prompt, /short diff/);
+  assert.ok(!prompt.includes('[...truncated]'));
+});
+
+test('buildCommitMessagePrompt: truncates a diff over the limit and marks it', () => {
+  const diff = 'a'.repeat(20);
+  const prompt = buildCommitMessagePrompt(diff, 10);
+  assert.match(prompt, /a{10}\[\.\.\.truncated\]/);
+  assert.ok(!prompt.includes('a'.repeat(11)));
 });

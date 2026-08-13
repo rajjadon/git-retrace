@@ -47,6 +47,13 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
   /** Ref the graph is scoped to; empty string means every ref (`--all`). */
   private currentRef = '';
   private selectedSha: string | undefined;
+  // The cap actually used by the last load — starts at `gitLore.maxGraphItems` and grows each
+  // time "Load more" is clicked. A plain refresh (or the HEAD/refs auto-refresh) re-asks with
+  // this same cap rather than snapping back to the configured default.
+  private currentMaxCount = 0;
+  // Guards against a superseded `load()` (e.g. a fast ref-picker change, or an auto-refresh
+  // landing mid-flight) overwriting a newer one's rendered HTML with stale data once it resolves.
+  private loadGeneration = 0;
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
@@ -112,7 +119,9 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
     if (!this.view) {
       return;
     }
+    const generation = ++this.loadGeneration;
     this.currentFilePath = filePath;
+    this.currentMaxCount = maxCount;
     this.view.webview.html = shellHtml('<p>Loading commit graph…</p>');
 
     try {
@@ -129,7 +138,13 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
         this.git.getBranches(filePath),
         this.git.getWorkingChanges(filePath),
       ]);
+      if (generation !== this.loadGeneration || !this.view) {
+        return;
+      }
       const nodes = layoutGraph(commits);
+      // A signal, not a guarantee: `git log -n <cap>` can't distinguish "exactly cap commits
+      // total" from "more than cap". "Load more" re-asking with a higher cap resolves either way.
+      const hasMore = commits.length > 0 && commits.length === maxCount;
       this.view.webview.html = renderGraphHtml(
         {
           nodes,
@@ -137,6 +152,7 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
           workingChanges,
           currentRef: this.currentRef,
           selectedSha: this.selectedSha,
+          hasMore,
         },
         {
           nonce: createNonce(),
@@ -145,15 +161,27 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
         },
       );
     } catch (err) {
+      if (generation !== this.loadGeneration || !this.view) {
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       this.view.webview.html = shellHtml(`<p>GitLore: failed to load the commit graph — ${escapeHtml(message)}</p>`);
     }
   }
 
+  /** Called by the "Load more commits" button — re-asks with a higher cap, same file and ref. */
+  async loadMore(): Promise<void> {
+    if (!this.currentFilePath) {
+      return;
+    }
+    await this.load(this.currentFilePath, this.currentMaxCount + readMaxGraphItems());
+  }
+
+  /** Re-asks with whatever cap is currently in effect — preserves a "Load more" expansion instead of snapping back to the configured default. */
   private async reload(): Promise<void> {
     const filePath = this.currentFilePath ?? resolveRepoContextPath();
     if (filePath) {
-      await this.load(filePath, readMaxGraphItems());
+      await this.load(filePath, this.currentMaxCount || readMaxGraphItems());
     }
   }
 
@@ -177,11 +205,18 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
     }
     if (type === 'setRef' && typeof ref === 'string') {
       this.currentRef = ref;
+      // A different scope is a fresh view — starts back at the configured cap rather than
+      // carrying over a "Load more" expansion made under the previous ref.
+      this.currentMaxCount = readMaxGraphItems();
       await this.reload();
       return;
     }
     if (type === 'refresh') {
       await this.reload();
+      return;
+    }
+    if (type === 'loadMore') {
+      await this.loadMore();
       return;
     }
     if ((type === 'pull' || type === 'push') && this.currentRepoRoot) {

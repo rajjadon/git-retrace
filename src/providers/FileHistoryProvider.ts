@@ -8,15 +8,36 @@ import { CONFIG, CONTEXT_KEYS, VIEWS, COMMANDS } from '../constants';
 
 const DEFAULT_MAX_HISTORY_ITEMS = 200;
 
-export class FileHistoryProvider implements vscode.TreeDataProvider<Commit>, vscode.Disposable {
+/** Sentinel tree node for the "Load more" row — distinguishes it from a real `Commit` at render time. */
+export interface LoadMoreNode {
+  kind: 'loadMore';
+}
+
+const LOAD_MORE_NODE: LoadMoreNode = { kind: 'loadMore' };
+
+export type FileHistoryNode = Commit | LoadMoreNode;
+
+export function isLoadMoreNode(node: FileHistoryNode): node is LoadMoreNode {
+  return 'kind' in node && node.kind === 'loadMore';
+}
+
+export class FileHistoryProvider implements vscode.TreeDataProvider<FileHistoryNode>, vscode.Disposable {
   private readonly onDidChangeTreeDataEmitter = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.onDidChangeTreeDataEmitter.event;
 
   private readonly disposables: vscode.Disposable[] = [this.onDidChangeTreeDataEmitter];
   private commits: Commit[] = [];
   private currentFilePath: string | undefined;
+  private currentMaxCount = DEFAULT_MAX_HISTORY_ITEMS;
+  // True when the last load returned exactly the requested cap — a signal (not a guarantee) that
+  // there may be more commits past it, since `git log -n <cap>` can't distinguish "exactly cap
+  // commits total" from "more than cap". Clicking "Load more" re-asks with a higher cap either way.
+  private hasMore = false;
   private tracking = false;
-  private treeView: vscode.TreeView<Commit> | undefined;
+  private treeView: vscode.TreeView<FileHistoryNode> | undefined;
+  // Guards against a superseded load (rapid tab-switching) overwriting the tree with a stale
+  // file's history once an earlier lookup resolves after a later one.
+  private loadGeneration = 0;
 
   constructor(private readonly git: GitService) {}
 
@@ -46,7 +67,16 @@ export class FileHistoryProvider implements vscode.TreeDataProvider<Commit>, vsc
     await vscode.commands.executeCommand(`${VIEWS.fileHistory}.focus`);
   }
 
-  getTreeItem(commit: Commit): vscode.TreeItem {
+  getTreeItem(node: FileHistoryNode): vscode.TreeItem {
+    if (isLoadMoreNode(node)) {
+      const item = new vscode.TreeItem('Load more commits…', vscode.TreeItemCollapsibleState.None);
+      item.iconPath = new vscode.ThemeIcon('ellipsis');
+      item.contextValue = 'gitLore.loadMore';
+      item.command = { command: COMMANDS.loadMoreFileHistory, title: 'Load More File History' };
+      return item;
+    }
+
+    const commit = node;
     const item = new vscode.TreeItem(commit.message, vscode.TreeItemCollapsibleState.None);
     item.description = `${commit.author}, ${formatAge(new Date(commit.date))}`;
     const date = new Date(commit.date);
@@ -64,23 +94,44 @@ export class FileHistoryProvider implements vscode.TreeDataProvider<Commit>, vsc
     return item;
   }
 
-  getChildren(): Commit[] {
-    return this.commits;
+  getChildren(): FileHistoryNode[] {
+    return this.hasMore ? [...this.commits, LOAD_MORE_NODE] : this.commits;
+  }
+
+  /** Called by the "Load more commits" tree item — re-asks with a higher cap, same file. */
+  async loadMore(): Promise<void> {
+    if (!this.currentFilePath || !this.hasMore) {
+      return;
+    }
+    const step = this.getConfig<number>(CONFIG.maxHistoryItems, DEFAULT_MAX_HISTORY_ITEMS);
+    await this.loadForPath(this.currentFilePath, this.currentMaxCount + step);
   }
 
   private async loadForEditor(editor: vscode.TextEditor | undefined): Promise<void> {
     if (!editor || editor.document.uri.scheme !== 'file') {
+      this.loadGeneration++;
       this.currentFilePath = undefined;
       this.setCommits([], 'Open a file to see its history.');
       return;
     }
-
-    this.currentFilePath = editor.document.uri.fsPath;
     const maxCount = this.getConfig<number>(CONFIG.maxHistoryItems, DEFAULT_MAX_HISTORY_ITEMS);
+    await this.loadForPath(editor.document.uri.fsPath, maxCount);
+  }
+
+  private async loadForPath(filePath: string, maxCount: number): Promise<void> {
+    const generation = ++this.loadGeneration;
+    this.currentFilePath = filePath;
+    this.currentMaxCount = maxCount;
     try {
-      const commits = await this.git.getFileHistory(editor.document.uri.fsPath, maxCount);
+      const commits = await this.git.getFileHistory(filePath, maxCount);
+      if (generation !== this.loadGeneration) {
+        return;
+      }
       this.setCommits(commits, commits.length === 0 ? 'This file has no history.' : undefined);
     } catch (err) {
+      if (generation !== this.loadGeneration) {
+        return;
+      }
       this.setCommits([], undefined);
       const message = err instanceof Error ? err.message : String(err);
       void vscode.window.showErrorMessage(`GitLore: failed to load file history — ${message}`);
@@ -89,6 +140,7 @@ export class FileHistoryProvider implements vscode.TreeDataProvider<Commit>, vsc
 
   private setCommits(commits: Commit[], message: string | undefined): void {
     this.commits = commits;
+    this.hasMore = commits.length > 0 && commits.length === this.currentMaxCount;
     if (this.treeView) {
       this.treeView.message = message;
     }

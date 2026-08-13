@@ -35,6 +35,9 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
   private currentCompare: string | undefined;
   private currentFiles: FileChange[] = [];
   private currentPrUrl: string | undefined;
+  // Guards against a superseded `load()` (e.g. a fast ref-picker change) overwriting a newer
+  // one's rendered HTML with stale data once it resolves — same idiom as CommitGraphViewProvider.
+  private loadGeneration = 0;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -117,6 +120,7 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
     if (!this.view) {
       return;
     }
+    const generation = ++this.loadGeneration;
     this.currentFilePath = filePath;
     this.currentBase = base;
     this.currentCompare = compare;
@@ -132,6 +136,9 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
         this.git.getBranches(filePath),
         this.git.resolveRemoteInfo(filePath),
       ]);
+      if (generation !== this.loadGeneration || !this.view) {
+        return;
+      }
       this.currentFiles = files;
 
       // Only offer "Create PR" when we know that host's compare-URL shape — a button that
@@ -155,6 +162,9 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
         },
       );
     } catch (err) {
+      if (generation !== this.loadGeneration || !this.view) {
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       this.view.webview.html = shellHtml(`<p>GitLore: failed to load the comparison — ${escapeHtml(message)}</p>`);
     }

@@ -30,6 +30,11 @@
         "icon": "$(history)"
       },
       {
+        "command": "gitLore.loadMoreFileHistory",
+        "title": "GitLore: Load More File History",
+        "icon": "$(ellipsis)"
+      },
+      {
         "command": "gitLore.copySha",
         "title": "GitLore: Copy Commit SHA",
         "icon": "$(copy)"
@@ -57,6 +62,11 @@
       {
         "command": "gitLore.explainCommit",
         "title": "GitLore: Explain Commit with AI",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitLore.generateCommitMessage",
+        "title": "GitLore: Generate Commit Message with AI",
         "icon": "$(sparkle)"
       },
       {
@@ -213,6 +223,13 @@
           "when": "view == gitLore.explorer && viewItem == gitLore.stash"
         }
       ],
+      "scm/title": [
+        {
+          "command": "gitLore.generateCommitMessage",
+          "when": "scmProvider == git",
+          "group": "navigation"
+        }
+      ],
       "view/title": [
         {
           "command": "gitLore.compareBranches",
@@ -268,6 +285,10 @@
       "commandPalette": [
         {
           "command": "gitLore.copySha",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.loadMoreFileHistory",
           "when": "false"
         },
         {

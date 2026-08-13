@@ -36,6 +36,8 @@ export interface GraphData {
   workingChanges?: WorkingChanges;
   /** Row to mark selected on load, so a refresh doesn't lose the user's place. */
   selectedSha?: string;
+  /** True when the last load returned exactly `maxGraphItems` commits — there may be more past the cap. */
+  hasMore?: boolean;
   now?: Date;
 }
 
@@ -221,7 +223,7 @@ function renderWorkingChangesRow(changes: WorkingChanges, svgWidth: number, tabb
 
 /** Builds the commit graph webview's full HTML document. Pure — nonce/cspSource/styleUris come from the caller, so this is unit-testable without a real webview host. */
 export function renderGraphHtml(data: GraphData, opts: RenderGraphOptions): string {
-  const { nodes, branches = [], currentRef = '', workingChanges, selectedSha } = data;
+  const { nodes, branches = [], currentRef = '', workingChanges, selectedSha, hasMore = false } = data;
   const now = data.now ?? new Date();
   const styles = opts.styleUris.map((uri) => `<link rel="stylesheet" href="${uri}" />`).join('\n');
   // A little extra room beyond the widest lane so the dot never sits flush against the text
@@ -299,6 +301,7 @@ ${rows}
 </div>
 ${empty ? '<p class="empty">No commits yet.</p>' : ''}
 </div>
+${hasMore ? '<div class="load-more"><button id="load-more" class="btn" type="button">Load more commits</button></div>' : ''}
 <div id="row-tooltip" class="row-tooltip" role="tooltip" aria-hidden="true" hidden></div>
 <script nonce="${opts.nonce}">
 const vscode = acquireVsCodeApi();
@@ -471,6 +474,9 @@ document.getElementById('pull')?.addEventListener('click', () => {
 });
 document.getElementById('push')?.addEventListener('click', () => {
   vscode.postMessage({ type: 'push' });
+});
+document.getElementById('load-more')?.addEventListener('click', () => {
+  vscode.postMessage({ type: 'loadMore' });
 });
 </script>
 </body>

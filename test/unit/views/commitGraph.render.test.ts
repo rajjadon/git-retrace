@@ -382,3 +382,13 @@ test('renderGraphHtml: pluralizes the commit count', () => {
     />2 commits</,
   );
 });
+
+test('renderGraphHtml: hides the "Load more" button when hasMore is not set', () => {
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
+  assert.ok(!html.includes('id="load-more"'));
+});
+
+test('renderGraphHtml: shows a "Load more" button when hasMore is true', () => {
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now, hasMore: true }, opts);
+  assert.match(html, /id="load-more"[^>]*>Load more commits</);
+});

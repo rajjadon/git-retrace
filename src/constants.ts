@@ -8,6 +8,7 @@ export const DEFAULT_MAX_BLAME_FILE_SIZE = 1_048_576;
 export const COMMANDS = {
   toggleBlame: 'gitLore.toggleBlame',
   showFileHistory: 'gitLore.showFileHistory',
+  loadMoreFileHistory: 'gitLore.loadMoreFileHistory',
   showCommit: 'gitLore.showCommit',
   copySha: 'gitLore.copySha',
   openGraph: 'gitLore.openGraph',
@@ -15,6 +16,7 @@ export const COMMANDS = {
   compareBranches: 'gitLore.compareBranches',
   explainCommit: 'gitLore.explainCommit',
   explainLine: 'gitLore.explainLine',
+  generateCommitMessage: 'gitLore.generateCommitMessage',
   showFileOwnership: 'gitLore.showFileOwnership',
   rebaseInteractively: 'gitLore.rebaseInteractively',
   checkoutBranch: 'gitLore.checkoutBranch',
@@ -36,7 +38,6 @@ export const CONFIG = {
   maxHistoryItems: 'maxHistoryItems',
   maxBlameFileSize: 'maxBlameFileSize',
   maxGraphItems: 'maxGraphItems',
-  dateFormat: 'dateFormat',
   staleCodeEnabled: 'staleCode.enabled',
   staleThresholdDays: 'staleThresholdDays',
   ownershipEnabled: 'ownership.enabled',

@@ -129,6 +129,7 @@ Never let a `vscode` import leak into `core/`. If you're tempted, the logic belo
 - [x] **AI line explanation** — "Why does this line exist?" → LLM answers using the line's blame + diff history
 - [x] **Stale-code detector** — flag files/functions untouched for > `staleThresholdDays`, shown as a subtle CodeLens
 - [x] **Author ownership** — per-file heatmap: who owns which regions, by line count and recency
+- [x] **AI commit message generation** — drafts a message from the staged diff straight into the Source Control input box, via a title-bar button there; same opt-in gate and infrastructure as commit summary/line explanation
 
 ### Phase 3 — Graph & collaboration — shipped 0.1.0–0.2.0 (built ahead of Phase 2)
 - [x] **Commit graph** — interactive DAG in a Webview
@@ -165,12 +166,16 @@ Do not start a phase until the previous phase is tested and merged.
 |---|---|
 | `gitLore.toggleBlame` | GitLore: Toggle Inline Blame |
 | `gitLore.showFileHistory` | GitLore: Show File History |
+| `gitLore.loadMoreFileHistory` | GitLore: Load More File History |
 | `gitLore.showCommit` | GitLore: Show Commit Details |
 | `gitLore.explainCommit` | GitLore: Explain Commit with AI |
 | `gitLore.explainLine` | GitLore: Explain This Line's History |
+| `gitLore.generateCommitMessage` | GitLore: Generate Commit Message with AI |
 | `gitLore.copySha` | GitLore: Copy Commit SHA |
 | `gitLore.openGraph` | GitLore: Open Commit Graph |
 | `gitLore.showVisualFileHistory` | GitLore: Show Visual File History |
+| `gitLore.compareBranches` | GitLore: Compare Branches |
+| `gitLore.showFileOwnership` | GitLore: Show File Ownership |
 | `gitLore.rebaseInteractively` | GitLore: Rebase Branch Interactively... |
 | `gitLore.checkoutBranch` | GitLore: Checkout Branch |
 | `gitLore.compareBranchFromExplorer` | GitLore: Compare with Current Branch |
@@ -191,11 +196,17 @@ Do not start a phase until the previous phase is tested and merged.
 | `gitLore.ai.enabled` | boolean | `false` | Enable AI features (uses your own model via vscode.lm) |
 | `gitLore.ai.modelFamily` | string | `"gpt-4o"` | Preferred LM family hint |
 | `gitLore.ai.maxDiffChars` | number | `8000` | Max diff size sent to the model |
+| `gitLore.staleCode.enabled` | boolean | `true` | Show the stale-code CodeLens above untouched functions/methods |
 | `gitLore.staleThresholdDays` | number | `180` | Days before a function is considered stale |
 | `gitLore.maxHistoryItems` | number | `200` | Max commits loaded per file history |
+| `gitLore.maxGraphItems` | number | `200` | Max commits loaded in the commit graph |
 | `gitLore.maxBlameFileSize` | number | `1048576` | Skip blame for files larger than this (bytes) |
-| `gitLore.dateFormat` | string | `"relative"` | `relative` or an absolute date-fns pattern |
+| `gitLore.ownership.enabled` | boolean | `false` | Show a per-line author color mark in the overview ruler |
 | `gitLore.fullFileBlame.enabled` | boolean | `false` | Show a hot-to-cold recency gradient as a left-edge mark per line, across the whole file |
+| `gitLore.issueLinking.enabled` | boolean | `true` | Auto-link issue/PR references (e.g. `#123`) in commit messages |
+| `gitLore.issueLinking.pattern` | string | `"#(\\d+)"` | Regex matching issue/PR references; first capture group fills `{issue}` |
+| `gitLore.issueLinking.urlTemplate` | string | `""` | `{issue}`-templated URL for issue links; empty auto-detects from the GitHub/GitLab remote |
+| `gitLore.rebaseEditor.enabled` | boolean | `true` | Use GitLore's Interactive Rebase Editor for `git-rebase-todo` files |
 | `gitLore.launchpad.enabled` | boolean | `false` | Enable Launchpad, the cross-repo PR triage board — the only setting that makes GitLore call out to a remote host |
 | `gitLore.launchpad.customHosts` | array | `[]` | Self-hosted/custom forge instances Launchpad can't recognize by hostname alone: `{ hostname, flavor, apiBaseUrl }[]` |
 

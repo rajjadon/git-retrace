@@ -134,6 +134,16 @@ An overview-ruler color mark per line, by that line's author (`gitLore.ownership
 
 A hot-to-cold recency gradient as a left-edge mark per line, across the whole file (`gitLore.fullFileBlame.enabled`, off by default) — relative to the file's own age range, so even an entirely old file still shows which of its lines are relatively newer. Distinct from the current-line inline blame decoration and the ownership ruler above: a third, independent visual, not a mode of either.
 
+### AI commit summaries, line explanations, and commit messages
+
+Opt-in (`gitLore.ai.enabled`, off by default) — nothing is sent anywhere until you turn it on, and it uses whatever language model you've already registered with VS Code (e.g. GitHub Copilot Chat) via the built-in Language Model API. No GitLore backend, no API key, no account.
+
+- **Summarize** in Commit Details streams a plain-English summary of the open commit.
+- **Explain this line with AI**, from the blame hover, answers "why does this line exist?" using that line's blame and diff history.
+- **Generate Commit Message with AI**, a sparkle button in the Source Control panel's title bar, drafts a message from your staged diff straight into the commit box — GitLore never stages or commits anything itself, it only fills in the text VS Code's own Source Control view already owns.
+
+Each degrades to an inline hint rather than erroring when no model is registered.
+
 ### Also
 
 - **Issue and PR links** — `#123` in a commit message becomes a link, auto-detected from your remote or pointed at any tracker (Jira included) via a regex and URL template. Visible inline wherever a commit message renders — no separate view of its own.
@@ -161,6 +171,7 @@ Every command is also a title-bar button in the GitLore panel.
 | `GitLore: Step Through This Line's History` | Move the hover's line-history stepper (from the hover's Older/prev/next links) |
 | `GitLore: Toggle Full-File Blame Heatmap` | Turn the whole-file recency gradient on or off |
 | `GitLore: Open Launchpad` | Open the cross-repo PR triage board (needs `gitLore.launchpad.enabled`) |
+| `GitLore: Generate Commit Message with AI` | Draft a commit message from your staged diff, into the Source Control input box (also a title-bar button there; needs `gitLore.ai.enabled`) |
 
 ## Settings
 
@@ -199,9 +210,9 @@ No telemetry. No analytics. No account.
 
 GitLore is not trying to out-feature the bigger, paid alternatives — it's trying to be the free, fast, small part you actually use every day. Honest accounting:
 
-**What GitLore does** — inline blame and hover, status bar, file history (tree and visual), a self-refreshing commit graph with pull/push, commit details with per-file diffs, an interactive rebase editor, branch comparison, a repo-wide sidebar explorer, a cross-repo PR triage board, AI commit summaries, AI line explanations, stale-code detection, ownership and recency heatmaps, and issue linking. All free, forever.
+**What GitLore does** — inline blame and hover, status bar, file history (tree and visual), a self-refreshing commit graph with pull/push, commit details with per-file diffs, an interactive rebase editor, branch comparison, a repo-wide sidebar explorer, a cross-repo PR triage board, AI commit summaries, AI line explanations, AI-drafted commit messages, stale-code detection, ownership and recency heatmaps, and issue linking. All free, forever.
 
-**What it deliberately doesn't** — staging, stashing or committing (that's VS Code's own Source Control view, and the graph links you there), and anything behind a sign-in.
+**What it deliberately doesn't** — staging, stashing or committing itself (that's VS Code's own Source Control view; GitLore only helps draft the message that goes there, and the graph links to Source Control for everything else), and anything behind a sign-in.
 
 **What's missing for now** — a file-tree view of changed files (GitLore's diffs list files flat, not nested by folder). See the [changelog](CHANGELOG.md) for the current list.
 
