@@ -7,7 +7,7 @@ const REPO: ForgeRepoRef = { host: 'bitbucket', identity: 'acme/widgets', label:
 const BASE = 'https://api.bitbucket.org/2.0';
 
 function jsonResponse(body: unknown, ok = true): Response {
-  return { ok, json: async () => body } as unknown as Response;
+  return { ok, status: ok ? 200 : 401, statusText: ok ? 'OK' : 'Unauthorized', json: async () => body } as unknown as Response;
 }
 
 function fakeFetch(routes: Record<string, unknown>): typeof fetch {
@@ -31,9 +31,9 @@ test('getAuthenticatedLogin: falls back to nickname when username is absent', as
   assert.equal(await client.getAuthenticatedLogin(), 'raj-nick');
 });
 
-test('getAuthenticatedLogin: an invalid token returns null, not a throw', async () => {
+test('getAuthenticatedLogin: an invalid token throws with the real HTTP status, not a generic message', async () => {
   const client = new BitbucketClient(BASE, 'bad', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
-  assert.equal(await client.getAuthenticatedLogin(), null);
+  await assert.rejects(() => client.getAuthenticatedLogin(), /401 Unauthorized from api\.bitbucket\.org/);
 });
 
 test('listOpenPullRequests: normalizes a plain open PR with no reviewers or build statuses', async () => {

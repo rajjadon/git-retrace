@@ -87,16 +87,13 @@ export class BitbucketClient implements ForgeClient {
 
   async getAuthenticatedLogin(): Promise<string | null> {
     const res = await this.request('/user');
-    if (!res) {
-      return null;
-    }
     const data = (await res.json()) as BitbucketUser;
     const login = loginOf(data);
     return login || null;
   }
 
   async listOpenPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
-    const listRes = await this.request(`/repositories/${repo.identity}/pullrequests?state=OPEN`);
+    const listRes = await this.requestOrNull(`/repositories/${repo.identity}/pullrequests?state=OPEN`);
     if (!listRes) {
       return [];
     }
@@ -124,7 +121,7 @@ export class BitbucketClient implements ForgeClient {
   }
 
   private async fetchBuildStatuses(repo: ForgeRepoRef, revision: string): Promise<BitbucketBuildStatus[]> {
-    const res = await this.request(`/repositories/${repo.identity}/commit/${revision}/statuses`);
+    const res = await this.requestOrNull(`/repositories/${repo.identity}/commit/${revision}/statuses`);
     if (!res) {
       return [];
     }
@@ -132,12 +129,25 @@ export class BitbucketClient implements ForgeClient {
     return page.values ?? [];
   }
 
-  private async request(path: string): Promise<Response | null> {
+  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it — every caller except `getAuthenticatedLogin` wraps this in `requestOrNull` to keep their existing soft-degrade behavior. */
+  private async request(path: string): Promise<Response> {
+    const url = `${this.apiBaseUrl}${path}`;
+    let res: Response;
     try {
-      const res = await this.fetchImpl(`${this.apiBaseUrl}${path}`, {
-        headers: { Authorization: `Bearer ${this.token}` },
-      });
-      return res.ok ? res : null;
+      res = await this.fetchImpl(url, { headers: { Authorization: `Bearer ${this.token}` } });
+    } catch (err) {
+      throw new Error(`couldn't reach ${new URL(url).host}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}`);
+    }
+    return res;
+  }
+
+  /** Network failure, DNS failure, non-2xx, etc. — degrade to "nothing here" rather than throwing partway through a board render. */
+  private async requestOrNull(path: string): Promise<Response | null> {
+    try {
+      return await this.request(path);
     } catch {
       return null;
     }

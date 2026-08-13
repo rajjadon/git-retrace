@@ -7,7 +7,7 @@ const REPO: ForgeRepoRef = { host: 'github', identity: 'acme/widgets', label: 'a
 const BASE = 'https://api.github.com';
 
 function jsonResponse(body: unknown, ok = true): Response {
-  return { ok, json: async () => body } as unknown as Response;
+  return { ok, status: ok ? 200 : 401, statusText: ok ? 'OK' : 'Unauthorized', json: async () => body } as unknown as Response;
 }
 
 /** Routes a fake fetch by matching against the tail of the requested URL, so each test only wires up the endpoints it actually needs. */
@@ -27,9 +27,9 @@ test('getAuthenticatedLogin: returns the login from GET /user', async () => {
   assert.equal(await client.getAuthenticatedLogin(), 'raj');
 });
 
-test('getAuthenticatedLogin: a failed request (bad/expired token) returns null, not a throw', async () => {
+test('getAuthenticatedLogin: a failed request (bad/expired token) throws with the real HTTP status, not a generic message', async () => {
   const client = new GitHubClient(BASE, 'bad-tok', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
-  assert.equal(await client.getAuthenticatedLogin(), null);
+  await assert.rejects(() => client.getAuthenticatedLogin(), /401 Unauthorized from api\.github\.com/);
 });
 
 test('listOpenPullRequests: normalizes a plain open PR with no reviews, checks, or requested reviewers', async () => {

@@ -115,10 +115,22 @@ export class LaunchpadViewProvider implements vscode.Disposable {
           continue;
         }
         const client = buildForgeClient(detected.flavor, detected.apiBaseUrl, token, this.fetchImpl);
-        const login = await client.getAuthenticatedLogin();
+
+        let login: string | null;
+        try {
+          login = await client.getAuthenticatedLogin();
+        } catch (err) {
+          // Bad/expired/wrongly-scoped credential, or the host unreachable — clear it so the
+          // *next* refresh re-prompts instead of retrying the same bad credential forever, and
+          // show the real reason (HTTP status, network failure) instead of a one-size-fits-all
+          // "couldn't authenticate" that gives the user nothing to act on.
+          await clearForgeToken(this.context.secrets, detected);
+          const reason = err instanceof Error ? err.message : String(err);
+          this.logger?.error(`Launchpad failed to authenticate with ${detected.displayHost}`, err);
+          errors.push({ repo, message: `Couldn't authenticate with ${detected.displayHost}: ${reason}` });
+          continue;
+        }
         if (!login) {
-          // Bad/expired credential — clear it so the *next* refresh re-prompts instead of
-          // silently failing the same way forever.
           await clearForgeToken(this.context.secrets, detected);
           errors.push({ repo, message: `Couldn't authenticate with ${detected.displayHost}.` });
           continue;

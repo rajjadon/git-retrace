@@ -137,6 +137,43 @@ suite('Launchpad', () => {
       }),
     ));
 
+  test('enabled, with a rejected token: shows the real HTTP status (not a generic message) and re-prompts on the next refresh', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/rejected.git', async () => {
+        let promptCount = 0;
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () => {
+          promptCount++;
+          return 'fake-pat';
+        }) as typeof vscode.window.showInputBox;
+
+        api.launchpadProvider.setFetchImplForTest((async () => ({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+          json: async () => ({}),
+        })) as unknown as typeof fetch);
+
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          // The error banner escapes HTML entities, so the apostrophe renders as `&#39;`, not `'`.
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Couldn&#39;t authenticate'));
+          const html = api.getLaunchpadHtml() ?? '';
+          assert.match(html, /Couldn&#39;t authenticate with gitlab\.com: 401 Unauthorized from gitlab\.com/);
+
+          // Another test earlier in this suite may have already cached a gitlab.com PAT, so this
+          // refresh might reuse it (0 prompts) rather than prompt fresh (1 prompt) — either way,
+          // the rejected token should now be cleared, so the *next* refresh always needs exactly
+          // one more prompt than this one did, instead of silently retrying the same bad credential.
+          const promptCountAfterFirstRefresh = promptCount;
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => promptCount === promptCountAfterFirstRefresh + 1);
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+      }),
+    ));
+
   test('enabled, with an Azure DevOps SSH remote (git@ssh.dev.azure.com:v3/org/project/repo): fetches and renders real PR data', async () =>
     withLaunchpadEnabled(() =>
       withRemote('origin', 'git@ssh.dev.azure.com:v3/GoFynd/FyndOne/Boltic', async () => {

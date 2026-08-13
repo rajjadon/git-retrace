@@ -88,9 +88,6 @@ export class AzureDevOpsClient implements ForgeClient {
 
   async getAuthenticatedLogin(): Promise<string | null> {
     const res = await this.request('https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1');
-    if (!res) {
-      return null;
-    }
     const data = (await res.json()) as AzureDevOpsProfile;
     return data.emailAddress ?? data.displayName ?? null;
   }
@@ -101,7 +98,7 @@ export class AzureDevOpsClient implements ForgeClient {
       return [];
     }
     const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
-    const listRes = await this.request(`${base}/pullrequests?searchCriteria.status=active&api-version=7.1`);
+    const listRes = await this.requestOrNull(`${base}/pullrequests?searchCriteria.status=active&api-version=7.1`);
     if (!listRes) {
       return [];
     }
@@ -134,7 +131,7 @@ export class AzureDevOpsClient implements ForgeClient {
   }
 
   private async fetchStatuses(base: string, pullRequestId: number): Promise<AzureDevOpsStatus[]> {
-    const res = await this.request(`${base}/pullRequests/${pullRequestId}/statuses?api-version=7.1`);
+    const res = await this.requestOrNull(`${base}/pullRequests/${pullRequestId}/statuses?api-version=7.1`);
     if (!res) {
       return [];
     }
@@ -142,13 +139,27 @@ export class AzureDevOpsClient implements ForgeClient {
     return data.value ?? [];
   }
 
-  private async request(url: string): Promise<Response | null> {
+  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it — every caller except `getAuthenticatedLogin` wraps this in `requestOrNull` to keep their existing soft-degrade behavior. */
+  private async request(url: string): Promise<Response> {
+    // Azure DevOps PATs authenticate via HTTP Basic with an empty username — Bearer support for
+    // raw PATs isn't consistently documented the way it is for GitHub/GitLab/Bitbucket tokens.
+    const basic = Buffer.from(`:${this.token}`).toString('base64');
+    let res: Response;
     try {
-      // Azure DevOps PATs authenticate via HTTP Basic with an empty username — Bearer support for
-      // raw PATs isn't consistently documented the way it is for GitHub/GitLab/Bitbucket tokens.
-      const basic = Buffer.from(`:${this.token}`).toString('base64');
-      const res = await this.fetchImpl(url, { headers: { Authorization: `Basic ${basic}` } });
-      return res.ok ? res : null;
+      res = await this.fetchImpl(url, { headers: { Authorization: `Basic ${basic}` } });
+    } catch (err) {
+      throw new Error(`couldn't reach ${new URL(url).host}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}`);
+    }
+    return res;
+  }
+
+  /** Network failure, DNS failure, non-2xx, etc. — degrade to "nothing here" rather than throwing partway through a board render. */
+  private async requestOrNull(url: string): Promise<Response | null> {
+    try {
+      return await this.request(url);
     } catch {
       return null;
     }

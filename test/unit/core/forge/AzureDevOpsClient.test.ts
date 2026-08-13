@@ -8,7 +8,7 @@ const IDENTITY = buildAzureDevOpsIdentity({ organization: 'acme', project: 'Widg
 const REPO: ForgeRepoRef = { host: 'azureDevOps', identity: IDENTITY, label: 'acme/Widgets/widgets-api' };
 
 function jsonResponse(body: unknown, ok = true): Response {
-  return { ok, json: async () => body } as unknown as Response;
+  return { ok, status: ok ? 200 : 401, statusText: ok ? 'OK' : 'Unauthorized', json: async () => body } as unknown as Response;
 }
 
 function fakeFetch(routes: Record<string, unknown>): typeof fetch {
@@ -38,9 +38,9 @@ test('getAuthenticatedLogin: falls back to displayName when emailAddress is abse
   assert.equal(await client.getAuthenticatedLogin(), 'Raj Jadon');
 });
 
-test('getAuthenticatedLogin: an invalid PAT returns null, not a throw', async () => {
+test('getAuthenticatedLogin: an invalid PAT throws with the real HTTP status, not a generic message', async () => {
   const client = new AzureDevOpsClient('bad', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
-  assert.equal(await client.getAuthenticatedLogin(), null);
+  await assert.rejects(() => client.getAuthenticatedLogin(), /401 Unauthorized from app\.vssps\.visualstudio\.com/);
 });
 
 test('listOpenPullRequests: builds the repo URL from organization/project/repository, not owner/repo', async () => {

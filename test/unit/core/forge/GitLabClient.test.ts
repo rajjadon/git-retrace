@@ -7,7 +7,7 @@ const REPO: ForgeRepoRef = { host: 'gitlab', identity: 'acme/widgets', label: 'a
 const BASE = 'https://gitlab.com/api/v4';
 
 function jsonResponse(body: unknown, ok = true): Response {
-  return { ok, json: async () => body } as unknown as Response;
+  return { ok, status: ok ? 200 : 401, statusText: ok ? 'OK' : 'Unauthorized', json: async () => body } as unknown as Response;
 }
 
 function fakeFetch(routes: Record<string, unknown>): typeof fetch {
@@ -26,9 +26,9 @@ test('getAuthenticatedLogin: returns the username from GET /user', async () => {
   assert.equal(await client.getAuthenticatedLogin(), 'raj');
 });
 
-test('getAuthenticatedLogin: an invalid token returns null, not a throw', async () => {
+test('getAuthenticatedLogin: an invalid token throws with the real HTTP status, not a generic message', async () => {
   const client = new GitLabClient(BASE, 'bad', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
-  assert.equal(await client.getAuthenticatedLogin(), null);
+  await assert.rejects(() => client.getAuthenticatedLogin(), /401 Unauthorized from gitlab\.com/);
 });
 
 test('listOpenPullRequests: URL-encodes a nested-group project path', async () => {

@@ -78,16 +78,13 @@ export class GitLabClient implements ForgeClient {
 
   async getAuthenticatedLogin(): Promise<string | null> {
     const res = await this.request('/user');
-    if (!res) {
-      return null;
-    }
     const data = (await res.json()) as GitLabUser;
     return data.username ?? null;
   }
 
   async listOpenPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
     const projectPath = encodeURIComponent(repo.identity);
-    const listRes = await this.request(`/projects/${projectPath}/merge_requests?state=opened&per_page=100`);
+    const listRes = await this.requestOrNull(`/projects/${projectPath}/merge_requests?state=opened&per_page=100`);
     if (!listRes) {
       return [];
     }
@@ -121,7 +118,7 @@ export class GitLabClient implements ForgeClient {
   }
 
   private async fetchApprovals(projectPath: string, iid: number): Promise<GitLabApprovals> {
-    const res = await this.request(`/projects/${projectPath}/merge_requests/${iid}/approvals`);
+    const res = await this.requestOrNull(`/projects/${projectPath}/merge_requests/${iid}/approvals`);
     if (!res) {
       return { approved: false, approved_by: [] };
     }
@@ -129,12 +126,25 @@ export class GitLabClient implements ForgeClient {
     return { approved: data.approved ?? false, approved_by: data.approved_by ?? [] };
   }
 
-  private async request(path: string): Promise<Response | null> {
+  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it — every caller except `getAuthenticatedLogin` wraps this in `requestOrNull` to keep their existing soft-degrade behavior. */
+  private async request(path: string): Promise<Response> {
+    const url = `${this.apiBaseUrl}${path}`;
+    let res: Response;
     try {
-      const res = await this.fetchImpl(`${this.apiBaseUrl}${path}`, {
-        headers: { 'PRIVATE-TOKEN': this.token },
-      });
-      return res.ok ? res : null;
+      res = await this.fetchImpl(url, { headers: { 'PRIVATE-TOKEN': this.token } });
+    } catch (err) {
+      throw new Error(`couldn't reach ${new URL(url).host}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}`);
+    }
+    return res;
+  }
+
+  /** Network failure, DNS failure, non-2xx, etc. — degrade to "nothing here" rather than throwing partway through a board render. */
+  private async requestOrNull(path: string): Promise<Response | null> {
+    try {
+      return await this.request(path);
     } catch {
       return null;
     }

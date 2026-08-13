@@ -84,15 +84,12 @@ export class GitHubClient implements ForgeClient {
 
   async getAuthenticatedLogin(): Promise<string | null> {
     const res = await this.request('/user');
-    if (!res) {
-      return null;
-    }
     const data = (await res.json()) as GitHubUser;
     return data.login ?? null;
   }
 
   async listOpenPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
-    const listRes = await this.request(`/repos/${repo.identity}/pulls?state=open&per_page=100`);
+    const listRes = await this.requestOrNull(`/repos/${repo.identity}/pulls?state=open&per_page=100`);
     if (!listRes) {
       return [];
     }
@@ -124,12 +121,12 @@ export class GitHubClient implements ForgeClient {
   }
 
   private async fetchReviews(repo: ForgeRepoRef, prNumber: number): Promise<GitHubReview[]> {
-    const res = await this.request(`/repos/${repo.identity}/pulls/${prNumber}/reviews?per_page=100`);
+    const res = await this.requestOrNull(`/repos/${repo.identity}/pulls/${prNumber}/reviews?per_page=100`);
     return res ? ((await res.json()) as GitHubReview[]) : [];
   }
 
   private async fetchCheckRuns(repo: ForgeRepoRef, sha: string): Promise<GitHubCheckRun[]> {
-    const res = await this.request(`/repos/${repo.identity}/commits/${sha}/check-runs?per_page=100`);
+    const res = await this.requestOrNull(`/repos/${repo.identity}/commits/${sha}/check-runs?per_page=100`);
     if (!res) {
       return [];
     }
@@ -143,7 +140,7 @@ export class GitHubClient implements ForgeClient {
    * the same as "unknown, no conflicts" rather than polling for it to settle.
    */
   private async fetchMergeableState(repo: ForgeRepoRef, prNumber: number): Promise<string | null> {
-    const res = await this.request(`/repos/${repo.identity}/pulls/${prNumber}`);
+    const res = await this.requestOrNull(`/repos/${repo.identity}/pulls/${prNumber}`);
     if (!res) {
       return null;
     }
@@ -151,19 +148,32 @@ export class GitHubClient implements ForgeClient {
     return data.mergeable_state ?? null;
   }
 
-  private async request(path: string): Promise<Response | null> {
+  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it — every caller except `getAuthenticatedLogin` wraps this in `requestOrNull` to keep their existing soft-degrade behavior. */
+  private async request(path: string): Promise<Response> {
+    const url = `${this.apiBaseUrl}${path}`;
+    let res: Response;
     try {
-      const res = await this.fetchImpl(`${this.apiBaseUrl}${path}`, {
+      res = await this.fetchImpl(url, {
         headers: {
           Authorization: `Bearer ${this.token}`,
           Accept: 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
         },
       });
-      return res.ok ? res : null;
+    } catch (err) {
+      throw new Error(`couldn't reach ${new URL(url).host}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (!res.ok) {
+      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}`);
+    }
+    return res;
+  }
+
+  /** Network failure, DNS failure, non-2xx, etc. — degrade to "nothing here" rather than throwing partway through a board render. */
+  private async requestOrNull(path: string): Promise<Response | null> {
+    try {
+      return await this.request(path);
     } catch {
-      // Network failure, DNS failure, etc. — degrade to "nothing here" rather than throwing
-      // partway through a board render.
       return null;
     }
   }
