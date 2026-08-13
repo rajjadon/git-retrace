@@ -5,19 +5,52 @@
  *
  * Type rule used throughout GitLore: anything git would accept as an argument — a path, a SHA,
  * a diff body, a line number — is set in the editor's font. UI chrome is set in the UI font.
+ *
+ * GitLore's signature accent — one deliberate, theme-derived color used consistently across every
+ * panel (section-head's left bar, each panel's header underline, the AI action, hover-card
+ * borders) instead of the same default button-blue every other extension uses. Defined once here
+ * since every webview links shared.css first; never hardcode a hex in its place.
  */
+:root {
+  --gitlore-accent: var(--vscode-charts-purple);
+  /*
+   * Same signature, as a gradient — both stops are theme tokens (never a hardcoded hex), so it
+   * stays theme-correct the same way the solid accent does. Three orientations for the three
+   * shapes it fills: horizontal bars (toolbar underlines), vertical bars (section-head's left
+   * edge), and diagonal for filled surfaces (buttons, pills, tooltip borders).
+   */
+  --gitlore-accent-gradient: linear-gradient(90deg, var(--vscode-charts-purple), var(--vscode-charts-blue));
+  --gitlore-accent-gradient-v: linear-gradient(180deg, var(--vscode-charts-purple), var(--vscode-charts-blue));
+  --gitlore-accent-gradient-diag: linear-gradient(135deg, var(--vscode-charts-purple), var(--vscode-charts-blue));
+  /* Shared radius for every hover card (Commit Graph's row tooltip, Visual File History's) — they
+     previously drifted (3px vs 6px) despite being the same kind of element. */
+  --gitlore-radius-lg: 6px;
+}
 
 /* ---------- Section header ---------- */
 
 .section-head {
+  position: relative;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.3rem 0.5rem 0.3rem 0.75rem;
+  padding: 0.3rem 0.5rem 0.3rem 0.65rem;
   border-top: 1px solid var(--vscode-panel-border);
   border-bottom: 1px solid var(--vscode-panel-border);
   font-size: 0.92em;
+}
+
+/* A pseudo-element, not `border-left`, because this element already has its own solid top/bottom
+   borders — `border-image` would try to paint the same gradient across all four edges at once. */
+.section-head::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--gitlore-accent-gradient-v);
 }
 
 .section-icon {
@@ -28,8 +61,8 @@
 .section-title {
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  font-weight: 600;
-  opacity: 0.8;
+  font-weight: 700;
+  opacity: 0.85;
   white-space: nowrap;
 }
 
@@ -118,7 +151,7 @@
 
 .empty {
   margin: 0.75rem;
-  opacity: 0.65;
+  color: var(--vscode-descriptionForeground);
   text-align: center;
 }
 
@@ -189,7 +222,7 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  opacity: 0.6;
+  color: var(--vscode-descriptionForeground);
 }
 
 .file-name {
@@ -271,7 +304,7 @@
 }
 
 .muted {
-  opacity: 0.65;
+  color: var(--vscode-descriptionForeground);
 }
 
 .no-diff {
@@ -288,7 +321,7 @@ pre.diff {
   padding: 0.4rem 0;
   background-color: var(--vscode-textCodeBlock-background);
   border-radius: 3px;
-  font-family: var(--gitlore-editor-font, var(--vscode-editor-font-family));
+  font-family: var(--vscode-editor-font-family);
   font-size: var(--vscode-editor-font-size, 13px);
   line-height: 1.5;
 }
@@ -304,6 +337,8 @@ pre.diff {
   background-color: var(--vscode-list-hoverBackground);
 }
 
+/* Deliberately fainter than the theme's own secondary-text color (descriptionForeground, used
+   elsewhere for meta text) — a diff's line numbers should recede further than an ordinary caption. */
 .dn {
   text-align: right;
   opacity: 0.45;
@@ -357,7 +392,7 @@ body.wrap .dc {
 }
 
 .diff-meta {
-  opacity: 0.6;
+  color: var(--vscode-descriptionForeground);
 }
 
 .diff-ctx {

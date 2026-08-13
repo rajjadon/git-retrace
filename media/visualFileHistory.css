@@ -18,6 +18,10 @@ body {
   font-size: calc(var(--vscode-font-size, 13px) - 1px);
   color: var(--vscode-foreground);
   background-color: var(--vscode-panel-background, var(--vscode-editor-background));
+  /* Every GitLore webview draws its own left edge — docked sibling views in the same panel
+     container share one flat background with no native seam between them, so without this, two
+     panels open side by side visually merge into one. */
+  border-left: 1px solid var(--vscode-panel-border);
 }
 
 .fh-legend {
@@ -26,7 +30,9 @@ body {
   align-items: center;
   gap: 0.75rem;
   padding: 0.4rem 0.75rem;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  /* GitLore's signature accent (shared.css) marks every panel's header — quiet everywhere else, present here. */
+  border-bottom: 2px solid;
+  border-image: var(--gitlore-accent-gradient) 1;
 }
 
 .fh-legend-item {
@@ -108,9 +114,21 @@ body {
   z-index: 10;
   width: 260px;
   padding: 0.7rem 0.8rem;
-  border: 1px solid var(--vscode-panel-border);
-  border-radius: 6px;
-  background-color: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  border-radius: var(--gitlore-radius-lg);
+  /*
+   * `border-image` ignores `border-radius` (it paints square corners regardless), so a rounded
+   * gradient border needs this two-layer trick instead: a flat "gradient" (same color twice) fills
+   * the padding box, the real gradient fills the border box, and a transparent border reserves the
+   * ring between them for it to show through.
+   */
+  background:
+    linear-gradient(
+        var(--vscode-editorWidget-background, var(--vscode-editor-background)),
+        var(--vscode-editorWidget-background, var(--vscode-editor-background))
+      )
+      padding-box,
+    var(--gitlore-accent-gradient-diag) border-box;
+  border: 1px solid transparent;
   color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
   font-size: 0.9em;
