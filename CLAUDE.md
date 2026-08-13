@@ -117,25 +117,44 @@ Never let a `vscode` import leak into `core/`. If you're tempted, the logic belo
 
 ## 7. Feature roadmap (build in this order)
 
-### Phase 1 — Core (MVP, ship first)
-- [ ] **Inline blame** — current-line blame as a muted, right-aligned editor decoration
-- [ ] **Blame hover card** — hover → rich card: author (Gravatar), full message, relative + absolute date, diff stat, "Open commit" link
-- [ ] **File history** — TreeView of every commit touching the current file, newest first
-- [ ] **Commit details** — Webview: message, author, full diff, files changed, copy-SHA button
-- [ ] **Status bar** — current line's last author + age (e.g. `Raj, 3 days ago`), click → commit details
+### Phase 1 — Core (MVP, ship first) — shipped 0.1.0
+- [x] **Inline blame** — current-line blame as a muted, right-aligned editor decoration
+- [x] **Blame hover card** — hover → rich card: author (Gravatar), full message, relative + absolute date, diff stat, "Open commit" link
+- [x] **File history** — TreeView of every commit touching the current file, newest first
+- [x] **Commit details** — Webview: message, author, full diff, files changed, copy-SHA button
+- [x] **Status bar** — current line's last author + age (e.g. `Raj, 3 days ago`), click → commit details
 
-### Phase 2 — Intelligence (the "Sense" in GitLore)
-- [ ] **AI commit summary** — `vscode.lm` turns a commit + diff into a plain-English summary
-- [ ] **AI line explanation** — "Why does this line exist?" → LLM answers using the line's blame + diff history
-- [ ] **Stale-code detector** — flag files/functions untouched for > `staleThresholdDays`, shown as a subtle CodeLens
-- [ ] **Author ownership** — per-file heatmap: who owns which regions, by line count and recency
+### Phase 2 — Intelligence (the "Sense" in GitLore) — shipped 0.3.0
+- [x] **AI commit summary** — `vscode.lm` turns a commit + diff into a plain-English summary
+- [x] **AI line explanation** — "Why does this line exist?" → LLM answers using the line's blame + diff history
+- [x] **Stale-code detector** — flag files/functions untouched for > `staleThresholdDays`, shown as a subtle CodeLens
+- [x] **Author ownership** — per-file heatmap: who owns which regions, by line count and recency
 
-### Phase 3 — Graph & collaboration
-- [ ] **Commit graph** — interactive DAG in a Webview
-- [ ] **Branch comparison** — two branches side-by-side
-- [ ] **Issue/PR linking** — auto-link commit messages to GitHub/GitLab issues via configurable regex
+### Phase 3 — Graph & collaboration — shipped 0.1.0–0.2.0 (built ahead of Phase 2)
+- [x] **Commit graph** — interactive DAG in a Webview
+- [x] **Branch comparison** — two branches side-by-side
+- [x] **Issue/PR linking** — auto-link commit messages to GitHub/GitLab issues via configurable regex
+
+### Phase 4 — Editor surface depth
+Extends existing hover/decoration/webview code already in the repo — no new view containers.
+- [ ] **Hover quick-actions + revision nav** — Compare / File History / Copy SHA buttons in the blame hover card, plus ◀ prev/next ▶ stepping through a line's blame history without leaving the hover
+- [ ] **Branch Compare polish** — per-file diffstat bars, "Create PR" button (opens the remote's compare/PR URL), "Open all changes with common base"
+- [ ] **Full-file gutter blame + heatmap toggle** — whole-file blame overlay in the gutter (distinct from the current-line decoration and the ownership ruler), with a hot→cold recency gradient edge
+
+### Phase 5 — Repository views
+- [ ] **Sidebar explorer tree** — one view container: Branches, Remotes, Tags, Stashes, Worktrees, Contributors, with ahead/behind status and right-click actions
+
+### Phase 6 — Visual history & rebase
+- [ ] **Visual File History** — author-swimlane bubble timeline (additions/deletions over time), as an alternative to the existing tree-based File History
+- [ ] **Interactive rebase editor** — custom editor webview replacing the `git rebase -i` todo file: drag-reorder, pick/squash/fixup/drop/reword/edit, conflict list, Start/Abort
+
+### Phase 7 — Launchpad (optional, last)
+The only feature that reaches beyond the local repo — needs GitHub PR/CI status, not just `git`. Use VS Code's built-in GitHub authentication session (`vscode.authentication.getSession('github', …)`); never a GitLore backend or proxied key. Revisit whether this belongs in GitLore at all once Phases 4–6 ship.
+- [ ] **PR triage board** — Needs Review / Ready to Merge / Waiting / Blocked / Drafts / Snoozed, across the workspace's repos
 
 Do not start a phase until the previous phase is tested and merged.
+
+**Naming:** whatever inspires a phase, GitLore ships under its own name only — no competitor product or company names in code, comments, settings, commands, or docs.
 
 ---
 
