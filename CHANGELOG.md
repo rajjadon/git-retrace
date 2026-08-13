@@ -14,6 +14,11 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - Docked alongside Commit Graph, Commit Details, and Branch Comparison; also reachable from the Commit Graph panel's toolbar.
 - Respects `gitLore.maxHistoryItems`, same as the tree-based File History view.
 
+### Changed
+
+- **Diffstat bars** — Commit Details and Branch Comparison now show a proportional green/red bar next to each changed file, scaled to the largest file in the list, alongside the existing `+N -M` counts.
+- **Commit Graph columns** are noticeably tighter, so more layouts (e.g. Commit Graph, Commit Details, and Branch Comparison open side by side) show Author/Changes/Date/SHA without needing to scroll the row grid horizontally.
+
 ## [0.3.1] - 2026-08-13
 
 ### Changed

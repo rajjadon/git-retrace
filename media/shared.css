@@ -202,6 +202,29 @@
   font-size: 0.92em;
 }
 
+/* Fixed 48px track (matches STAT_BAR_MAX_WIDTH in diffRender.ts) — the largest file in the list
+   fills it completely; every other file's bar is proportionally shorter. */
+.stat-bar {
+  flex: 0 0 auto;
+  display: inline-flex;
+  width: 48px;
+  height: 6px;
+  margin-left: 0.5rem;
+  border-radius: 2px;
+  overflow: hidden;
+  background-color: var(--vscode-widget-border, transparent);
+}
+
+.stat-bar-add {
+  height: 100%;
+  background-color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+
+.stat-bar-del {
+  height: 100%;
+  background-color: var(--vscode-gitDecoration-deletedResourceForeground);
+}
+
 /* Row-level action, revealed on hover/focus so a list of 40 files isn't a wall of buttons. */
 .row-btn {
   flex: 0 0 auto;

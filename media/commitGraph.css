@@ -7,12 +7,20 @@
  */
 
 :root {
-  --col-refs: 150px;
-  --col-author: 96px;
-  --col-changes: 58px;
-  --col-date: 100px;
-  --col-sha: 66px;
-  --col-message-min: 160px;
+  /*
+   * Tightened from the original 150/96/58/100/66/160 budget (~830px minimum) — with three panels
+   * open side by side (Commit Graph, Commit Details, Branch Comparison), each pane commonly gets
+   * only a third of the window, well under the old budget, forcing horizontal scroll even for an
+   * ordinary-width pane. This trims every column to its actual content need (branch pills and
+   * relative-age strings don't need 150px/100px) so more layouts fit without scrolling, while still
+   * scrolling rather than clipping once a pane really is too narrow.
+   */
+  --col-refs: 110px;
+  --col-author: 78px;
+  --col-changes: 50px;
+  --col-date: 76px;
+  --col-sha: 58px;
+  --col-message-min: 110px;
   --row-min-width: calc(
     var(--col-refs) + var(--graph-svg-width) + var(--col-message-min) + var(--col-author) +
       var(--col-changes) + var(--col-date) + var(--col-sha) + 5rem

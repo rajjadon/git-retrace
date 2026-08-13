@@ -155,6 +155,29 @@ test('renderDiff: escapes diff content', () => {
   assert.ok(!renderDiff('+<script>alert(1)</script>\n').includes('<script>alert(1)</script>'));
 });
 
+test('renderFileSections: renders a proportional diffstat bar, scaled to the largest file in the list', () => {
+  const html = renderFileSections(
+    [file('big.ts', { insertions: 90, deletions: 10 }), file('small.ts', { insertions: 5, deletions: 0 })],
+    '',
+  );
+  const widthOf = (path: string, cls: 'stat-bar-add' | 'stat-bar-del'): number => {
+    const re = new RegExp(`data-filter="${path}"[\\s\\S]*?class="${cls}" style="width:([0-9.]+)px"`);
+    const match = re.exec(html);
+    return match ? Number(match[1]) : 0;
+  };
+  const bigTotal = widthOf('big.ts', 'stat-bar-add') + widthOf('big.ts', 'stat-bar-del');
+  const smallTotal = widthOf('small.ts', 'stat-bar-add') + widthOf('small.ts', 'stat-bar-del');
+  assert.ok(bigTotal > smallTotal, `expected big.ts's bar (${bigTotal}) wider than small.ts's (${smallTotal})`);
+  // big.ts is the largest file in this list, so its bar should span the full track.
+  assert.ok(bigTotal > 40, `expected big.ts's bar near the max track width, got ${bigTotal}`);
+});
+
+test('renderFileSections: a binary file gets no diffstat bar', () => {
+  const html = renderFileSections([file('logo.png', { binary: true, insertions: 0, deletions: 0 })], '');
+  assert.ok(!html.includes('stat-bar-add'));
+  assert.ok(!html.includes('stat-bar-del'));
+});
+
 test('renderFileSections: each file row offers an Open changes button carrying its path', () => {
   const html = renderFileSections([file('src/a.ts')], twoFileDiff);
   assert.match(html, /class="row-btn" type="button" data-path="src\/a\.ts" title="Open changes"/);
