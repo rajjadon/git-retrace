@@ -2,7 +2,6 @@ import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import { EXTENSION_ID } from './extensionId';
 
-
 suite('Extension activation', () => {
   test('activates and registers gitLore.toggleBlame', async () => {
     const ext = vscode.extensions.getExtension(EXTENSION_ID);
