@@ -10,6 +10,10 @@ function jsonResponse(body: unknown, ok = true): Response {
   return { ok, status: ok ? 200 : 401, statusText: ok ? 'OK' : 'Unauthorized', json: async () => body } as unknown as Response;
 }
 
+function textResponse(body: string): Response {
+  return { ok: true, status: 200, statusText: 'OK', text: async () => body } as unknown as Response;
+}
+
 /** Routes a fake fetch by matching against the tail of the requested URL, so each test only wires up the endpoints it actually needs. */
 function fakeFetch(routes: Record<string, unknown>): typeof fetch {
   return (async (url: string) => {
@@ -319,4 +323,32 @@ test('closePullRequest: PATCHes state=closed to the PR endpoint', async () => {
 test('closePullRequest: a rejected request throws with the real HTTP status', async () => {
   const client = new GitHubClient(BASE, 'tok', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
   await assert.rejects(() => client.closePullRequest(REPO, 13), /401 Unauthorized from api\.github\.com/);
+});
+
+test('getPullRequestDiff: fetches raw diff text via the diff media type, and stats from /files', async () => {
+  let capturedAccept: string | undefined;
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    (async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/pulls/14/files?per_page=100')) {
+        return jsonResponse([
+          { filename: 'src/a.ts', additions: 3, deletions: 1 },
+          { filename: 'image.png', additions: 0, deletions: 0 },
+        ]);
+      }
+      if (url.endsWith('/pulls/14')) {
+        capturedAccept = (init?.headers as Record<string, string>).Accept;
+        return textResponse('diff --git a/src/a.ts b/src/a.ts\n@@ -1 +1,3 @@\n+x');
+      }
+      throw new Error(`unmocked: ${url}`);
+    }) as unknown as typeof fetch,
+  );
+  const result = await client.getPullRequestDiff(REPO, 14);
+  assert.equal(capturedAccept, 'application/vnd.github.v3.diff');
+  assert.match(result.diff, /diff --git a\/src\/a\.ts/);
+  assert.deepEqual(result.files, [
+    { path: 'src/a.ts', insertions: 3, deletions: 1, binary: false },
+    { path: 'image.png', insertions: 0, deletions: 0, binary: true },
+  ]);
 });

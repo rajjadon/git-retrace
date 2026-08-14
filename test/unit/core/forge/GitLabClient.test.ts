@@ -277,3 +277,24 @@ test('closePullRequest: PUTs state_event=close to the merge request endpoint', a
   assert.equal(capturedInit?.method, 'PUT');
   assert.equal(capturedInit?.body, JSON.stringify({ state_event: 'close' }));
 });
+
+test('getPullRequestDiff: synthesizes a diff --git header per file so the shared renderer can split it, and counts +/- lines itself', async () => {
+  const client = new GitLabClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/merge_requests/23/diffs?per_page=100': [
+        { old_path: 'src/a.ts', new_path: 'src/a.ts', diff: '@@ -1,2 +1,3 @@\n-old\n+new1\n+new2' },
+        { old_path: 'bin.dat', new_path: 'bin.dat', diff: '' },
+      ],
+    }),
+  );
+  const result = await client.getPullRequestDiff(REPO, 23);
+  assert.match(result.diff, /diff --git a\/src\/a\.ts b\/src\/a\.ts\n@@ -1,2 \+1,3 @@/);
+  assert.deepEqual(result.files, [
+    { path: 'src/a.ts', insertions: 2, deletions: 1, binary: false },
+    { path: 'bin.dat', insertions: 0, deletions: 0, binary: false },
+  ]);
+  // No diff fragment for the empty-diff file — nothing to synthesize a header for.
+  assert.ok(!result.diff.includes('bin.dat'));
+});

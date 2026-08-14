@@ -493,4 +493,99 @@ suite('Launchpad', () => {
         await waitFor(() => !(api.getLaunchpadHtml() ?? '').includes('Closable PR'));
       }),
     ));
+
+  test('renders a push/pull row for a repo even when the user declines to sign in — push/pull needs no forge credential at all', async () =>
+    withLaunchpadEnabled(() =>
+      // Bitbucket, not GitLab: every other test in this file authenticates against gitlab.com,
+      // which would leave a stored PAT under that same host's secret-storage key — using a host
+      // no other test touches guarantees this test actually exercises "no token stored yet".
+      withOriginRemote('https://bitbucket.org/acme/widgets.git', async () => {
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () => undefined) as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('class="repo-row"'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        const html = api.getLaunchpadHtml() ?? '';
+        assert.match(html, /class="repo-row" data-key="bitbucket:acme\/widgets"/);
+        assert.match(html, /Not signed in\./);
+      }),
+    ));
+
+  test('syncRepoForTest: an unrecognized repo key is a silent no-op (no terminal created)', async () => {
+    const before = vscode.window.terminals.length;
+    api.launchpadProvider.syncRepoForTest('not-a-real-repo-key', 'pull');
+    assert.equal(vscode.window.terminals.length, before);
+  });
+
+  test('gitLore.showPullRequest: opens the PR Details panel and renders that PR\'s real diff', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/details-widgets.git', async () => {
+        api.launchpadProvider.setFetchImplForTest((async (url: string) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 8,
+                title: 'Details-worthy PR',
+                web_url: 'https://gitlab.com/acme/details-widgets/-/merge_requests/8',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: false, approved_by: [] });
+          }
+          if (url.includes('merge_requests/8/diffs')) {
+            return jsonResponse([
+              { old_path: 'src/real.ts', new_path: 'src/real.ts', diff: '@@ -1 +1,2 @@\n+a real diff line' },
+            ]);
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Details-worthy PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'gitlab:acme/details-widgets#8');
+        await waitFor(() => (api.getPullRequestDetailsHtml() ?? '').includes('a real diff line'));
+
+        const html = api.getPullRequestDetailsHtml() ?? '';
+        assert.match(html, /Details-worthy PR/);
+        assert.match(html, /src\/real\.ts/);
+        assert.match(html, /class="dc diff-add">\+a real diff line</);
+      }),
+    ));
+
+  test('gitLore.showPullRequest: an unknown key shows a warning instead of throwing', async () => {
+    const originalWarn = vscode.window.showWarningMessage;
+    let warned: string | undefined;
+    (vscode.window as { showWarningMessage: typeof vscode.window.showWarningMessage }).showWarningMessage = ((message: string) => {
+      warned = message;
+      return Promise.resolve(undefined);
+    }) as typeof vscode.window.showWarningMessage;
+    try {
+      await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'github:nobody/nothing#999');
+    } finally {
+      vscode.window.showWarningMessage = originalWarn;
+    }
+    assert.match(warned ?? '', /isn't on the board/);
+  });
 });

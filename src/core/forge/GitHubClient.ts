@@ -1,5 +1,6 @@
+import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ForgeRepoRef, PullRequestSummary, ReviewDecision } from './types';
+import type { CheckStatus, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision } from './types';
 
 interface GitHubUser {
   login: string;
@@ -32,6 +33,14 @@ interface GitHubReview {
 interface GitHubCheckRun {
   status: 'queued' | 'in_progress' | 'completed';
   conclusion: 'success' | 'failure' | 'neutral' | 'cancelled' | 'timed_out' | 'action_required' | 'stale' | null;
+}
+
+interface GitHubPullFile {
+  filename: string;
+  additions: number;
+  deletions: number;
+  /** Absent for binary files and files too large to diff — GitHub's own signal for "no textual diff", reused directly as `FileChange.binary`. */
+  patch?: string;
 }
 
 /** Last review per user wins — GitHub returns reviews in submission order, so the last occurrence for a given login is their current standing. */
@@ -135,6 +144,23 @@ export class GitHubClient implements ForgeClient {
     });
   }
 
+  /** GitHub's `application/vnd.github.v3.diff` media type returns the whole PR's unified diff as plain text directly — no reconstruction needed, unlike GitLab. */
+  async getPullRequestDiff(repo: ForgeRepoRef, number: number): Promise<PullRequestDiff> {
+    const [diffRes, filesRes] = await Promise.all([
+      this.request(`/repos/${repo.identity}/pulls/${number}`, { headers: { Accept: 'application/vnd.github.v3.diff' } }),
+      this.request(`/repos/${repo.identity}/pulls/${number}/files?per_page=100`),
+    ]);
+    const diff = await diffRes.text();
+    const rawFiles = (await filesRes.json()) as GitHubPullFile[];
+    const files: FileChange[] = rawFiles.map((f) => ({
+      path: f.filename,
+      insertions: f.additions,
+      deletions: f.deletions,
+      binary: f.patch === undefined,
+    }));
+    return { files, diff };
+  }
+
   private async enrich(repo: ForgeRepoRef, pull: GitHubPull): Promise<PullRequestSummary> {
     const [reviews, checkRuns, mergeableState] = await Promise.all([
       this.fetchReviews(repo, pull.number),
@@ -198,6 +224,8 @@ export class GitHubClient implements ForgeClient {
           Accept: 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
           ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+          // Last, so a caller-supplied Accept (e.g. the raw-diff media type) wins over the default.
+          ...init?.headers,
         },
       });
     } catch (err) {

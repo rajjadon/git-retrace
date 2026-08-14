@@ -4,10 +4,8 @@ import { layoutGraph } from '../../core/graph/layout';
 import { renderGraphHtml } from './render';
 import { escapeHtml } from '../escapeHtml';
 import { waitForWebviewView } from '../waitForWebviewView';
-import { COMMANDS, CONFIG, MEDIA, VIEWS } from '../../constants';
+import { COMMANDS, CONFIG, MEDIA, SYNC_TERMINAL_NAME, VIEWS } from '../../constants';
 import type { BlameSource } from '../../providers/BlameSource';
-
-const SYNC_TERMINAL_NAME = 'GitLore: Git Sync';
 
 const DEFAULT_MAX_GRAPH_ITEMS = 200;
 

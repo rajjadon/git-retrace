@@ -1,6 +1,7 @@
+import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
 import { splitAzureDevOpsIdentity } from './azureDevOpsIdentity';
-import type { CheckStatus, ForgeRepoRef, PullRequestSummary, ReviewDecision } from './types';
+import type { CheckStatus, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision } from './types';
 
 interface AzureDevOpsIdentityRef {
   uniqueName?: string;
@@ -36,6 +37,18 @@ interface AzureDevOpsProfile {
   id?: string;
   emailAddress?: string;
   displayName?: string;
+}
+
+interface AzureDevOpsIteration {
+  id: number;
+}
+
+interface AzureDevOpsChangeEntry {
+  item: { path: string };
+}
+
+interface AzureDevOpsIterationChanges {
+  changeEntries: AzureDevOpsChangeEntry[];
 }
 
 function loginOf(ref: AzureDevOpsIdentityRef): string {
@@ -192,6 +205,40 @@ export class AzureDevOpsClient implements ForgeClient {
       method: 'PATCH',
       body: JSON.stringify({ status: 'abandoned' }),
     });
+  }
+
+  /**
+   * Azure DevOps has no endpoint that returns diff text — only structured changed-item lists
+   * (`iterations/{n}/changes`), which would need diffing raw file content client-side to produce
+   * hunks, and this codebase doesn't bundle a diff library for that (nor should it, for one host's
+   * gap). Returns the changed file paths with `insertions`/`deletions` at `0` (unknown, not "no
+   * changes" — see `PullRequestDiff`) and no diff text; `renderFileSections` already shows "No
+   * textual diff for this file" per file when hunks are empty, so this degrades honestly rather
+   * than fabricating numbers.
+   */
+  async getPullRequestDiff(repo: ForgeRepoRef, number: number): Promise<PullRequestDiff> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      return { files: [], diff: '' };
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    const iterationsRes = await this.request(`${base}/pullrequests/${number}/iterations?api-version=7.1`);
+    const iterations = (await iterationsRes.json()) as AzureDevOpsListResponse<AzureDevOpsIteration>;
+    const latest = iterations.value.at(-1);
+    if (!latest) {
+      return { files: [], diff: '' };
+    }
+    const changesRes = await this.request(`${base}/pullrequests/${number}/iterations/${latest.id}/changes?api-version=7.1`);
+    const changes = (await changesRes.json()) as AzureDevOpsIterationChanges;
+    const files: FileChange[] = changes.changeEntries.map((entry) => ({
+      // Azure DevOps paths are repo-root-absolute ("/src/foo.ts") — every other host's paths have
+      // no leading slash, so this strips it for a consistent look in the shared file-list renderer.
+      path: entry.item.path.replace(/^\//, ''),
+      insertions: 0,
+      deletions: 0,
+      binary: false,
+    }));
+    return { files, diff: '' };
   }
 
   private async enrich(

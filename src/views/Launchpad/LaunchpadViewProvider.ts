@@ -9,9 +9,9 @@ import type { ForgeClient } from '../../core/forge/ForgeClient';
 import { resolveForgeRepoRef } from '../../core/forge/resolveRepoRef';
 import { pullRequestKey, type CategorizedPullRequest, type ForgeRepoRef, type PullRequestSummary } from '../../core/forge/types';
 import { azureDevOpsCredentialScheme, clearForgeToken, resolveForgeToken } from '../../providers/forgeCredentials';
-import { renderLaunchpadHtml, type LaunchpadRepoError } from './render';
+import { renderLaunchpadHtml, type LaunchpadRepoError, type LaunchpadRepoRow } from './render';
 import { renderPlaceholderHtml } from '../placeholder';
-import { CONFIG, MEDIA, VIEWS } from '../../constants';
+import { COMMANDS, CONFIG, MEDIA, SYNC_TERMINAL_NAME, VIEWS } from '../../constants';
 
 const SNOOZE_STATE_KEY = 'gitLore.launchpad.snoozed';
 
@@ -43,6 +43,8 @@ export class LaunchpadViewProvider implements vscode.Disposable {
   /** Rebuilt on every refresh — lets the "Close PR" action find the right host's client and the PR's `repo`/`number` from just the card's stable key, without re-parsing that key's opaque `identity`. */
   private clientsByRepoKey = new Map<string, ForgeClient>();
   private prsByKey = new Map<string, PullRequestSummary>();
+  /** Rebuilt on every refresh — lets Push/Pull find the right local working copy from a repo row's stable key. Populated regardless of forge auth outcome: push/pull is a local git operation that doesn't need a host credential at all. */
+  private repoRootByKey = new Map<string, string>();
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -113,8 +115,13 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     const errors: LaunchpadRepoError[] = [];
     this.clientsByRepoKey = new Map();
     this.prsByKey = new Map();
+    this.repoRootByKey = new Map();
+    const repoRows: LaunchpadRepoRow[] = [];
 
-    for (const { repo, detected } of repos) {
+    for (const { repo, detected, repoRoot } of repos) {
+      const repoKey = `${repo.host}:${repo.identity}`;
+      this.repoRootByKey.set(repoKey, repoRoot);
+      repoRows.push({ key: repoKey, label: repo.label });
       try {
         const token = await resolveForgeToken(this.context.secrets, detected);
         if (!token) {
@@ -172,7 +179,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     if (!this.panel) {
       return;
     }
-    this.panel.webview.html = renderLaunchpadHtml({ categorized, errors }, renderOpts);
+    this.panel.webview.html = renderLaunchpadHtml({ categorized, errors, repoRows }, renderOpts);
   }
 
   private readCustomHosts(): ForgeHostConfig[] {
@@ -189,9 +196,9 @@ export class LaunchpadViewProvider implements vscode.Disposable {
    */
   private async resolveWorkspaceRepos(
     customHosts: ForgeHostConfig[],
-  ): Promise<Array<{ repo: ForgeRepoRef; detected: DetectedForgeHost }>> {
+  ): Promise<Array<{ repo: ForgeRepoRef; detected: DetectedForgeHost; repoRoot: string }>> {
     const folders = vscode.workspace.workspaceFolders ?? [];
-    const results: Array<{ repo: ForgeRepoRef; detected: DetectedForgeHost }> = [];
+    const results: Array<{ repo: ForgeRepoRef; detected: DetectedForgeHost; repoRoot: string }> = [];
     const seen = new Set<string>();
 
     for (const folder of folders) {
@@ -218,7 +225,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
           continue;
         }
         seen.add(key);
-        results.push({ repo, detected });
+        results.push({ repo, detected, repoRoot });
       }
     }
     return results;
@@ -263,9 +270,53 @@ export class LaunchpadViewProvider implements vscode.Disposable {
       await this.closePullRequest(key, typeof title === 'string' ? title : key);
       return;
     }
+    if (type === 'showPullRequestDetails' && typeof key === 'string') {
+      await vscode.commands.executeCommand(COMMANDS.showPullRequest, key);
+      return;
+    }
+    if ((type === 'pull' || type === 'push') && typeof key === 'string') {
+      this.syncRepo(key, type);
+      return;
+    }
     if (type === 'refresh') {
       await this.refresh();
     }
+  }
+
+  /**
+   * Runs in a real terminal, not via simple-git — pull/push can need interactive auth (an SSH
+   * passphrase, a credential-manager prompt) or land a merge conflict on pull, and a terminal is
+   * where the user can actually see and handle either. Same pattern and shared terminal as Commit
+   * Graph's sync buttons (`CommitGraphViewProvider.ts`) — Launchpad doesn't track "did it finish"
+   * either; the user sees the result in the terminal and can refresh the board themselves.
+   */
+  private syncRepo(repoKey: string, direction: 'pull' | 'push'): void {
+    const repoRoot = this.repoRootByKey.get(repoKey);
+    if (!repoRoot) {
+      return;
+    }
+    const terminal =
+      vscode.window.terminals.find((t) => t.name === SYNC_TERMINAL_NAME) ?? vscode.window.createTerminal({ name: SYNC_TERMINAL_NAME, cwd: repoRoot });
+    terminal.show();
+    terminal.sendText(direction === 'pull' ? 'git pull' : 'git push');
+  }
+
+  /** Test-only introspection seam — a webview button click can't be simulated in an integration test, so this drives the same lookup-then-terminal flow the push/pull message handler does. */
+  syncRepoForTest(repoKey: string, direction: 'pull' | 'push'): void {
+    this.syncRepo(repoKey, direction);
+  }
+
+  /** Resolves a card's key back to its `PullRequestSummary` and the `ForgeClient` that owns it — used by the "Show Pull Request Details" command, same lookup `closePullRequest` already does. `undefined` if the board has since refreshed and this PR is no longer on it. */
+  resolvePullRequestForDetails(key: string): { pr: PullRequestSummary; client: ForgeClient } | undefined {
+    const pr = this.prsByKey.get(key);
+    if (!pr) {
+      return undefined;
+    }
+    const client = this.clientsByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    if (!client) {
+      return undefined;
+    }
+    return { pr, client };
   }
 
   private async closePullRequest(key: string, title: string): Promise<void> {

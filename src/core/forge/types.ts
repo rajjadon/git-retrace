@@ -1,3 +1,5 @@
+import type { FileChange } from '../git/types';
+
 /** Which hosting service a PR/repo belongs to — Launchpad isn't GitHub-only, unlike everything else in GitLore that only ever needs "is this host recognized" (see `utils/remoteLinks.ts`). */
 export type ForgeHost = 'github' | 'gitlab' | 'bitbucket' | 'azureDevOps';
 
@@ -39,6 +41,19 @@ export interface PullRequestSummary {
   closedAt?: string;
   /** Only meaningful alongside `closedAt`: true if the PR was merged, false if it was closed without merging. */
   merged?: boolean;
+}
+
+/**
+ * A PR's changed files plus one combined unified-diff string covering all of them — the same
+ * shape `src/views/diffRender.ts`'s `renderFileSections` already renders for local commits, reused
+ * here as-is. `diff` is `''` when a host's API has no way to produce diff text without diffing raw
+ * file content client-side (Azure DevOps — see `AzureDevOpsClient.getPullRequestDiff`); `files`
+ * still carries real paths/change-type in that case, just with `insertions`/`deletions` at `0`
+ * (unknown, not "no changes") and `binary: false` — a documented gap, not a silent guess.
+ */
+export interface PullRequestDiff {
+  files: FileChange[];
+  diff: string;
 }
 
 export const LAUNCHPAD_BUCKETS = [

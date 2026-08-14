@@ -14,6 +14,8 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **Launchpad: Merged and Closed columns** — two new columns show your own most-recently-completed PRs (merged separately from closed-without-merging), so the board also reflects what you've shipped, not just what's still open.
 - **Launchpad: Close PR** — a close action on every open-PR card (with a confirmation dialog first) closes it on its host without merging, across all four supported hosts, without leaving GitLore.
 - **Launchpad: sign in to Azure DevOps Services with your Microsoft account** — `dev.azure.com` now uses the same built-in VS Code authentication session as GitHub, instead of requiring a Personal Access Token. This also fixes organizations whose Conditional Access policy blocks PAT/Basic auth outright, where no PAT — regardless of scope — could ever work. Self-hosted Azure DevOps Server still uses a PAT.
+- **Launchpad: per-repo Push/Pull** — a row per workspace repo Launchpad recognizes, with Pull/Push buttons, so you don't have to switch to Source Control per repo while triaging. Works even for a repo whose forge sign-in failed or was skipped, since push/pull is a local git operation with no host credential involved.
+- **Pull Request Details** — a **View diff** button on every Launchpad card opens a docked panel (next to Commit Details) showing that PR's changed files and diff, without leaving the editor. Azure DevOps doesn't expose diff text through its API, so its panel shows the changed file list without inline diffs rather than a fabricated one.
 
 ### Fixed
 

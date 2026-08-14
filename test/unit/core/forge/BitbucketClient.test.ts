@@ -10,6 +10,10 @@ function jsonResponse(body: unknown, ok = true): Response {
   return { ok, status: ok ? 200 : 401, statusText: ok ? 'OK' : 'Unauthorized', json: async () => body } as unknown as Response;
 }
 
+function textResponse(body: string): Response {
+  return { ok: true, status: 200, statusText: 'OK', text: async () => body } as unknown as Response;
+}
+
 function fakeFetch(routes: Record<string, unknown>): typeof fetch {
   return (async (url: string) => {
     for (const [suffix, body] of Object.entries(routes)) {
@@ -274,4 +278,35 @@ test('closePullRequest: POSTs to the decline endpoint', async () => {
   await client.closePullRequest(REPO, 32);
   assert.equal(capturedUrl, 'https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests/32/decline');
   assert.equal(capturedInit?.method, 'POST');
+});
+
+test('getPullRequestDiff: fetches raw diff text from /diff and stats from /diffstat', async () => {
+  const client = new BitbucketClient(BASE, 'tok', (async (url: string) => {
+    if (url.endsWith('/pullrequests/33/diff')) {
+      return textResponse('diff --git a/src/a.ts b/src/a.ts\n@@ -1 +1,2 @@\n+x');
+    }
+    if (url.endsWith('/pullrequests/33/diffstat')) {
+      return jsonResponse({
+        values: [{ status: 'modified', lines_added: 2, lines_removed: 1, old: { path: 'src/a.ts' }, new: { path: 'src/a.ts' } }],
+      });
+    }
+    throw new Error(`unmocked: ${url}`);
+  }) as unknown as typeof fetch);
+  const result = await client.getPullRequestDiff(REPO, 33);
+  assert.match(result.diff, /diff --git a\/src\/a\.ts/);
+  assert.deepEqual(result.files, [{ path: 'src/a.ts', insertions: 2, deletions: 1, binary: false }]);
+});
+
+test('getPullRequestDiff: a removed file has no "new" path, falls back to "old"', async () => {
+  const client = new BitbucketClient(BASE, 'tok', (async (url: string) => {
+    if (url.endsWith('/pullrequests/34/diff')) {
+      return textResponse('');
+    }
+    if (url.endsWith('/pullrequests/34/diffstat')) {
+      return jsonResponse({ values: [{ status: 'removed', lines_added: 0, lines_removed: 5, old: { path: 'gone.ts' }, new: null }] });
+    }
+    throw new Error(`unmocked: ${url}`);
+  }) as unknown as typeof fetch);
+  const result = await client.getPullRequestDiff(REPO, 34);
+  assert.deepEqual(result.files, [{ path: 'gone.ts', insertions: 0, deletions: 5, binary: false }]);
 });

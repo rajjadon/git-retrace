@@ -36,6 +36,27 @@ body {
   flex: 1 1 auto;
 }
 
+.repo-list {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.4rem 1rem;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.repo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.9em;
+}
+
+.repo-row-label {
+  color: var(--vscode-descriptionForeground);
+  margin-right: 0.2rem;
+}
+
 .errors {
   flex: 0 0 auto;
   padding: 0.4rem 1rem;

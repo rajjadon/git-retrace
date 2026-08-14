@@ -1,5 +1,6 @@
+import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ForgeRepoRef, PullRequestSummary, ReviewDecision } from './types';
+import type { CheckStatus, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision } from './types';
 
 interface BitbucketUser {
   username?: string;
@@ -32,6 +33,14 @@ interface BitbucketPage<T> {
 
 interface BitbucketBuildStatus {
   state: 'SUCCESSFUL' | 'FAILED' | 'INPROGRESS' | 'STOPPED';
+}
+
+interface BitbucketDiffstatEntry {
+  status: 'added' | 'removed' | 'modified' | 'renamed' | 'merge conflict';
+  lines_added: number;
+  lines_removed: number;
+  old: { path: string } | null;
+  new: { path: string } | null;
 }
 
 function loginOf(user: BitbucketUser | null | undefined): string {
@@ -143,6 +152,23 @@ export class BitbucketClient implements ForgeClient {
 
   async closePullRequest(repo: ForgeRepoRef, number: number): Promise<void> {
     await this.request(`/repositories/${repo.identity}/pullrequests/${number}/decline`, { method: 'POST' });
+  }
+
+  /** Bitbucket's `/diff` endpoint returns the whole PR's unified diff as plain text directly, already carrying real `diff --git a/x b/y` headers — no reconstruction needed, unlike GitLab. `/diffstat` supplies the per-file insertion/deletion counts the diff text itself doesn't summarize. */
+  async getPullRequestDiff(repo: ForgeRepoRef, number: number): Promise<PullRequestDiff> {
+    const [diffRes, statRes] = await Promise.all([
+      this.request(`/repositories/${repo.identity}/pullrequests/${number}/diff`),
+      this.request(`/repositories/${repo.identity}/pullrequests/${number}/diffstat`),
+    ]);
+    const diff = await diffRes.text();
+    const statPage = (await statRes.json()) as BitbucketPage<BitbucketDiffstatEntry>;
+    const files: FileChange[] = statPage.values.map((entry) => ({
+      path: entry.new?.path ?? entry.old?.path ?? '',
+      insertions: entry.lines_added,
+      deletions: entry.lines_removed,
+      binary: false,
+    }));
+    return { files, diff };
   }
 
   private async enrich(repo: ForgeRepoRef, pr: BitbucketPullRequest): Promise<PullRequestSummary> {

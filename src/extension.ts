@@ -39,6 +39,8 @@ import { VisualFileHistoryViewProvider } from './views/VisualFileHistory/VisualF
 import { RebaseEditorProvider } from './views/RebaseEditor/RebaseEditorProvider';
 import { LaunchpadViewProvider } from './views/Launchpad/LaunchpadViewProvider';
 import { handleOpenLaunchpadCommand } from './commands/launchpadCommands';
+import { PullRequestDetailsViewProvider } from './views/PullRequestDetails/PullRequestDetailsViewProvider';
+import { handleShowPullRequestCommand } from './commands/pullRequestCommands';
 import { RepoExplorerProvider } from './providers/RepoExplorerProvider';
 import { LanguageModelClient } from './ai/LanguageModelClient';
 import { LineExplanationService } from './ai/LineExplanationService';
@@ -61,6 +63,7 @@ export interface GitLoreTestApi {
   getVisualFileHistoryHtml: () => string | undefined;
   getRebaseEditorHtml: () => string | undefined;
   getLaunchpadHtml: () => string | undefined;
+  getPullRequestDetailsHtml: () => string | undefined;
   repoExplorerProvider: RepoExplorerProvider;
   launchpadProvider: LaunchpadViewProvider;
   explainCommit: () => Promise<void>;
@@ -100,6 +103,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
   const visualFileHistoryViewProvider = new VisualFileHistoryViewProvider(ctx.extensionUri, git);
   const rebaseEditorProvider = new RebaseEditorProvider(ctx.extensionUri);
   const launchpadProvider = new LaunchpadViewProvider(ctx.extensionUri, ctx, git, logger);
+  const pullRequestDetailsViewProvider = new PullRequestDetailsViewProvider(ctx.extensionUri);
   const repoExplorerProvider = new RepoExplorerProvider(git);
 
   ctx.subscriptions.push(
@@ -128,6 +132,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     handleRebaseInteractivelyCommand(git),
     launchpadProvider,
     handleOpenLaunchpadCommand(launchpadProvider),
+    handleShowPullRequestCommand(pullRequestDetailsViewProvider, launchpadProvider),
     repoExplorerProvider,
     handleCheckoutBranchCommand(git, repoExplorerProvider),
     handleCompareBranchCommand(git),
@@ -146,6 +151,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     vscode.window.registerWebviewViewProvider(VIEWS.commitDetails, commitDetailsViewProvider),
     vscode.window.registerWebviewViewProvider(VIEWS.branchComparison, branchComparisonViewProvider),
     vscode.window.registerWebviewViewProvider(VIEWS.visualFileHistory, visualFileHistoryViewProvider),
+    vscode.window.registerWebviewViewProvider(VIEWS.pullRequestDetails, pullRequestDetailsViewProvider),
   );
   const initialRepoPath = resolveRepoContextPath();
   if (initialRepoPath) {
@@ -172,6 +178,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     getVisualFileHistoryHtml: () => visualFileHistoryViewProvider.getCurrentHtmlForTest(),
     getRebaseEditorHtml: () => rebaseEditorProvider.getCurrentHtmlForTest(),
     getLaunchpadHtml: () => launchpadProvider.getCurrentHtmlForTest(),
+    getPullRequestDetailsHtml: () => pullRequestDetailsViewProvider.getCurrentHtmlForTest(),
     repoExplorerProvider,
     launchpadProvider,
     explainCommit: () => commitDetailsViewProvider.explainCommit(),

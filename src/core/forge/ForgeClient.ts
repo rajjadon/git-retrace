@@ -1,4 +1,4 @@
-import type { ForgeRepoRef, PullRequestSummary } from './types';
+import type { ForgeRepoRef, PullRequestDiff, PullRequestSummary } from './types';
 
 /**
  * One host's PR API, normalized to GitLore's common shape. Each implementation (GitHub, GitLab,
@@ -26,4 +26,6 @@ export interface ForgeClient {
   listRecentlyClosedPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]>;
   /** Closes an open PR/MR without merging it. Throws with the real reason (HTTP status, network failure, or a permissions rejection) on failure — the caller surfaces it as an error toast. */
   closePullRequest(repo: ForgeRepoRef, number: number): Promise<void>;
+  /** This PR's changed files and diff text, for the PR Details panel. See `PullRequestDiff` for what an empty `diff` means. */
+  getPullRequestDiff(repo: ForgeRepoRef, number: number): Promise<PullRequestDiff>;
 }

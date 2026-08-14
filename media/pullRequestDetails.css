@@ -1,0 +1,78 @@
+/*
+ * Panel-docked PR details. Section chrome, the changed-file list and the diff live in shared.css;
+ * this file only owns the PR's own header and action bar — same split as commitDetails.css, for a
+ * remote PR instead of a local commit.
+ */
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-panel-background, var(--vscode-editor-background));
+  /* Every GitLore webview draws its own left edge — docked sibling views in the same panel
+     container share one flat background with no native seam between them, so without this, two
+     panels open side by side visually merge into one. */
+  border-left: 1px solid var(--vscode-panel-border);
+  line-height: 1.45;
+}
+
+/* ---------- PR header ---------- */
+
+.head {
+  flex: 0 0 auto;
+  padding: 0.5rem 0.75rem 0.35rem;
+}
+
+.head-text {
+  min-width: 0;
+}
+
+h1 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 0;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.head-meta {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.92em;
+}
+
+.head-sep {
+  margin: 0 0.35rem;
+}
+
+/* ---------- Action bar ---------- */
+
+.actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0 0.75rem 0.5rem;
+}
+
+/*
+ * "Open changes" hands off to a native diff editor for a local commit's before/after blobs — a
+ * remote PR's changed files don't have local refs to diff against yet, so this button (rendered
+ * unconditionally by the shared `renderFileSections`) has nothing to do here. Hidden rather than
+ * forked out of the shared renderer for one consumer's gap.
+ */
+.row-btn {
+  display: none;
+}

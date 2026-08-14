@@ -1,5 +1,6 @@
+import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ForgeRepoRef, PullRequestSummary, ReviewDecision } from './types';
+import type { CheckStatus, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision } from './types';
 
 interface GitLabUser {
   username: string;
@@ -27,6 +28,13 @@ interface GitLabMergeRequest {
 interface GitLabApprovals {
   approved: boolean;
   approved_by: Array<{ user: GitLabUser }>;
+}
+
+/** GitLab's per-file diff fragment — `diff` is just the hunk body, with no `diff --git a/x b/y` header line the way a real `git diff`/GitHub's raw-diff media type has one. */
+interface GitLabDiffFile {
+  old_path: string;
+  new_path: string;
+  diff: string;
 }
 
 const PASSING_STATUSES = new Set(['success', 'skipped']);
@@ -141,6 +149,31 @@ export class GitLabClient implements ForgeClient {
       method: 'PUT',
       body: JSON.stringify({ state_event: 'close' }),
     });
+  }
+
+  /**
+   * GitLab's `/diffs` endpoint returns one hunk-body fragment per file — no `diff --git a/x b/y`
+   * header the way GitHub's raw-diff media type or a real `git diff` has, and no insertion/deletion
+   * counts either. Synthesizing a minimal header per file (and counting `+`/`-` lines ourselves)
+   * makes this combine into one string `splitDiffByFile`/`renderDiff` (`src/views/diffRender.ts`)
+   * already know how to parse — that shared renderer only ever needed the header line to find each
+   * file's boundary, nothing else about it.
+   */
+  async getPullRequestDiff(repo: ForgeRepoRef, number: number): Promise<PullRequestDiff> {
+    const projectPath = encodeURIComponent(repo.identity);
+    const res = await this.request(`/projects/${projectPath}/merge_requests/${number}/diffs?per_page=100`);
+    const rawFiles = (await res.json()) as GitLabDiffFile[];
+    const files: FileChange[] = [];
+    const diffParts: string[] = [];
+    for (const f of rawFiles) {
+      const insertions = (f.diff.match(/^\+(?!\+\+)/gm) ?? []).length;
+      const deletions = (f.diff.match(/^-(?!--)/gm) ?? []).length;
+      files.push({ path: f.new_path, insertions, deletions, binary: false });
+      if (f.diff) {
+        diffParts.push(`diff --git a/${f.old_path} b/${f.new_path}\n${f.diff}`);
+      }
+    }
+    return { files, diff: diffParts.join('\n') };
   }
 
   private async enrich(repo: ForgeRepoRef, projectPath: string, mr: GitLabMergeRequest): Promise<PullRequestSummary> {

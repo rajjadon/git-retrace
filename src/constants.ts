@@ -2,6 +2,9 @@
 
 export const OUTPUT_CHANNEL_NAME = 'GitLore';
 
+/** Shared by Commit Graph's and Launchpad's push/pull buttons, so both reuse the same terminal instead of spawning duplicates. */
+export const SYNC_TERMINAL_NAME = 'GitLore: Git Sync';
+
 /** Default for `gitLore.maxBlameFileSize` — shared so every blame-consuming provider agrees on the fallback. */
 export const DEFAULT_MAX_BLAME_FILE_SIZE = 1_048_576;
 
@@ -27,6 +30,7 @@ export const COMMANDS = {
   stepLineHistory: 'gitLore.stepLineHistory',
   toggleFullFileBlame: 'gitLore.toggleFullFileBlame',
   openLaunchpad: 'gitLore.openLaunchpad',
+  showPullRequest: 'gitLore.showPullRequest',
 } as const;
 
 export const CONFIG = {
@@ -61,6 +65,7 @@ export const VIEWS = {
   visualFileHistory: 'gitLore.visualFileHistory',
   rebaseEditor: 'gitLore.rebaseEditor',
   explorer: 'gitLore.explorer',
+  pullRequestDetails: 'gitLore.pullRequestDetails',
   /** Not registered via `contributes.views` — created imperatively with `createWebviewPanel` (a full editor-area tab, like Rebase Editor, not a docked panel), so this id is only ever used internally. */
   launchpad: 'gitLore.launchpad',
 } as const;
@@ -75,6 +80,7 @@ export const MEDIA = {
   shared: 'shared.css',
   commitGraph: 'commitGraph.css',
   commitDetails: 'commitDetails.css',
+  pullRequestDetails: 'pullRequestDetails.css',
   branchComparison: 'branchComparison.css',
   visualFileHistory: 'visualFileHistory.css',
   rebaseEditor: 'rebaseEditor.css',

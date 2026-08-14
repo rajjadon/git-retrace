@@ -326,3 +326,31 @@ test('closePullRequest: PATCHes status=abandoned to the pull request endpoint', 
   assert.equal(capturedInit?.method, 'PATCH');
   assert.equal(capturedInit?.body, JSON.stringify({ status: 'abandoned' }));
 });
+
+test('getPullRequestDiff: no diff text is available — returns changed files (leading slash stripped) with 0/0 stats, not fabricated numbers', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
+    if (url.includes('/iterations?api-version')) {
+      return jsonResponse({ value: [{ id: 1 }, { id: 2 }] });
+    }
+    if (url.includes('/iterations/2/changes')) {
+      return jsonResponse({ changeEntries: [{ item: { path: '/src/a.ts' }, changeType: 'edit' }] });
+    }
+    throw new Error(`unmocked: ${url}`);
+  }) as unknown as typeof fetch);
+  const result = await client.getPullRequestDiff(REPO, 50);
+  assert.equal(result.diff, '');
+  assert.deepEqual(result.files, [{ path: 'src/a.ts', insertions: 0, deletions: 0, binary: false }]);
+});
+
+test('getPullRequestDiff: uses the latest iteration, not the first', async () => {
+  const requestedUrls: string[] = [];
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
+    requestedUrls.push(url);
+    if (url.includes('/iterations?api-version')) {
+      return jsonResponse({ value: [{ id: 1 }, { id: 2 }, { id: 3 }] });
+    }
+    return jsonResponse({ changeEntries: [] });
+  }) as unknown as typeof fetch);
+  await client.getPullRequestDiff(REPO, 51);
+  assert.ok(requestedUrls.some((url) => url.includes('/iterations/3/changes')), requestedUrls.join('\n'));
+});
