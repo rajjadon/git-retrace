@@ -33,6 +33,7 @@ interface AzureDevOpsStatus {
 }
 
 interface AzureDevOpsProfile {
+  id?: string;
   emailAddress?: string;
   displayName?: string;
 }
@@ -83,9 +84,15 @@ function reviewersInfo(reviewers: AzureDevOpsReviewer[]): { requestedReviewers: 
  * (the default Azure DevOps offers when creating one) 401s against the global host even though
  * the exact same token works fine against every other endpoint here. PR authors/reviewers are
  * matched by `uniqueName` (their email/UPN), the same value the profile API returns as
- * `emailAddress`.
+ * `emailAddress`. That same profile response's `id` (a GUID) is cached and reused to scope the
+ * closed-PR search server-side via `searchCriteria.creatorId`, so the current user's own older
+ * merged/abandoned PRs aren't silently dropped by the `$top=10` window over a busy shared repo's
+ * most-recently-closed PRs before `categorizeClosedPullRequests` ever filters by author.
  */
 export class AzureDevOpsClient implements ForgeClient {
+  /** Set by `getAuthenticatedLogin` (always called once before the closed-PR list, per `LaunchpadViewProvider`) — the GUID `searchCriteria.creatorId` needs, which the shared `ForgeClient` interface has no other way to hand `listRecentlyClosedPullRequests`. */
+  private authenticatedUserId: string | undefined;
+
   constructor(
     private readonly identity: string,
     private readonly token: string,
@@ -99,6 +106,7 @@ export class AzureDevOpsClient implements ForgeClient {
       : 'https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1';
     const res = await this.request(url);
     const data = (await res.json()) as AzureDevOpsProfile;
+    this.authenticatedUserId = data.id;
     return data.emailAddress ?? data.displayName ?? null;
   }
 
@@ -138,7 +146,11 @@ export class AzureDevOpsClient implements ForgeClient {
     status: 'completed' | 'abandoned',
     merged: boolean,
   ): Promise<PullRequestSummary[]> {
-    const res = await this.requestOrNull(`${base}/pullrequests?searchCriteria.status=${status}&$top=10&api-version=7.1`);
+    // Filtered server-side by creatorId, not fetched-then-filtered client-side: this repo's most
+    // recently closed PRs project-wide would otherwise push the current user's own older ones
+    // out of the $top window before `categorizeClosedPullRequests` ever gets to filter by author.
+    const creatorFilter = this.authenticatedUserId ? `&searchCriteria.creatorId=${this.authenticatedUserId}` : '';
+    const res = await this.requestOrNull(`${base}/pullrequests?searchCriteria.status=${status}${creatorFilter}&$top=10&api-version=7.1`);
     if (!res) {
       return [];
     }

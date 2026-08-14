@@ -247,6 +247,36 @@ test('listRecentlyClosedPullRequests: combines completed and abandoned, tagging 
   assert.equal(result.find((r) => r.number === 41)?.merged, false);
 });
 
+test('listRecentlyClosedPullRequests: scopes the search server-side to the authenticated user via searchCriteria.creatorId, once known', async () => {
+  const requestedUrls: string[] = [];
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async (url: string) => {
+    requestedUrls.push(url);
+    if (url.startsWith('https://vssps.dev.azure.com/')) {
+      return jsonResponse({ id: 'user-guid-123', emailAddress: 'raj@acme.com' });
+    }
+    return jsonResponse({ value: [] });
+  }) as unknown as typeof fetch);
+
+  await client.getAuthenticatedLogin();
+  await client.listRecentlyClosedPullRequests(REPO);
+
+  const listUrls = requestedUrls.filter((url) => url.includes('searchCriteria.status='));
+  assert.equal(listUrls.length, 2);
+  assert.ok(listUrls.every((url) => url.includes('searchCriteria.creatorId=user-guid-123')), listUrls.join('\n'));
+});
+
+test('listRecentlyClosedPullRequests: omits creatorId when the authenticated user is not yet known', async () => {
+  const requestedUrls: string[] = [];
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async (url: string) => {
+    requestedUrls.push(url);
+    return jsonResponse({ value: [] });
+  }) as unknown as typeof fetch);
+
+  await client.listRecentlyClosedPullRequests(REPO);
+
+  assert.ok(requestedUrls.every((url) => !url.includes('searchCriteria.creatorId')), requestedUrls.join('\n'));
+});
+
 test('closePullRequest: PATCHes status=abandoned to the pull request endpoint', async () => {
   let capturedUrl: string | undefined;
   let capturedInit: RequestInit | undefined;
