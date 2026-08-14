@@ -44,7 +44,8 @@ interface AzureDevOpsIteration {
 }
 
 interface AzureDevOpsChangeEntry {
-  item: { path: string };
+  /** Absent for some entries (folder-level changes, certain property-only changes) — not every entry represents an actual file. */
+  item?: { path?: string };
 }
 
 interface AzureDevOpsIterationChanges {
@@ -248,14 +249,19 @@ export class AzureDevOpsClient implements ForgeClient {
     }
     const changesRes = await this.request(`${base}/pullrequests/${number}/iterations/${latest.id}/changes?api-version=7.1`);
     const changes = (await changesRes.json()) as AzureDevOpsIterationChanges;
-    const files: FileChange[] = changes.changeEntries.map((entry) => ({
-      // Azure DevOps paths are repo-root-absolute ("/src/foo.ts") — every other host's paths have
-      // no leading slash, so this strips it for a consistent look in the shared file-list renderer.
-      path: entry.item.path.replace(/^\//, ''),
-      insertions: 0,
-      deletions: 0,
-      binary: false,
-    }));
+    const files: FileChange[] = changes.changeEntries
+      .map((entry) => entry.item?.path)
+      // Some change entries (folder-level entries, certain property-only changes) carry no `item.path`
+      // at all — real API responses, not a shape the docs guarantee never happens. Skip rather than crash.
+      .filter((path): path is string => !!path)
+      .map((path) => ({
+        // Azure DevOps paths are repo-root-absolute ("/src/foo.ts") — every other host's paths have
+        // no leading slash, so this strips it for a consistent look in the shared file-list renderer.
+        path: path.replace(/^\//, ''),
+        insertions: 0,
+        deletions: 0,
+        binary: false,
+      }));
     return { files, diff: '' };
   }
 

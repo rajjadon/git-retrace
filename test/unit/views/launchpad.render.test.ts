@@ -73,8 +73,8 @@ test('renderLaunchpadHtml: the snooze button posts toggleSnooze with the PR\'s s
 test('renderLaunchpadHtml: a snoozed-column card is labeled "Unsnooze" instead of "Snooze"', () => {
   const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'snoozed' }];
   const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
-  assert.match(html, /title="Unsnooze PR"/);
-  assert.ok(!html.includes('title="Snooze PR"'));
+  assert.match(html, /data-tooltip="Unsnooze PR"/);
+  assert.ok(!html.includes('data-tooltip="Snooze PR"'));
 });
 
 test('renderLaunchpadHtml: the close button posts closePr with the PR\'s stable key and title', () => {

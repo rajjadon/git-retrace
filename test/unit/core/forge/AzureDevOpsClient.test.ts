@@ -342,6 +342,26 @@ test('getPullRequestDiff: no diff text is available — returns changed files (l
   assert.deepEqual(result.files, [{ path: 'src/a.ts', insertions: 0, deletions: 0, binary: false }]);
 });
 
+test('getPullRequestDiff: a change entry with no item.path (a folder-level entry, in practice) is skipped, not a crash', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
+    if (url.includes('/iterations?api-version')) {
+      return jsonResponse({ value: [{ id: 1 }] });
+    }
+    if (url.includes('/iterations/1/changes')) {
+      return jsonResponse({
+        changeEntries: [
+          { item: { path: '/src/a.ts' }, changeType: 'edit' },
+          { changeType: 'edit' },
+          { item: {}, changeType: 'edit' },
+        ],
+      });
+    }
+    throw new Error(`unmocked: ${url}`);
+  }) as unknown as typeof fetch);
+  const result = await client.getPullRequestDiff(REPO, 60);
+  assert.deepEqual(result.files, [{ path: 'src/a.ts', insertions: 0, deletions: 0, binary: false }]);
+});
+
 test('getPullRequestDiff: uses the latest iteration, not the first', async () => {
   const requestedUrls: string[] = [];
   const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {

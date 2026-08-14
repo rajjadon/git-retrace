@@ -68,12 +68,12 @@ function renderCard(pr: PullRequestSummary, now: Date, bucket: LaunchpadBucket):
   // doesn't need its own "is this my own PR" check on top of that.
   const stateActions = isTerminal
     ? ''
-    : `<button class="pr-card-snooze icon-btn" type="button" data-key="${escapeHtml(key)}" title="${snoozeTitle} PR" aria-label="${snoozeTitle} ${escapeHtml(pr.title)}">${SNOOZE_ICON}</button>
-<button class="pr-card-approve icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" title="Approve PR" aria-label="Approve ${escapeHtml(pr.title)}">${APPROVE_ICON}</button>
-<button class="pr-card-request-changes icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" title="Request changes on PR" aria-label="Request changes on ${escapeHtml(pr.title)}">${REQUEST_CHANGES_ICON}</button>
-<button class="pr-card-close icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" title="Close PR" aria-label="Close ${escapeHtml(pr.title)}">${CLOSE_ICON}</button>`;
+    : `<button class="pr-card-snooze icon-btn" type="button" data-key="${escapeHtml(key)}" data-tooltip="${snoozeTitle} PR" aria-label="${snoozeTitle} ${escapeHtml(pr.title)}">${SNOOZE_ICON}</button>
+<button class="pr-card-approve icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Approve PR" aria-label="Approve ${escapeHtml(pr.title)}">${APPROVE_ICON}</button>
+<button class="pr-card-request-changes icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Request changes on PR" aria-label="Request changes on ${escapeHtml(pr.title)}">${REQUEST_CHANGES_ICON}</button>
+<button class="pr-card-close icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Close PR" aria-label="Close ${escapeHtml(pr.title)}">${CLOSE_ICON}</button>`;
   const actions = `<div class="pr-card-actions">
-<button class="pr-card-details icon-btn" type="button" data-key="${escapeHtml(key)}" title="View PR diff" aria-label="View diff for ${escapeHtml(pr.title)}">${OPEN_CHANGES_ICON}</button>
+<button class="pr-card-details icon-btn" type="button" data-key="${escapeHtml(key)}" data-tooltip="View PR diff" aria-label="View diff for ${escapeHtml(pr.title)}">${OPEN_CHANGES_ICON}</button>
 ${stateActions}
 </div>`;
   return `<div class="pr-card" data-key="${escapeHtml(key)}" data-url="${escapeHtml(pr.url)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(pr.title)} on ${escapeHtml(pr.repo.label)}">
@@ -92,8 +92,8 @@ function renderRepoRow(repo: LaunchpadRepoRow): string {
   const label = escapeHtml(repo.label);
   return `<div class="repo-row" data-key="${key}">
 <span class="repo-row-label">${label}</span>
-<button class="repo-pull icon-btn" type="button" data-key="${key}" title="Pull" aria-label="Pull ${label}">${ARROW_DOWN_ICON}</button>
-<button class="repo-push icon-btn" type="button" data-key="${key}" title="Push" aria-label="Push ${label}">${ARROW_UP_ICON}</button>
+<button class="repo-pull icon-btn" type="button" data-key="${key}" data-tooltip="Pull" aria-label="Pull ${label}">${ARROW_DOWN_ICON}</button>
+<button class="repo-push icon-btn" type="button" data-key="${key}" data-tooltip="Push" aria-label="Push ${label}">${ARROW_UP_ICON}</button>
 </div>`;
 }
 
@@ -143,7 +143,7 @@ ${styles}
 <div class="toolbar">
 <span class="title">Launchpad</span>
 <span class="spacer"></span>
-<button id="refresh" class="icon-btn" type="button" title="Refresh" aria-label="Refresh Launchpad">${REFRESH_ICON}</button>
+<button id="refresh" class="icon-btn" type="button" data-tooltip="Refresh" aria-label="Refresh Launchpad">${REFRESH_ICON}</button>
 </div>
 ${repoList}
 ${errors}
@@ -222,6 +222,45 @@ for (const btn of document.querySelectorAll('.repo-push')) {
 document.getElementById('refresh').addEventListener('click', () => {
   vscode.postMessage({ type: 'refresh' });
 });
+
+// Native title="" tooltips have proven unreliable on some of these icon-only buttons in practice —
+// this renders one shared tooltip element GitLore fully controls instead, so it never depends on
+// whatever the host's native hover-bubbling happens to do.
+const tooltip = document.createElement('div');
+tooltip.className = 'gitlore-tooltip';
+tooltip.setAttribute('role', 'tooltip');
+document.body.appendChild(tooltip);
+
+function positionTooltip(target) {
+  const rect = target.getBoundingClientRect();
+  const tipRect = tooltip.getBoundingClientRect();
+  let top = rect.top - tipRect.height - 6;
+  if (top < 4) top = rect.bottom + 6;
+  let left = rect.left + rect.width / 2 - tipRect.width / 2;
+  left = Math.max(4, Math.min(left, window.innerWidth - tipRect.width - 4));
+  tooltip.style.top = top + 'px';
+  tooltip.style.left = left + 'px';
+}
+
+function showTooltip(target) {
+  const text = target.dataset.tooltip;
+  if (!text) return;
+  tooltip.textContent = text;
+  tooltip.classList.add('visible');
+  positionTooltip(target);
+}
+
+function hideTooltip() {
+  tooltip.classList.remove('visible');
+}
+
+for (const el of document.querySelectorAll('[data-tooltip]')) {
+  el.addEventListener('mouseenter', () => showTooltip(el));
+  el.addEventListener('focus', () => showTooltip(el));
+  el.addEventListener('mouseleave', hideTooltip);
+  el.addEventListener('blur', hideTooltip);
+  el.addEventListener('click', hideTooltip);
+}
 </script>
 </body>
 </html>`;
