@@ -51,7 +51,7 @@ test('renderLaunchpadHtml: an empty column says "Nothing here", not a blank spac
 test('renderLaunchpadHtml: a card shows repo label, author, and age', () => {
   const categorized: CategorizedPullRequest[] = [{ pr: pr({ repo: { host: 'gitlab', identity: 'acme/platform', label: 'acme/platform' } }), bucket: 'waiting' }];
   const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
-  assert.match(html, /class="pr-card-repo">acme\/platform</);
+  assert.match(html, /class="pr-card-repo" title="acme\/platform">acme\/platform</);
   assert.match(html, /raj/);
   assert.match(html, /3 days ago/);
 });
@@ -73,8 +73,8 @@ test('renderLaunchpadHtml: the snooze button posts toggleSnooze with the PR\'s s
 test('renderLaunchpadHtml: a snoozed-column card is labeled "Unsnooze" instead of "Snooze"', () => {
   const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'snoozed' }];
   const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
-  assert.match(html, /title="Unsnooze"/);
-  assert.ok(!html.includes('title="Snooze"'));
+  assert.match(html, /title="Unsnooze PR"/);
+  assert.ok(!html.includes('title="Snooze PR"'));
 });
 
 test('renderLaunchpadHtml: the close button posts closePr with the PR\'s stable key and title', () => {

@@ -119,7 +119,6 @@ body {
 }
 
 .pr-card {
-  position: relative;
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--vscode-panel-border);
   border-radius: 4px;
@@ -136,10 +135,29 @@ body {
   outline-offset: 1px;
 }
 
+/*
+ * Repo label and action buttons as flex siblings, not an absolutely-positioned overlay — a card
+ * can carry up to 5 action buttons (view diff, snooze, approve, request changes, close) plus a
+ * long repo label (Azure DevOps' "org/project/repo" identity especially), and a fixed-position
+ * overlay had no way to reserve room for either: it simply sat on top of whatever repo text was
+ * underneath it. Letting the repo label shrink and truncate instead means this never overlaps,
+ * regardless of button count or label length — the full label is still one hover away via `title`.
+ */
+.pr-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.2rem;
+}
+
 .pr-card-repo {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--vscode-descriptionForeground);
   font-size: 0.85em;
-  margin-bottom: 0.2rem;
 }
 
 .pr-card-title {
@@ -166,9 +184,9 @@ body {
 }
 
 .pr-card-actions {
-  position: absolute;
-  top: 0.3rem;
-  right: 0.3rem;
+  flex: 0 0 auto;
   display: flex;
-  gap: 0.1rem;
+  /* Wider than the repo/column gaps elsewhere — these are five small, similarly-styled icon
+     buttons side by side, and too tight a gap makes them easy to misread or mis-click. */
+  gap: 0.25rem;
 }

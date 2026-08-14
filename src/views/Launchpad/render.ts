@@ -68,19 +68,21 @@ function renderCard(pr: PullRequestSummary, now: Date, bucket: LaunchpadBucket):
   // doesn't need its own "is this my own PR" check on top of that.
   const stateActions = isTerminal
     ? ''
-    : `<button class="pr-card-snooze icon-btn" type="button" data-key="${escapeHtml(key)}" title="${snoozeTitle}" aria-label="${snoozeTitle} ${escapeHtml(pr.title)}">${SNOOZE_ICON}</button>
-<button class="pr-card-approve icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" title="Approve" aria-label="Approve ${escapeHtml(pr.title)}">${APPROVE_ICON}</button>
-<button class="pr-card-request-changes icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" title="Request changes" aria-label="Request changes on ${escapeHtml(pr.title)}">${REQUEST_CHANGES_ICON}</button>
+    : `<button class="pr-card-snooze icon-btn" type="button" data-key="${escapeHtml(key)}" title="${snoozeTitle} PR" aria-label="${snoozeTitle} ${escapeHtml(pr.title)}">${SNOOZE_ICON}</button>
+<button class="pr-card-approve icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" title="Approve PR" aria-label="Approve ${escapeHtml(pr.title)}">${APPROVE_ICON}</button>
+<button class="pr-card-request-changes icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" title="Request changes on PR" aria-label="Request changes on ${escapeHtml(pr.title)}">${REQUEST_CHANGES_ICON}</button>
 <button class="pr-card-close icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" title="Close PR" aria-label="Close ${escapeHtml(pr.title)}">${CLOSE_ICON}</button>`;
   const actions = `<div class="pr-card-actions">
-<button class="pr-card-details icon-btn" type="button" data-key="${escapeHtml(key)}" title="View diff" aria-label="View diff for ${escapeHtml(pr.title)}">${OPEN_CHANGES_ICON}</button>
+<button class="pr-card-details icon-btn" type="button" data-key="${escapeHtml(key)}" title="View PR diff" aria-label="View diff for ${escapeHtml(pr.title)}">${OPEN_CHANGES_ICON}</button>
 ${stateActions}
 </div>`;
   return `<div class="pr-card" data-key="${escapeHtml(key)}" data-url="${escapeHtml(pr.url)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(pr.title)} on ${escapeHtml(pr.repo.label)}">
-<div class="pr-card-repo">${escapeHtml(pr.repo.label)}</div>
+<div class="pr-card-header">
+<div class="pr-card-repo" title="${escapeHtml(pr.repo.label)}">${escapeHtml(pr.repo.label)}</div>
+${actions}
+</div>
 <div class="pr-card-title">${escapeHtml(pr.title)}</div>
 <div class="pr-card-meta">${AUTHOR_ICON}<span>${escapeHtml(pr.authorLogin)}</span><span class="pr-card-age" title="${escapeHtml(absolute)}">${escapeHtml(ageLabel)}</span></div>
-${actions}
 </div>`;
 }
 
