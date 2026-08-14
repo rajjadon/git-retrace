@@ -76,19 +76,28 @@ function reviewersInfo(reviewers: AzureDevOpsReviewer[]): { requestedReviewers: 
  * whose remote uses the legacy `<org>.visualstudio.com` hostname (that hostname still resolves,
  * but `dev.azure.com` is the canonical modern one for every org).
  *
- * The identity ("who am I") check lives on a *different* host (`app.vssps.visualstudio.com`) than
- * the main API (`dev.azure.com`) — a genuine, well-documented Azure DevOps quirk, not a mistake
- * here. PR authors/reviewers are matched by `uniqueName` (their email/UPN), the same value the
- * profile API returns as `emailAddress`.
+ * The identity ("who am I") check lives on a *different* host (`vssps.dev.azure.com`) than the
+ * main API (`dev.azure.com`) — a genuine, well-documented Azure DevOps quirk, not a mistake here.
+ * That profile check must be routed through the org (`vssps.dev.azure.com/{organization}/...`),
+ * not the legacy global `app.vssps.visualstudio.com/...` host: a PAT scoped to one organization
+ * (the default Azure DevOps offers when creating one) 401s against the global host even though
+ * the exact same token works fine against every other endpoint here. PR authors/reviewers are
+ * matched by `uniqueName` (their email/UPN), the same value the profile API returns as
+ * `emailAddress`.
  */
 export class AzureDevOpsClient implements ForgeClient {
   constructor(
+    private readonly identity: string,
     private readonly token: string,
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
   async getAuthenticatedLogin(): Promise<string | null> {
-    const res = await this.request('https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1');
+    const id = splitAzureDevOpsIdentity(this.identity);
+    const url = id
+      ? `https://vssps.dev.azure.com/${id.organization}/_apis/profile/profiles/me?api-version=7.1`
+      : 'https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1';
+    const res = await this.request(url);
     const data = (await res.json()) as AzureDevOpsProfile;
     return data.emailAddress ?? data.displayName ?? null;
   }

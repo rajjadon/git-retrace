@@ -121,7 +121,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
           errors.push({ repo, message: 'Not signed in.' });
           continue;
         }
-        const client = buildForgeClient(detected.flavor, detected.apiBaseUrl, token, this.fetchImpl);
+        const client = buildForgeClient(detected.flavor, detected.apiBaseUrl, repo.identity, token, this.fetchImpl);
 
         let login: string | null;
         try {

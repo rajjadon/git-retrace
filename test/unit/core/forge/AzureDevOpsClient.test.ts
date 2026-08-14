@@ -22,11 +22,24 @@ function fakeFetch(routes: Record<string, unknown>): typeof fetch {
   }) as typeof fetch;
 }
 
-test('getAuthenticatedLogin: reads emailAddress from the vssps profile endpoint, a different host than the main API', async () => {
+test('getAuthenticatedLogin: reads emailAddress from the org-scoped vssps profile endpoint, not the legacy global host', async () => {
   const client = new AzureDevOpsClient(
+    IDENTITY,
     'pat',
     (async (url: string) => {
-      assert.ok(url.startsWith('https://app.vssps.visualstudio.com/'), `expected the profile host, got ${url}`);
+      assert.ok(url.startsWith('https://vssps.dev.azure.com/acme/'), `expected the org-scoped profile host, got ${url}`);
+      return jsonResponse({ emailAddress: 'raj@acme.com' });
+    }) as unknown as typeof fetch,
+  );
+  assert.equal(await client.getAuthenticatedLogin(), 'raj@acme.com');
+});
+
+test('getAuthenticatedLogin: falls back to the global vssps host when the identity cannot be parsed', async () => {
+  const client = new AzureDevOpsClient(
+    'not-a-valid-identity',
+    'pat',
+    (async (url: string) => {
+      assert.ok(url.startsWith('https://app.vssps.visualstudio.com/'), `expected the global profile host, got ${url}`);
       return jsonResponse({ emailAddress: 'raj@acme.com' });
     }) as unknown as typeof fetch,
   );
@@ -34,18 +47,18 @@ test('getAuthenticatedLogin: reads emailAddress from the vssps profile endpoint,
 });
 
 test('getAuthenticatedLogin: falls back to displayName when emailAddress is absent', async () => {
-  const client = new AzureDevOpsClient('pat', (async () => jsonResponse({ displayName: 'Raj Jadon' })) as unknown as typeof fetch);
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async () => jsonResponse({ displayName: 'Raj Jadon' })) as unknown as typeof fetch);
   assert.equal(await client.getAuthenticatedLogin(), 'Raj Jadon');
 });
 
 test('getAuthenticatedLogin: an invalid PAT throws with the real HTTP status, not a generic message', async () => {
-  const client = new AzureDevOpsClient('bad', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
-  await assert.rejects(() => client.getAuthenticatedLogin(), /401 Unauthorized from app\.vssps\.visualstudio\.com/);
+  const client = new AzureDevOpsClient(IDENTITY, 'bad', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  await assert.rejects(() => client.getAuthenticatedLogin(), /401 Unauthorized from vssps\.dev\.azure\.com/);
 });
 
 test('listOpenPullRequests: builds the repo URL from organization/project/repository, not owner/repo', async () => {
   let requestedListUrl = '';
-  const client = new AzureDevOpsClient('pat', (async (url: string) => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async (url: string) => {
     if (url.includes('pullrequests?searchCriteria.status=active')) {
       requestedListUrl = url;
       return jsonResponse({ value: [] });
@@ -57,13 +70,14 @@ test('listOpenPullRequests: builds the repo URL from organization/project/reposi
 });
 
 test('listOpenPullRequests: a malformed identity (not 3 parts) returns an empty array rather than throwing', async () => {
-  const client = new AzureDevOpsClient('pat', (async () => jsonResponse({ value: [] })) as unknown as typeof fetch);
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async () => jsonResponse({ value: [] })) as unknown as typeof fetch);
   const malformed: ForgeRepoRef = { host: 'azureDevOps', identity: 'acme/widgets-api', label: 'acme/widgets-api' };
   assert.deepEqual(await client.listOpenPullRequests(malformed), []);
 });
 
 test('listOpenPullRequests: normalizes a plain PR with no reviewers or statuses', async () => {
   const client = new AzureDevOpsClient(
+    IDENTITY,
     'pat',
     fakeFetch({
       'searchCriteria.status=active&api-version=7.1': {
@@ -90,6 +104,7 @@ test('listOpenPullRequests: normalizes a plain PR with no reviewers or statuses'
 
 test('listOpenPullRequests: a reviewer who rejected (vote -10) -> reviewDecision "changesRequested"', async () => {
   const client = new AzureDevOpsClient(
+    IDENTITY,
     'pat',
     fakeFetch({
       'searchCriteria.status=active&api-version=7.1': {
@@ -112,6 +127,7 @@ test('listOpenPullRequests: a reviewer who rejected (vote -10) -> reviewDecision
 
 test('listOpenPullRequests: a reviewer who has not voted (vote 0) -> "reviewRequired"', async () => {
   const client = new AzureDevOpsClient(
+    IDENTITY,
     'pat',
     fakeFetch({
       'searchCriteria.status=active&api-version=7.1': {
@@ -134,6 +150,7 @@ test('listOpenPullRequests: a reviewer who has not voted (vote 0) -> "reviewRequ
 
 test('listOpenPullRequests: every reviewer approved (vote 10) -> "approved"', async () => {
   const client = new AzureDevOpsClient(
+    IDENTITY,
     'pat',
     fakeFetch({
       'searchCriteria.status=active&api-version=7.1': {
@@ -156,6 +173,7 @@ test('listOpenPullRequests: every reviewer approved (vote 10) -> "approved"', as
 
 test('listOpenPullRequests: mergeStatus "conflicts" -> hasConflicts true', async () => {
   const client = new AzureDevOpsClient(
+    IDENTITY,
     'pat',
     fakeFetch({
       'searchCriteria.status=active&api-version=7.1': {
@@ -178,6 +196,7 @@ test('listOpenPullRequests: mergeStatus "conflicts" -> hasConflicts true', async
 test('listOpenPullRequests: status checks map to checkStatus (succeeded/failed/pending)', async () => {
   async function statusCheck(state: string, expected: string): Promise<void> {
     const client = new AzureDevOpsClient(
+      IDENTITY,
       'pat',
       fakeFetch({
         'searchCriteria.status=active&api-version=7.1': {
@@ -204,12 +223,12 @@ test('listOpenPullRequests: status checks map to checkStatus (succeeded/failed/p
 });
 
 test('listOpenPullRequests: a failed list request returns an empty array, not a throw', async () => {
-  const client = new AzureDevOpsClient('pat', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
   assert.deepEqual(await client.listOpenPullRequests(REPO), []);
 });
 
 test('listRecentlyClosedPullRequests: combines completed and abandoned, tagging each with the right merged flag', async () => {
-  const client = new AzureDevOpsClient('pat', (async (url: string) => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async (url: string) => {
     if (url.includes('searchCriteria.status=completed')) {
       return jsonResponse({
         value: [{ pullRequestId: 40, title: 'Shipped', createdBy: { uniqueName: 'raj@acme.com' }, creationDate: 'c' }],
@@ -231,7 +250,7 @@ test('listRecentlyClosedPullRequests: combines completed and abandoned, tagging 
 test('closePullRequest: PATCHes status=abandoned to the pull request endpoint', async () => {
   let capturedUrl: string | undefined;
   let capturedInit: RequestInit | undefined;
-  const client = new AzureDevOpsClient('pat', (async (url: string, init?: RequestInit) => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async (url: string, init?: RequestInit) => {
     capturedUrl = url;
     capturedInit = init;
     return jsonResponse({});
