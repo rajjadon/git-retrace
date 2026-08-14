@@ -2,7 +2,7 @@
   "name": "gitlore",
   "displayName": "GitLore — git blame, history & commit graph",
   "description": "The story behind every line. Free, local-first git blame, history, commit graph and branch comparison — no account, no telemetry.",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "publisher": "RajpratapsinghJadon",
   "license": "MIT",
   "engines": {
@@ -43,6 +43,11 @@
         "command": "gitLore.showCommit",
         "title": "GitLore: Show Commit Details",
         "icon": "$(git-commit)"
+      },
+      {
+        "command": "gitLore.showPullRequest",
+        "title": "GitLore: Show Pull Request Details",
+        "icon": "$(git-pull-request)"
       },
       {
         "command": "gitLore.openGraph",
@@ -177,6 +182,12 @@
           "type": "webview",
           "id": "gitLore.visualFileHistory",
           "name": "Visual File History",
+          "visibility": "collapsed"
+        },
+        {
+          "type": "webview",
+          "id": "gitLore.pullRequestDetails",
+          "name": "Pull Request Details",
           "visibility": "collapsed"
         }
       ]

@@ -2,7 +2,18 @@ import { LAUNCHPAD_BUCKETS, pullRequestKey } from '../../core/forge/types';
 import type { CategorizedPullRequest, ForgeRepoRef, LaunchpadBucket, PullRequestSummary } from '../../core/forge/types';
 import { formatAge, formatAbsolute } from '../../utils/date';
 import { escapeHtml } from '../escapeHtml';
-import { AUTHOR_ICON, CLOSE_ICON, REFRESH_ICON, SNOOZE_ICON } from '../icons';
+import {
+  APPROVE_ICON,
+  ARROW_DOWN_ICON,
+  ARROW_UP_ICON,
+  AUTHOR_ICON,
+  CLOSE_ICON,
+  OPEN_CHANGES_ICON,
+  REFRESH_ICON,
+  REOPEN_ICON,
+  REQUEST_CHANGES_ICON,
+  SNOOZE_ICON,
+} from '../icons';
 
 const TERMINAL_BUCKETS = new Set<LaunchpadBucket>(['merged', 'closed']);
 
@@ -17,9 +28,16 @@ export interface LaunchpadRepoError {
   message: string;
 }
 
+/** One workspace repo Launchpad found a git remote for — independent of whether its forge auth succeeded, since push/pull needs no host credential at all. */
+export interface LaunchpadRepoRow {
+  key: string;
+  label: string;
+}
+
 export interface LaunchpadData {
   categorized: CategorizedPullRequest[];
   errors: LaunchpadRepoError[];
+  repoRows?: LaunchpadRepoRow[];
   now?: Date;
 }
 
@@ -44,19 +62,43 @@ function renderCard(pr: PullRequestSummary, now: Date, bucket: LaunchpadBucket):
   const absolute = formatAbsolute(date, 'yyyy-MM-dd HH:mm');
   const ageLabel = bucket === 'merged' ? `merged ${age}` : bucket === 'closed' ? `closed ${age}` : age;
   const snoozeTitle = bucket === 'snoozed' ? 'Unsnooze' : 'Snooze';
-  // Nothing to snooze or close on a PR that's already done — those actions only make sense on an
-  // open card.
-  const actions = isTerminal
-    ? ''
-    : `<div class="pr-card-actions">
-<button class="pr-card-snooze icon-btn" type="button" data-key="${escapeHtml(key)}" title="${snoozeTitle}" aria-label="${snoozeTitle} ${escapeHtml(pr.title)}">${SNOOZE_ICON}</button>
-<button class="pr-card-close icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" title="Close PR" aria-label="Close ${escapeHtml(pr.title)}">${CLOSE_ICON}</button>
+  // Nothing to snooze or close on a PR that's already done — those two only make sense on an open
+  // card. Viewing the diff applies either way, so it's not gated on `isTerminal`.
+  // Approve/request-changes only make sense on an open card too — a host rejects a self-approval
+  // attempt with its own clear error (surfaced the same way a failed close already is), so this
+  // doesn't need its own "is this my own PR" check on top of that.
+  // Reopen only makes sense on "closed", never "merged" — no host we support lets a merge be
+  // undone through this action.
+  const stateActions = isTerminal
+    ? bucket === 'closed'
+      ? `<button class="pr-card-reopen icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Reopen PR" aria-label="Reopen ${escapeHtml(pr.title)}">${REOPEN_ICON}</button>`
+      : ''
+    : `<button class="pr-card-snooze icon-btn" type="button" data-key="${escapeHtml(key)}" data-tooltip="${snoozeTitle} PR" aria-label="${snoozeTitle} ${escapeHtml(pr.title)}">${SNOOZE_ICON}</button>
+<button class="pr-card-approve icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Approve PR" aria-label="Approve ${escapeHtml(pr.title)}">${APPROVE_ICON}</button>
+<button class="pr-card-request-changes icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Request changes on PR" aria-label="Request changes on ${escapeHtml(pr.title)}">${REQUEST_CHANGES_ICON}</button>
+<button class="pr-card-close icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Close PR" aria-label="Close ${escapeHtml(pr.title)}">${CLOSE_ICON}</button>`;
+  const actions = `<div class="pr-card-actions">
+<button class="pr-card-details icon-btn" type="button" data-key="${escapeHtml(key)}" data-tooltip="View PR diff" aria-label="View diff for ${escapeHtml(pr.title)}">${OPEN_CHANGES_ICON}</button>
+${stateActions}
 </div>`;
   return `<div class="pr-card" data-key="${escapeHtml(key)}" data-url="${escapeHtml(pr.url)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(pr.title)} on ${escapeHtml(pr.repo.label)}">
-<div class="pr-card-repo">${escapeHtml(pr.repo.label)}</div>
+<div class="pr-card-header">
+<div class="pr-card-repo" title="${escapeHtml(pr.repo.label)}">${escapeHtml(pr.repo.label)}</div>
+${actions}
+</div>
 <div class="pr-card-title">${escapeHtml(pr.title)}</div>
 <div class="pr-card-meta">${AUTHOR_ICON}<span>${escapeHtml(pr.authorLogin)}</span><span class="pr-card-age" title="${escapeHtml(absolute)}">${escapeHtml(ageLabel)}</span></div>
-${actions}
+</div>`;
+}
+
+/** One row per workspace repo, with push/pull buttons — a local git operation, so these render regardless of whether that repo's forge auth succeeded. No ahead/behind badge yet (would need a `GitService.getBranches()` call per repo on every refresh); add one later if the repo list turns out sparse enough that it's worth the extra latency. */
+function renderRepoRow(repo: LaunchpadRepoRow): string {
+  const key = escapeHtml(repo.key);
+  const label = escapeHtml(repo.label);
+  return `<div class="repo-row" data-key="${key}">
+<span class="repo-row-label">${label}</span>
+<button class="repo-pull icon-btn" type="button" data-key="${key}" data-tooltip="Pull" aria-label="Pull ${label}">${ARROW_DOWN_ICON}</button>
+<button class="repo-push icon-btn" type="button" data-key="${key}" data-tooltip="Push" aria-label="Push ${label}">${ARROW_UP_ICON}</button>
 </div>`;
 }
 
@@ -91,6 +133,9 @@ export function renderLaunchpadHtml(data: LaunchpadData, opts: RenderLaunchpadOp
 
   const empty = data.categorized.length === 0 && data.errors.length === 0;
 
+  const repoRows = data.repoRows ?? [];
+  const repoList = repoRows.length === 0 ? '' : `<div class="repo-list">${repoRows.map(renderRepoRow).join('\n')}</div>`;
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -103,8 +148,9 @@ ${styles}
 <div class="toolbar">
 <span class="title">Launchpad</span>
 <span class="spacer"></span>
-<button id="refresh" class="icon-btn" type="button" title="Refresh" aria-label="Refresh Launchpad">${REFRESH_ICON}</button>
+<button id="refresh" class="icon-btn" type="button" data-tooltip="Refresh" aria-label="Refresh Launchpad">${REFRESH_ICON}</button>
 </div>
+${repoList}
 ${errors}
 ${empty ? '<p class="empty">No pull requests need your attention right now.</p>' : `<div class="board">${columns}</div>`}
 <script nonce="${opts.nonce}">
@@ -142,9 +188,92 @@ for (const btn of document.querySelectorAll('.pr-card-close')) {
   });
 }
 
+for (const btn of document.querySelectorAll('.pr-card-reopen')) {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    vscode.postMessage({ type: 'reopenPr', key: btn.dataset.key, title: btn.dataset.title });
+  });
+}
+
+for (const btn of document.querySelectorAll('.pr-card-approve')) {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    vscode.postMessage({ type: 'submitReview', key: btn.dataset.key, title: btn.dataset.title, decision: 'approve' });
+  });
+}
+
+for (const btn of document.querySelectorAll('.pr-card-request-changes')) {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    vscode.postMessage({ type: 'submitReview', key: btn.dataset.key, title: btn.dataset.title, decision: 'requestChanges' });
+  });
+}
+
+for (const btn of document.querySelectorAll('.pr-card-details')) {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    vscode.postMessage({ type: 'showPullRequestDetails', key: btn.dataset.key });
+  });
+}
+
+for (const btn of document.querySelectorAll('.repo-pull')) {
+  btn.addEventListener('click', () => {
+    vscode.postMessage({ type: 'pull', key: btn.dataset.key });
+  });
+}
+
+for (const btn of document.querySelectorAll('.repo-push')) {
+  btn.addEventListener('click', () => {
+    vscode.postMessage({ type: 'push', key: btn.dataset.key });
+  });
+}
+
 document.getElementById('refresh').addEventListener('click', () => {
   vscode.postMessage({ type: 'refresh' });
 });
+
+// Native title="" tooltips have proven unreliable on some of these icon-only buttons in practice —
+// this renders one shared tooltip element GitLore fully controls instead, so it never depends on
+// whatever the host's native hover-bubbling happens to do.
+const tooltip = document.createElement('div');
+tooltip.className = 'gitlore-tooltip';
+tooltip.setAttribute('role', 'tooltip');
+document.body.appendChild(tooltip);
+
+function positionTooltip(target) {
+  const rect = target.getBoundingClientRect();
+  const tipRect = tooltip.getBoundingClientRect();
+  let top = rect.top - tipRect.height - 6;
+  if (top < 4) top = rect.bottom + 6;
+  let left = rect.left + rect.width / 2 - tipRect.width / 2;
+  left = Math.max(4, Math.min(left, window.innerWidth - tipRect.width - 4));
+  tooltip.style.top = top + 'px';
+  tooltip.style.left = left + 'px';
+}
+
+function showTooltip(target) {
+  const text = target.dataset.tooltip;
+  if (!text) return;
+  tooltip.textContent = text;
+  tooltip.classList.add('visible');
+  positionTooltip(target);
+}
+
+function hideTooltip() {
+  tooltip.classList.remove('visible');
+}
+
+for (const el of document.querySelectorAll('[data-tooltip]')) {
+  el.addEventListener('mouseenter', () => showTooltip(el));
+  el.addEventListener('focus', () => showTooltip(el));
+  el.addEventListener('mouseleave', hideTooltip);
+  el.addEventListener('blur', hideTooltip);
+  el.addEventListener('click', hideTooltip);
+}
 </script>
 </body>
 </html>`;

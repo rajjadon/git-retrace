@@ -155,6 +155,7 @@ suite('Launchpad', () => {
           status: 401,
           statusText: 'Unauthorized',
           json: async () => ({}),
+          text: async () => '{}',
         })) as unknown as typeof fetch);
 
         try {
@@ -181,7 +182,9 @@ suite('Launchpad', () => {
     withLaunchpadEnabled(() =>
       withRemote('origin', 'git@ssh.dev.azure.com:v3/GoFynd/FyndOne/Boltic', async () => {
         api.launchpadProvider.setFetchImplForTest((async (url: string) => {
-          if (url.includes('app.vssps.visualstudio.com')) {
+          // Org-scoped, not the legacy global `app.vssps.visualstudio.com` host — see
+          // `AzureDevOpsClient.getAuthenticatedLogin`.
+          if (url.startsWith('https://vssps.dev.azure.com/')) {
             return jsonResponse({ emailAddress: 'raj@example.com' });
           }
           if (url.includes('/pullrequests?searchCriteria.status=active')) {
@@ -206,14 +209,21 @@ suite('Launchpad', () => {
           throw new Error(`unmocked request in test: ${url}`);
         }) as unknown as typeof fetch);
 
-        const originalInput = vscode.window.showInputBox;
-        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
-          'fake-pat') as typeof vscode.window.showInputBox;
+        // `dev.azure.com` resolves its credential via VS Code's built-in Microsoft/AAD session,
+        // not a PAT prompt (see `forgeCredentials.ts`'s `resolveForgeToken`) — mock that session
+        // instead of `showInputBox`.
+        const originalGetSession = vscode.authentication.getSession;
+        (vscode.authentication as { getSession: typeof vscode.authentication.getSession }).getSession = (async () => ({
+          id: 'fake-session',
+          accessToken: 'fake-oauth-token',
+          account: { id: 'fake-account', label: 'raj' },
+          scopes: [],
+        })) as typeof vscode.authentication.getSession;
         try {
           await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
           await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Azure DevOps PR'));
         } finally {
-          vscode.window.showInputBox = originalInput;
+          vscode.authentication.getSession = originalGetSession;
         }
 
         const html = api.getLaunchpadHtml() ?? '';
@@ -491,6 +501,371 @@ suite('Launchpad', () => {
         await api.launchpadProvider.closePullRequestForTest('gitlab:acme/widgets#60');
         assert.ok(closeCalled, 'expected the close endpoint to be called');
         await waitFor(() => !(api.getLaunchpadHtml() ?? '').includes('Closable PR'));
+      }),
+    ));
+
+  test('reopening a closed (not merged) PR calls the client\'s reopen endpoint', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/widgets.git', async () => {
+        let reopenCalled = false;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened') || url.includes('merge_requests?state=merged')) {
+            return jsonResponse([]);
+          }
+          if (url.includes('merge_requests?state=closed')) {
+            return jsonResponse([
+              {
+                iid: 70,
+                title: 'Reopenable PR',
+                web_url: 'https://gitlab.com/acme/widgets/-/merge_requests/70',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-04T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.endsWith('/merge_requests/70') && init?.method === 'PUT') {
+            reopenCalled = true;
+            assert.equal(init.body, JSON.stringify({ state_event: 'reopen' }));
+            return jsonResponse({});
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Reopenable PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        await api.launchpadProvider.reopenPullRequestForTest('gitlab:acme/widgets#70');
+        assert.ok(reopenCalled, 'expected the reopen endpoint to be called');
+      }),
+    ));
+
+  test('approving a PR calls the client\'s approve endpoint', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/widgets.git', async () => {
+        let approveCalled = false;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 61,
+                title: 'Reviewable PR',
+                web_url: 'https://gitlab.com/acme/widgets/-/merge_requests/61',
+                // A different author than the signed-in user ('raj', mocked via /user below) —
+                // Launchpad now refuses to submit a review on your own PR before ever calling the
+                // API, so this needs to be someone else's PR to actually exercise the approve call.
+                // 'raj' as a requested reviewer is what makes categorizePullRequests keep this PR
+                // at all — it only surfaces PRs you authored or were asked to review.
+                author: { username: 'other-dev' },
+                reviewers: [{ username: 'raj' }],
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: false, approved_by: [] });
+          }
+          if (url.endsWith('/merge_requests/61/approve') && init?.method === 'POST') {
+            approveCalled = true;
+            return jsonResponse({});
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Reviewable PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        await api.launchpadProvider.submitReviewForTest('gitlab:acme/widgets#61', 'approve');
+        assert.ok(approveCalled, 'expected the approve endpoint to be called');
+      }),
+    ));
+
+  test('submitting a review on your own PR never calls the host — every host rejects self-review anyway, so this is caught before the request', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/widgets.git', async () => {
+        let approveCalled = false;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 62,
+                title: 'My own PR',
+                web_url: 'https://gitlab.com/acme/widgets/-/merge_requests/62',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: false, approved_by: [] });
+          }
+          if (url.endsWith('/merge_requests/62/approve') && init?.method === 'POST') {
+            approveCalled = true;
+            return jsonResponse({});
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('My own PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        await api.launchpadProvider.submitReviewForTest('gitlab:acme/widgets#62', 'approve');
+        assert.ok(!approveCalled, 'expected the approve endpoint to never be called for your own PR');
+      }),
+    ));
+
+  test('renders a push/pull row for a repo even when the user declines to sign in — push/pull needs no forge credential at all', async () =>
+    withLaunchpadEnabled(() =>
+      // Bitbucket, not GitLab: every other test in this file authenticates against gitlab.com,
+      // which would leave a stored PAT under that same host's secret-storage key — using a host
+      // no other test touches guarantees this test actually exercises "no token stored yet".
+      withOriginRemote('https://bitbucket.org/acme/widgets.git', async () => {
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () => undefined) as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('class="repo-row"'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        const html = api.getLaunchpadHtml() ?? '';
+        assert.match(html, /class="repo-row" data-key="bitbucket:acme\/widgets"/);
+        assert.match(html, /Not signed in\./);
+      }),
+    ));
+
+  test('syncRepoForTest: an unrecognized repo key is a silent no-op (no terminal created)', async () => {
+    const before = vscode.window.terminals.length;
+    api.launchpadProvider.syncRepoForTest('not-a-real-repo-key', 'pull');
+    assert.equal(vscode.window.terminals.length, before);
+  });
+
+  test('gitLore.showPullRequest: opens the PR Details panel and renders that PR\'s real diff', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/details-widgets.git', async () => {
+        api.launchpadProvider.setFetchImplForTest((async (url: string) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 8,
+                title: 'Details-worthy PR',
+                web_url: 'https://gitlab.com/acme/details-widgets/-/merge_requests/8',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: false, approved_by: [] });
+          }
+          if (url.includes('merge_requests/8/diffs')) {
+            return jsonResponse([
+              { old_path: 'src/real.ts', new_path: 'src/real.ts', diff: '@@ -1 +1,2 @@\n+a real diff line' },
+            ]);
+          }
+          if (url.includes('merge_requests/8/discussions')) {
+            return jsonResponse([]);
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Details-worthy PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'gitlab:acme/details-widgets#8');
+        await waitFor(() => (api.getPullRequestDetailsHtml() ?? '').includes('a real diff line'));
+
+        const html = api.getPullRequestDetailsHtml() ?? '';
+        assert.match(html, /Details-worthy PR/);
+        assert.match(html, /src\/real\.ts/);
+        assert.match(html, /class="dc diff-add">\+a real diff line</);
+      }),
+    ));
+
+  test('gitLore.showPullRequest: an unknown key shows a warning instead of throwing', async () => {
+    const originalWarn = vscode.window.showWarningMessage;
+    let warned: string | undefined;
+    (vscode.window as { showWarningMessage: typeof vscode.window.showWarningMessage }).showWarningMessage = ((message: string) => {
+      warned = message;
+      return Promise.resolve(undefined);
+    }) as typeof vscode.window.showWarningMessage;
+    try {
+      await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'github:nobody/nothing#999');
+    } finally {
+      vscode.window.showWarningMessage = originalWarn;
+    }
+    assert.match(warned ?? '', /isn't on the board/);
+  });
+
+  test('addCommentForTest: posts a comment against the PR currently loaded in the Details panel', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/comment-widgets.git', async () => {
+        let capturedBody: string | undefined;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 9,
+                title: 'Commentable PR',
+                web_url: 'https://gitlab.com/acme/comment-widgets/-/merge_requests/9',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: false, approved_by: [] });
+          }
+          if (url.includes('merge_requests/9/diffs')) {
+            return jsonResponse([]);
+          }
+          if (url.includes('merge_requests/9/discussions')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/merge_requests/9/notes') && init?.method === 'POST') {
+            capturedBody = JSON.parse(String(init.body)).body;
+            return jsonResponse({});
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Commentable PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'gitlab:acme/comment-widgets#9');
+        await waitFor(() => (api.getPullRequestDetailsHtml() ?? '').includes('Commentable PR'));
+
+        await api.pullRequestDetailsProvider.addCommentForTest('Looks good to me');
+        assert.equal(capturedBody, 'Looks good to me');
+      }),
+    ));
+
+  test('resolveThreadForTest: resolves a conversation thread against the PR currently loaded in the Details panel', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/thread-widgets.git', async () => {
+        let resolveCalled = false;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 10,
+                title: 'Thready PR',
+                web_url: 'https://gitlab.com/acme/thread-widgets/-/merge_requests/10',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: false, approved_by: [] });
+          }
+          if (url.includes('merge_requests/10/diffs')) {
+            return jsonResponse([]);
+          }
+          // Checked before the broader discussions-list match below — the resolve PUT's URL
+          // (".../discussions/d1?resolved=true") is also a substring match for
+          // ".../discussions", so the specific check has to come first or it's unreachable.
+          if (url.includes('merge_requests/10/discussions/d1') && init?.method === 'PUT') {
+            resolveCalled = true;
+            return jsonResponse({});
+          }
+          if (url.includes('merge_requests/10/discussions')) {
+            return jsonResponse([
+              { id: 'd1', notes: [{ body: 'Fix this', author: { username: 'amy' }, resolvable: true, resolved: false }] },
+            ]);
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Thready PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'gitlab:acme/thread-widgets#10');
+        await waitFor(() => (api.getPullRequestDetailsHtml() ?? '').includes('Fix this'));
+
+        await api.pullRequestDetailsProvider.resolveThreadForTest('d1');
+        assert.ok(resolveCalled, 'expected the resolve-discussion endpoint to be called');
       }),
     ));
 });

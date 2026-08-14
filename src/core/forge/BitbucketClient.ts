@@ -1,9 +1,12 @@
+import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ForgeRepoRef, PullRequestSummary, ReviewDecision } from './types';
+import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import { describeErrorBody } from './httpError';
 
 interface BitbucketUser {
   username?: string;
   nickname?: string;
+  uuid?: string;
 }
 
 interface BitbucketParticipant {
@@ -31,6 +34,25 @@ interface BitbucketPage<T> {
 
 interface BitbucketBuildStatus {
   state: 'SUCCESSFUL' | 'FAILED' | 'INPROGRESS' | 'STOPPED';
+}
+
+/** Bitbucket has no separate "thread" object — a top-level comment (no `parent`) *is* the conversation; replies carry a `parent`. `resolution` is present only once a top-level comment has been resolved. */
+interface BitbucketComment {
+  id: number;
+  content: { raw: string };
+  user: BitbucketUser | null;
+  parent?: { id: number };
+  resolution?: unknown;
+  /** Only present on a comment attached to a specific diff line — absent for a general PR comment. `to` is the line on the new side; `from` is the old side, used when the comment is on a removed line. */
+  inline?: { path: string; to?: number | null; from?: number | null };
+}
+
+interface BitbucketDiffstatEntry {
+  status: 'added' | 'removed' | 'modified' | 'renamed' | 'merge conflict';
+  lines_added: number;
+  lines_removed: number;
+  old: { path: string } | null;
+  new: { path: string } | null;
 }
 
 function loginOf(user: BitbucketUser | null | undefined): string {
@@ -79,6 +101,9 @@ function reviewersInfo(pr: BitbucketPullRequest): { requestedReviewers: string[]
  * GitLab's `has_conflicts` are. Documented gap, not a silent guess.
  */
 export class BitbucketClient implements ForgeClient {
+  /** Set by `getAuthenticatedLogin` (always called once before the closed-PR list, per `LaunchpadViewProvider`) — `username`/`nickname` can be hidden by privacy settings, but `uuid` is always present, so it's what scopes `fetchClosedList`'s author filter. */
+  private authenticatedUserUuid: string | undefined;
+
   constructor(
     private readonly apiBaseUrl: string,
     private readonly token: string,
@@ -88,15 +113,13 @@ export class BitbucketClient implements ForgeClient {
   async getAuthenticatedLogin(): Promise<string | null> {
     const res = await this.request('/user');
     const data = (await res.json()) as BitbucketUser;
+    this.authenticatedUserUuid = data.uuid;
     const login = loginOf(data);
     return login || null;
   }
 
   async listOpenPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
-    const listRes = await this.requestOrNull(`/repositories/${repo.identity}/pullrequests?state=OPEN`);
-    if (!listRes) {
-      return [];
-    }
+    const listRes = await this.request(`/repositories/${repo.identity}/pullrequests?state=OPEN`);
     const page = (await listRes.json()) as BitbucketPage<BitbucketPullRequest>;
     return Promise.all(page.values.map((pr) => this.enrich(repo, pr)));
   }
@@ -112,12 +135,16 @@ export class BitbucketClient implements ForgeClient {
   }
 
   private async fetchClosedList(repo: ForgeRepoRef, state: 'MERGED' | 'DECLINED', merged: boolean): Promise<PullRequestSummary[]> {
-    const res = await this.requestOrNull(`/repositories/${repo.identity}/pullrequests?state=${state}`);
-    if (!res) {
-      return [];
-    }
+    // Filtered server-side by author.uuid, not fetched-then-filtered client-side: this repo's
+    // most recently closed/declined PRs project-wide would otherwise push the current user's own
+    // older ones out of the `pagelen` window before `categorizeClosedPullRequests` ever gets to
+    // filter by author.
+    const authorFilter = this.authenticatedUserUuid
+      ? `&q=${encodeURIComponent(`author.uuid="${this.authenticatedUserUuid}"`)}`
+      : '';
+    const res = await this.request(`/repositories/${repo.identity}/pullrequests?state=${state}${authorFilter}&pagelen=10`);
     const page = (await res.json()) as BitbucketPage<BitbucketPullRequest>;
-    return page.values.slice(0, 10).map((pr) => ({
+    return page.values.map((pr) => ({
       repo,
       number: pr.id,
       title: pr.title,
@@ -137,6 +164,63 @@ export class BitbucketClient implements ForgeClient {
 
   async closePullRequest(repo: ForgeRepoRef, number: number): Promise<void> {
     await this.request(`/repositories/${repo.identity}/pullrequests/${number}/decline`, { method: 'POST' });
+  }
+
+  /** Bitbucket Cloud has no way to reopen a declined PR at all — not through this API, not even through its own web UI (a long-standing, still-open feature request on Bitbucket's own tracker) — so this throws a clear, actionable message rather than silently doing nothing or guessing at an endpoint that doesn't exist. */
+  async reopenPullRequest(_repo: ForgeRepoRef, _number: number): Promise<void> {
+    throw new Error('Bitbucket has no way to reopen a declined pull request — open a new pull request instead');
+  }
+
+  /** Bitbucket's `/diff` endpoint returns the whole PR's unified diff as plain text directly, already carrying real `diff --git a/x b/y` headers — no reconstruction needed, unlike GitLab. `/diffstat` supplies the per-file insertion/deletion counts the diff text itself doesn't summarize. */
+  async getPullRequestDiff(repo: ForgeRepoRef, number: number): Promise<PullRequestDiff> {
+    const [diffRes, statRes] = await Promise.all([
+      this.request(`/repositories/${repo.identity}/pullrequests/${number}/diff`),
+      this.request(`/repositories/${repo.identity}/pullrequests/${number}/diffstat`),
+    ]);
+    const diff = await diffRes.text();
+    const statPage = (await statRes.json()) as BitbucketPage<BitbucketDiffstatEntry>;
+    const files: FileChange[] = statPage.values.map((entry) => ({
+      path: entry.new?.path ?? entry.old?.path ?? '',
+      insertions: entry.lines_added,
+      deletions: entry.lines_removed,
+      binary: false,
+    }));
+    return { files, diff };
+  }
+
+  async submitReview(repo: ForgeRepoRef, number: number, decision: ReviewSubmission): Promise<void> {
+    const action = decision === 'approve' ? 'approve' : 'request-changes';
+    await this.request(`/repositories/${repo.identity}/pullrequests/${number}/${action}`, { method: 'POST' });
+  }
+
+  async addComment(repo: ForgeRepoRef, number: number, body: string): Promise<void> {
+    await this.request(`/repositories/${repo.identity}/pullrequests/${number}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content: { raw: body } }),
+    });
+  }
+
+  /** Only top-level comments (no `parent`) are their own conversation here — a reply isn't independently resolvable, only the thread it belongs to is. First page only, same as this client's other list calls (`fetchBuildStatuses`) — Bitbucket's own UI shows recent comments first too. */
+  async listConversationThreads(repo: ForgeRepoRef, number: number): Promise<ConversationThread[]> {
+    const res = await this.request(`/repositories/${repo.identity}/pullrequests/${number}/comments`);
+    const page = (await res.json()) as BitbucketPage<BitbucketComment>;
+    return page.values
+      .filter((c) => !c.parent)
+      .map((c) => {
+        const line = c.inline?.to ?? c.inline?.from ?? undefined;
+        return {
+          id: String(c.id),
+          body: c.content.raw,
+          authorLogin: loginOf(c.user),
+          resolved: c.resolution !== undefined && c.resolution !== null,
+          ...(c.inline?.path !== undefined ? { file: c.inline.path } : {}),
+          ...(line !== undefined ? { line } : {}),
+        };
+      });
+  }
+
+  async resolveConversationThread(repo: ForgeRepoRef, number: number, threadId: string): Promise<void> {
+    await this.request(`/repositories/${repo.identity}/pullrequests/${number}/comments/${threadId}/resolve`, { method: 'POST' });
   }
 
   private async enrich(repo: ForgeRepoRef, pr: BitbucketPullRequest): Promise<PullRequestSummary> {
@@ -167,7 +251,7 @@ export class BitbucketClient implements ForgeClient {
     return page.values ?? [];
   }
 
-  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it — every caller except `getAuthenticatedLogin` wraps this in `requestOrNull` to keep their existing soft-degrade behavior. */
+  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it. Only `fetchBuildStatuses` wraps this in `requestOrNull` — one PR's build-status data failing to load shouldn't take down the whole list the way a credential problem on the list call itself should be visible. */
   private async request(path: string, init?: RequestInit): Promise<Response> {
     const url = `${this.apiBaseUrl}${path}`;
     let res: Response;
@@ -183,7 +267,8 @@ export class BitbucketClient implements ForgeClient {
       throw new Error(`couldn't reach ${new URL(url).host}: ${err instanceof Error ? err.message : String(err)}`);
     }
     if (!res.ok) {
-      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}`);
+      const detail = describeErrorBody(await res.text());
+      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}${detail ? `: ${detail}` : ''}`);
     }
     return res;
   }

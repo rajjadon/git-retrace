@@ -7,11 +7,17 @@ import { categorizeClosedPullRequests, categorizePullRequests } from '../../core
 import { detectForgeHost, type DetectedForgeHost, type ForgeHostConfig } from '../../core/forge/hostDetection';
 import type { ForgeClient } from '../../core/forge/ForgeClient';
 import { resolveForgeRepoRef } from '../../core/forge/resolveRepoRef';
-import { pullRequestKey, type CategorizedPullRequest, type ForgeRepoRef, type PullRequestSummary } from '../../core/forge/types';
-import { clearForgeToken, resolveForgeToken } from '../../providers/forgeCredentials';
-import { renderLaunchpadHtml, type LaunchpadRepoError } from './render';
+import {
+  pullRequestKey,
+  type CategorizedPullRequest,
+  type ForgeRepoRef,
+  type PullRequestSummary,
+  type ReviewSubmission,
+} from '../../core/forge/types';
+import { azureDevOpsCredentialScheme, clearForgeToken, resolveForgeToken } from '../../providers/forgeCredentials';
+import { renderLaunchpadHtml, type LaunchpadRepoError, type LaunchpadRepoRow } from './render';
 import { renderPlaceholderHtml } from '../placeholder';
-import { CONFIG, MEDIA, VIEWS } from '../../constants';
+import { COMMANDS, CONFIG, MEDIA, SYNC_TERMINAL_NAME, VIEWS } from '../../constants';
 
 const SNOOZE_STATE_KEY = 'gitLore.launchpad.snoozed';
 
@@ -43,6 +49,10 @@ export class LaunchpadViewProvider implements vscode.Disposable {
   /** Rebuilt on every refresh — lets the "Close PR" action find the right host's client and the PR's `repo`/`number` from just the card's stable key, without re-parsing that key's opaque `identity`. */
   private clientsByRepoKey = new Map<string, ForgeClient>();
   private prsByKey = new Map<string, PullRequestSummary>();
+  /** Rebuilt on every refresh — lets Push/Pull find the right local working copy from a repo row's stable key. Populated regardless of forge auth outcome: push/pull is a local git operation that doesn't need a host credential at all. */
+  private repoRootByKey = new Map<string, string>();
+  /** Rebuilt on every refresh — the signed-in login per repo, so `submitReview` can catch "you're reviewing your own PR" before ever calling the host's API. Every host we support rejects a self-review one way or another; catching it here turns that into one clear message instead of a different opaque API error per host. */
+  private loginByRepoKey = new Map<string, string>();
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -91,11 +101,20 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     return this.panel?.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', name)).toString() ?? '';
   }
 
-  private async refresh(): Promise<void> {
+  /**
+   * `showLoadingPlaceholder` defaults to true for the initial open and an explicit "Refresh"
+   * click, where a brief loading state is expected. A refresh that follows a card action
+   * (snooze/close/approve) passes `false` — setting `webview.html` at all forces VS Code to fully
+   * reset the webview's DOM, so blanking it out first (as this always used to do) made every
+   * successful action visibly flash back to a loading screen before repainting the board.
+   */
+  private async refresh(showLoadingPlaceholder = true): Promise<void> {
     if (!this.panel) {
       return;
     }
-    this.panel.webview.html = shellHtml('<p>Loading Launchpad…</p>');
+    if (showLoadingPlaceholder) {
+      this.panel.webview.html = shellHtml('<p>Loading Launchpad…</p>');
+    }
     const styleUris = [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.launchpad)];
     const renderOpts = { nonce: createNonce(), cspSource: this.panel.webview.cspSource, styleUris };
 
@@ -113,15 +132,28 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     const errors: LaunchpadRepoError[] = [];
     this.clientsByRepoKey = new Map();
     this.prsByKey = new Map();
+    this.repoRootByKey = new Map();
+    this.loginByRepoKey = new Map();
+    const repoRows: LaunchpadRepoRow[] = [];
 
-    for (const { repo, detected } of repos) {
+    for (const { repo, detected, repoRoot } of repos) {
+      const repoKey = `${repo.host}:${repo.identity}`;
+      this.repoRootByKey.set(repoKey, repoRoot);
+      repoRows.push({ key: repoKey, label: repo.label });
       try {
         const token = await resolveForgeToken(this.context.secrets, detected);
         if (!token) {
           errors.push({ repo, message: 'Not signed in.' });
           continue;
         }
-        const client = buildForgeClient(detected.flavor, detected.apiBaseUrl, token, this.fetchImpl);
+        const client = buildForgeClient(
+          detected.flavor,
+          detected.apiBaseUrl,
+          repo.identity,
+          token,
+          azureDevOpsCredentialScheme(detected),
+          this.fetchImpl,
+        );
 
         let login: string | null;
         try {
@@ -143,14 +175,22 @@ export class LaunchpadViewProvider implements vscode.Disposable {
           continue;
         }
         this.clientsByRepoKey.set(`${repo.host}:${repo.identity}`, client);
+        this.loginByRepoKey.set(`${repo.host}:${repo.identity}`, login);
         const [prs, closedPrs] = await Promise.all([client.listOpenPullRequests(repo), client.listRecentlyClosedPullRequests(repo)]);
         const openCategorized = categorizePullRequests(prs, login, (pr) => this.isSnoozed(pr));
         const closedCategorized = categorizeClosedPullRequests(closedPrs, login);
         categorized.push(...openCategorized, ...closedCategorized);
-        for (const { pr } of openCategorized) {
+        // Merged/closed PRs need to be resolvable too — View diff (rendered on every card,
+        // terminal or not) and the new Reopen action both look a card's key up here.
+        for (const { pr } of [...openCategorized, ...closedCategorized]) {
           this.prsByKey.set(pullRequestKey(pr), pr);
         }
       } catch (err) {
+        // A PR list call failing (as opposed to succeeding with zero results) almost always means
+        // the credential itself is bad — expired, or scoped for identity but not this host's PR
+        // API (e.g. an Azure DevOps PAT missing "Code" scope). Clear it so the next refresh
+        // re-prompts instead of silently showing an empty board forever.
+        await clearForgeToken(this.context.secrets, detected);
         const message = err instanceof Error ? err.message : String(err);
         this.logger?.error(`Launchpad failed to load ${repo.label}`, err);
         errors.push({ repo, message });
@@ -160,7 +200,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     if (!this.panel) {
       return;
     }
-    this.panel.webview.html = renderLaunchpadHtml({ categorized, errors }, renderOpts);
+    this.panel.webview.html = renderLaunchpadHtml({ categorized, errors, repoRows }, renderOpts);
   }
 
   private readCustomHosts(): ForgeHostConfig[] {
@@ -177,9 +217,9 @@ export class LaunchpadViewProvider implements vscode.Disposable {
    */
   private async resolveWorkspaceRepos(
     customHosts: ForgeHostConfig[],
-  ): Promise<Array<{ repo: ForgeRepoRef; detected: DetectedForgeHost }>> {
+  ): Promise<Array<{ repo: ForgeRepoRef; detected: DetectedForgeHost; repoRoot: string }>> {
     const folders = vscode.workspace.workspaceFolders ?? [];
-    const results: Array<{ repo: ForgeRepoRef; detected: DetectedForgeHost }> = [];
+    const results: Array<{ repo: ForgeRepoRef; detected: DetectedForgeHost; repoRoot: string }> = [];
     const seen = new Set<string>();
 
     for (const folder of folders) {
@@ -206,7 +246,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
           continue;
         }
         seen.add(key);
-        results.push({ repo, detected });
+        results.push({ repo, detected, repoRoot });
       }
     }
     return results;
@@ -229,14 +269,20 @@ export class LaunchpadViewProvider implements vscode.Disposable {
   /** Test-only introspection seam — a webview button click can't be simulated in an integration test, so this drives the same toggle-then-refresh flow the snooze button's message handler does. */
   async toggleSnoozeForTest(key: string): Promise<void> {
     await this.toggleSnooze(key);
-    await this.refresh();
+    await this.refresh(false);
   }
 
   private async handleMessage(message: unknown): Promise<void> {
     if (typeof message !== 'object' || message === null) {
       return;
     }
-    const { type, url, key, title } = message as { type?: unknown; url?: unknown; key?: unknown; title?: unknown };
+    const { type, url, key, title, decision } = message as {
+      type?: unknown;
+      url?: unknown;
+      key?: unknown;
+      title?: unknown;
+      decision?: unknown;
+    };
 
     if (type === 'openPr' && typeof url === 'string') {
       await vscode.env.openExternal(vscode.Uri.parse(url));
@@ -244,16 +290,68 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     }
     if (type === 'toggleSnooze' && typeof key === 'string') {
       await this.toggleSnooze(key);
-      await this.refresh();
+      await this.refresh(false);
       return;
     }
     if (type === 'closePr' && typeof key === 'string') {
       await this.closePullRequest(key, typeof title === 'string' ? title : key);
       return;
     }
+    if (type === 'reopenPr' && typeof key === 'string') {
+      await this.reopenPullRequest(key, typeof title === 'string' ? title : key);
+      return;
+    }
+    if (type === 'submitReview' && typeof key === 'string' && (decision === 'approve' || decision === 'requestChanges')) {
+      await this.submitReview(key, typeof title === 'string' ? title : key, decision);
+      return;
+    }
+    if (type === 'showPullRequestDetails' && typeof key === 'string') {
+      await vscode.commands.executeCommand(COMMANDS.showPullRequest, key);
+      return;
+    }
+    if ((type === 'pull' || type === 'push') && typeof key === 'string') {
+      this.syncRepo(key, type);
+      return;
+    }
     if (type === 'refresh') {
       await this.refresh();
     }
+  }
+
+  /**
+   * Runs in a real terminal, not via simple-git — pull/push can need interactive auth (an SSH
+   * passphrase, a credential-manager prompt) or land a merge conflict on pull, and a terminal is
+   * where the user can actually see and handle either. Same pattern and shared terminal as Commit
+   * Graph's sync buttons (`CommitGraphViewProvider.ts`) — Launchpad doesn't track "did it finish"
+   * either; the user sees the result in the terminal and can refresh the board themselves.
+   */
+  private syncRepo(repoKey: string, direction: 'pull' | 'push'): void {
+    const repoRoot = this.repoRootByKey.get(repoKey);
+    if (!repoRoot) {
+      return;
+    }
+    const terminal =
+      vscode.window.terminals.find((t) => t.name === SYNC_TERMINAL_NAME) ?? vscode.window.createTerminal({ name: SYNC_TERMINAL_NAME, cwd: repoRoot });
+    terminal.show();
+    terminal.sendText(direction === 'pull' ? 'git pull' : 'git push');
+  }
+
+  /** Test-only introspection seam — a webview button click can't be simulated in an integration test, so this drives the same lookup-then-terminal flow the push/pull message handler does. */
+  syncRepoForTest(repoKey: string, direction: 'pull' | 'push'): void {
+    this.syncRepo(repoKey, direction);
+  }
+
+  /** Resolves a card's key back to its `PullRequestSummary` and the `ForgeClient` that owns it — used by the "Show Pull Request Details" command, same lookup `closePullRequest` already does. `undefined` if the board has since refreshed and this PR is no longer on it. */
+  resolvePullRequestForDetails(key: string): { pr: PullRequestSummary; client: ForgeClient } | undefined {
+    const pr = this.prsByKey.get(key);
+    if (!pr) {
+      return undefined;
+    }
+    const client = this.clientsByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    if (!client) {
+      return undefined;
+    }
+    return { pr, client };
   }
 
   private async closePullRequest(key: string, title: string): Promise<void> {
@@ -271,7 +369,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     }
     try {
       await client.closePullRequest(pr.repo, pr.number);
-      await this.refresh();
+      await this.refresh(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger?.error(`Launchpad failed to close PR ${key}`, err);
@@ -290,6 +388,94 @@ export class LaunchpadViewProvider implements vscode.Disposable {
       return;
     }
     await client.closePullRequest(pr.repo, pr.number);
-    await this.refresh();
+    await this.refresh(false);
+  }
+
+  private async reopenPullRequest(key: string, title: string): Promise<void> {
+    const pr = this.prsByKey.get(key);
+    if (!pr) {
+      return;
+    }
+    const confirmed = await vscode.window.showWarningMessage(`Reopen "${title}" on ${pr.repo.label}?`, { modal: true }, 'Reopen PR');
+    if (confirmed !== 'Reopen PR') {
+      return;
+    }
+    const client = this.clientsByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    if (!client) {
+      return;
+    }
+    try {
+      await client.reopenPullRequest(pr.repo, pr.number);
+      await this.refresh(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`Launchpad failed to reopen PR ${key}`, err);
+      void vscode.window.showErrorMessage(`GitLore: couldn't reopen the PR — ${message}`);
+    }
+  }
+
+  /** Test-only introspection seam — a webview button click (and the real confirmation modal it triggers) can't be driven from an integration test, so this calls the reopen flow directly, skipping only the modal. */
+  async reopenPullRequestForTest(key: string): Promise<void> {
+    const pr = this.prsByKey.get(key);
+    if (!pr) {
+      return;
+    }
+    const client = this.clientsByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    if (!client) {
+      return;
+    }
+    await client.reopenPullRequest(pr.repo, pr.number);
+    await this.refresh(false);
+  }
+
+  /** Every host we support rejects a review from the PR's own author one way or another — catching it here, before the API call, turns that into one clear message instead of a different opaque rejection per host (see the 422 GitHub returns for exactly this). */
+  private isOwnPullRequest(pr: PullRequestSummary): boolean {
+    const login = this.loginByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    return !!login && pr.authorLogin.toLowerCase() === login.toLowerCase();
+  }
+
+  private async submitReview(key: string, title: string, decision: ReviewSubmission): Promise<void> {
+    const pr = this.prsByKey.get(key);
+    if (!pr) {
+      return;
+    }
+    if (this.isOwnPullRequest(pr)) {
+      void vscode.window.showWarningMessage("GitLore: you can't review your own pull request.");
+      return;
+    }
+    const verb = decision === 'approve' ? 'Approve' : 'Request changes on';
+    const confirmed = await vscode.window.showWarningMessage(`${verb} "${title}" on ${pr.repo.label}?`, { modal: true }, verb);
+    if (confirmed !== verb) {
+      return;
+    }
+    const client = this.clientsByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    if (!client) {
+      return;
+    }
+    try {
+      await client.submitReview(pr.repo, pr.number, decision);
+      await this.refresh(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`Launchpad failed to submit a review for PR ${key}`, err);
+      void vscode.window.showErrorMessage(`GitLore: couldn't submit that review — ${message}`);
+    }
+  }
+
+  /** Test-only introspection seam — a webview button click (and the real confirmation modal it triggers) can't be driven from an integration test, so this calls the review flow directly, skipping only the modal. */
+  async submitReviewForTest(key: string, decision: ReviewSubmission): Promise<void> {
+    const pr = this.prsByKey.get(key);
+    if (!pr) {
+      return;
+    }
+    if (this.isOwnPullRequest(pr)) {
+      return;
+    }
+    const client = this.clientsByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    if (!client) {
+      return;
+    }
+    await client.submitReview(pr.repo, pr.number, decision);
+    await this.refresh(false);
   }
 }

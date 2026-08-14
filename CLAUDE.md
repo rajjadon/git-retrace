@@ -150,9 +150,15 @@ Extends existing hover/decoration/webview code already in the repo — no new vi
 - [x] **Interactive rebase editor** — custom editor webview replacing the `git rebase -i` todo file: drag-reorder, pick/squash/fixup/drop/reword/edit, Start/Abort (conflict list deferred — points at Source Control instead, per the design spec's scope cut)
 
 ### Phase 7 — Launchpad (optional, last)
-The only feature that reaches beyond the local repo — needs PR/CI status, not just `git`. Not GitHub-only: GitHub, GitLab, Bitbucket, and Azure DevOps are all supported (each via its own `core/forge/*Client.ts`, the only place that touches that host's API), plus self-hosted/custom instances via `gitLore.launchpad.customHosts`. GitHub uses VS Code's built-in authentication session (`vscode.authentication.getSession('github', …)`); every other host needs a Personal Access Token stored in `context.secrets`. Never a GitLore backend or proxied key, for any host. Off by default (`gitLore.launchpad.enabled`) — the only feature that calls out to a remote host at all.
+The only feature that reaches beyond the local repo — needs PR/CI status, not just `git`. Not GitHub-only: GitHub, GitLab, Bitbucket, and Azure DevOps are all supported (each via its own `core/forge/*Client.ts`, the only place that touches that host's API), plus self-hosted/custom instances via `gitLore.launchpad.customHosts`. GitHub and Azure DevOps Services (`dev.azure.com`) both use a VS Code built-in authentication session (`vscode.authentication.getSession('github', …)` / `getSession('microsoft', …)` — the latter also covers organizations whose Conditional Access policy blocks PAT/Basic auth outright, which no PAT scope can work around); every other host, including self-hosted Azure DevOps Server, needs a Personal Access Token stored in `context.secrets`. Never a GitLore backend or proxied key, for any host. Off by default (`gitLore.launchpad.enabled`) — the only feature that calls out to a remote host at all.
 - [x] **PR triage board** — Needs Review / Ready to Merge / Waiting / Blocked / Drafts / Snoozed / Merged / Closed, across the workspace's repos
 - [x] **Close PR** — a per-card action (with a confirm dialog) that closes an open PR/MR on its host without merging, via each `ForgeClient`'s own write endpoint
+- [x] **Reopen PR** — a per-card action on a Closed (not merged) card only — no host lets a merge be undone this way. Bitbucket Cloud has no reopen capability at all, on its API or its own web UI, so that call throws a clear platform-gap error instead of pretending it's possible
+- [x] **Per-repo push/pull** — a row per workspace repo with Pull/Push buttons, independent of forge auth (it's a local git operation). Reuses Commit Graph's terminal-based pattern (`git pull`/`git push` sent to a shared `GitLore: Git Sync` terminal, not simple-git) rather than a new `GitService` method, since push/pull can need interactive auth or land a merge conflict a terminal is where the user handles either
+- [x] **PR Details: view diff/commits** — a docked panel (next to Commit Details) showing a PR's changed files and diff, reusing `diffRender.ts`'s file-section renderer as-is. Azure DevOps has no diff-text endpoint at all — it shows the changed file list with `0`/`0` stats (documented gap, not a fabricated guess) rather than diffing raw content client-side
+- [x] **PR review actions: Approve / Request changes** — two card actions on every open Launchpad PR (confirm dialog, then `ForgeClient.submitReview`). GitLab has no formal "request changes" review state — that decision throws a clear platform-gap error there instead of faking one
+- [x] **PR review actions: add a comment** — a comment box in the Pull Request Details panel posts a top-level PR comment via `ForgeClient.addComment`, all four hosts REST
+- [x] **PR review actions: resolve conversation threads** — the Pull Request Details panel lists review conversations with a Resolve button per unresolved one. GitHub has no REST endpoint for this at all — `GitHubClient` gained a second request path (`graphql()`, alongside its normal REST `request()`) purely for the `reviewThreads` query and `resolveReviewThread` mutation; the other three hosts are plain REST
 
 Do not start a phase until the previous phase is tested and merged.
 
@@ -186,6 +192,7 @@ Do not start a phase until the previous phase is tested and merged.
 | `gitLore.stepLineHistory` | GitLore: Step Through This Line's History |
 | `gitLore.toggleFullFileBlame` | GitLore: Toggle Full-File Blame Heatmap |
 | `gitLore.openLaunchpad` | GitLore: Open Launchpad |
+| `gitLore.showPullRequest` | GitLore: Show Pull Request Details |
 
 ### Settings (all under `gitLore.*`)
 | Setting | Type | Default | Description |

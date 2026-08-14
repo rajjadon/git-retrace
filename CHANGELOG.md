@@ -6,6 +6,10 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-14
+
+First stable release — closing out Phase 7 (Launchpad) of the roadmap.
+
 ### Added
 
 - A one-time warning when GitLore can't find `git` on your `PATH`, with a button to open the git install page. Previously this failed silently everywhere instead of telling you why nothing was working.
@@ -13,12 +17,29 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **AI commit message generation** — a sparkle button in the Source Control panel's title bar (**GitLore: Generate Commit Message with AI**) writes a message straight into the commit box, generated from your staged diff. Same opt-in gate and infrastructure as the existing AI commit summaries: off by default via `gitLore.ai.enabled`, degrades to an inline hint with no model registered, and nothing is sent anywhere unless you've turned AI on.
 - **Launchpad: Merged and Closed columns** — two new columns show your own most-recently-completed PRs (merged separately from closed-without-merging), so the board also reflects what you've shipped, not just what's still open.
 - **Launchpad: Close PR** — a close action on every open-PR card (with a confirmation dialog first) closes it on its host without merging, across all four supported hosts, without leaving GitLore.
+- **Launchpad: sign in to Azure DevOps Services with your Microsoft account** — `dev.azure.com` now uses the same built-in VS Code authentication session as GitHub, instead of requiring a Personal Access Token. This also fixes organizations whose Conditional Access policy blocks PAT/Basic auth outright, where no PAT — regardless of scope — could ever work. Self-hosted Azure DevOps Server still uses a PAT.
+- **Launchpad: per-repo Push/Pull** — a row per workspace repo Launchpad recognizes, with Pull/Push buttons, so you don't have to switch to Source Control per repo while triaging. Works even for a repo whose forge sign-in failed or was skipped, since push/pull is a local git operation with no host credential involved.
+- **Pull Request Details** — a **View diff** button on every Launchpad card opens a docked panel (next to Commit Details) showing that PR's changed files and diff, without leaving the editor. Azure DevOps doesn't expose diff text through its API, so its panel shows the changed file list without inline diffs rather than a fabricated one.
+- **Launchpad: Approve / Request changes** — two new actions on every open PR card (with a confirmation dialog first), across all four supported hosts. GitLab has no "Request Changes" review state of its own, so that action tells you so instead of silently doing nothing.
+- **Pull Request Details: add a comment** — a comment box in the panel posts a top-level comment on the PR without leaving GitLore, across all four supported hosts.
+- **Pull Request Details: resolve conversation threads** — the panel now lists review conversations with a Resolve button per unresolved one, across all four supported hosts.
+- **Pull Request Details: a Refresh button** — picks up state that changed elsewhere (e.g. approving the same PR from a Launchpad card while its Details panel is open), across all four supported hosts.
+- **Pull Request Details: conversations show which file/line they're on** — a review comment attached to a specific diff line now shows a `path:line` label above it, so you can tell which part of the diff a reviewer was actually commenting on instead of only seeing the comment text.
+- **Launchpad: Reopen PR** — a Closed card (closed without merging) now offers a Reopen action, across GitHub, GitLab, and Azure DevOps. Bitbucket Cloud has no way to reopen a declined PR at all — not through its API, not even its own web UI — so that action tells you so instead of silently doing nothing.
 
 ### Fixed
 
 - Removed `gitLore.dateFormat`, a setting that was documented but never actually wired into any date display and had no effect.
 - Commit Graph, Branch Comparison, and File History could show stale data if a second load started (a fast ref-picker change, a quick tab switch, an auto-refresh) before an earlier one finished — whichever request happened to resolve last won, not whichever was requested last. Each now tracks its own request generation and discards results from a superseded load.
 - The blame hover now honors VS Code's cancellation token instead of ignoring it, so a hover that's no longer needed (the mouse already moved on) stops doing further git lookups instead of finishing work nobody will see.
+- Azure DevOps' identity check was routed through a legacy global endpoint that 401s for an organization-scoped PAT even though the same token works everywhere else — now routed through the org, the way Azure DevOps actually expects.
+- Launchpad's Merged/Closed columns could render empty despite you having older merged PRs: the closed-PR search fetched the repo's most-recently-closed PRs project/repo-wide, so a busy shared repo could push your own older ones out of the window before the "authored by you" filter ever saw them. GitLab and Bitbucket now filter server-side to your own PRs from the start (Azure DevOps already did); GitHub's closed-PR page size was raised to its maximum, since its REST API has no author filter and its Search API's much tighter rate limit isn't worth the trade for a multi-repo board.
+- A failed PR-list request on any host (bad credential, insufficient scope, etc.) was silently rendered as an empty board, indistinguishable from a repo with genuinely no PRs. Now surfaces as a visible error, and clears the bad credential so the next refresh re-prompts instead of repeating the same failure forever.
+- Merged and Closed cards' **View diff** button silently did nothing — Launchpad only kept open PRs resolvable by their card key, so a click on a terminal card's button had no PR to look up. Merged/closed PRs are now resolvable too.
+- Launchpad card buttons (view diff, snooze, approve, request changes, close) relied on the browser's native hover tooltip, which several of them weren't reliably showing. Every icon button in Launchpad now uses a tooltip GitLore renders and positions itself, so hovering any of them — including the snooze/unsnooze clock icon — reliably tells you what it does.
+- Azure DevOps' **View diff** panel could crash with "Cannot read properties of null" instead of loading, because some real change entries (folder-level entries, property-only changes) have no file path at all. Those entries are now skipped instead of assumed to always have one.
+- Approving or requesting changes on your own PR failed with a bare "422 Unprocessable Entity" and no explanation — every host rejects a self-review, so Launchpad now catches this before ever calling the API and tells you plainly instead. Any other review/close/comment failure now also surfaces the host's actual rejection reason (e.g. GitHub's real validation message), not just the HTTP status code.
+- Approving, requesting changes on, closing, or snoozing a Launchpad card made the whole board flash back to a "Loading Launchpad…" screen before repainting. These actions now refresh in place instead of blanking the board first.
 
 ## [0.4.0] - 2026-08-14
 

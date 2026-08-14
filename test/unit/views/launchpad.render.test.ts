@@ -51,7 +51,7 @@ test('renderLaunchpadHtml: an empty column says "Nothing here", not a blank spac
 test('renderLaunchpadHtml: a card shows repo label, author, and age', () => {
   const categorized: CategorizedPullRequest[] = [{ pr: pr({ repo: { host: 'gitlab', identity: 'acme/platform', label: 'acme/platform' } }), bucket: 'waiting' }];
   const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
-  assert.match(html, /class="pr-card-repo">acme\/platform</);
+  assert.match(html, /class="pr-card-repo" title="acme\/platform">acme\/platform</);
   assert.match(html, /raj/);
   assert.match(html, /3 days ago/);
 });
@@ -73,8 +73,8 @@ test('renderLaunchpadHtml: the snooze button posts toggleSnooze with the PR\'s s
 test('renderLaunchpadHtml: a snoozed-column card is labeled "Unsnooze" instead of "Snooze"', () => {
   const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'snoozed' }];
   const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
-  assert.match(html, /title="Unsnooze"/);
-  assert.ok(!html.includes('title="Snooze"'));
+  assert.match(html, /data-tooltip="Unsnooze PR"/);
+  assert.ok(!html.includes('data-tooltip="Snooze PR"'));
 });
 
 test('renderLaunchpadHtml: the close button posts closePr with the PR\'s stable key and title', () => {
@@ -110,6 +110,58 @@ test('renderLaunchpadHtml: merged/closed cards offer neither snooze nor close �
   // so check for the rendered element (`class="..."`), not the bare class name.
   assert.ok(!html.includes('class="pr-card-snooze'));
   assert.ok(!html.includes('class="pr-card-close'));
+});
+
+test('renderLaunchpadHtml: a closed (not merged) card offers Reopen', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr({ closedAt: '2024-02-02T10:00:00Z', merged: false }), bucket: 'closed' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /class="pr-card-reopen[^"]*" type="button" data-key="github:acme\/widgets#1" data-title="Add feature"/);
+});
+
+test('renderLaunchpadHtml: a merged card offers no Reopen — no host lets a merge be undone this way', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr({ closedAt: '2024-02-02T10:00:00Z', merged: true }), bucket: 'merged' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.ok(!html.includes('class="pr-card-reopen'));
+});
+
+test('renderLaunchpadHtml: the Reopen button posts reopenPr with the PR\'s stable key and title', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr({ closedAt: '2024-02-02T10:00:00Z', merged: false }), bucket: 'closed' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /type: 'reopenPr', key: btn\.dataset\.key, title: btn\.dataset\.title/);
+});
+
+test('renderLaunchpadHtml: the "View diff" button posts showPullRequestDetails with the PR\'s stable key', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'waiting' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /class="pr-card-details[^"]*" type="button" data-key="github:acme\/widgets#1"/);
+  assert.match(html, /type: 'showPullRequestDetails', key: btn\.dataset\.key/);
+});
+
+test('renderLaunchpadHtml: "View diff" is offered even on a merged/closed card, unlike snooze/close — viewing a diff applies either way', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr({ closedAt: '2024-02-02T10:00:00Z', merged: true }), bucket: 'merged' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /class="pr-card-details/);
+});
+
+test('renderLaunchpadHtml: the approve button posts submitReview with decision "approve"', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'waiting' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /class="pr-card-approve[^"]*" type="button" data-key="github:acme\/widgets#1" data-title="Add feature"/);
+  assert.match(html, /type: 'submitReview', key: btn\.dataset\.key, title: btn\.dataset\.title, decision: 'approve'/);
+});
+
+test('renderLaunchpadHtml: the request-changes button posts submitReview with decision "requestChanges"', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'waiting' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /class="pr-card-request-changes[^"]*" type="button" data-key="github:acme\/widgets#1" data-title="Add feature"/);
+  assert.match(html, /type: 'submitReview', key: btn\.dataset\.key, title: btn\.dataset\.title, decision: 'requestChanges'/);
+});
+
+test('renderLaunchpadHtml: merged/closed cards offer neither approve nor request-changes — nothing to review on a PR that is already done', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr({ closedAt: '2024-02-02T10:00:00Z', merged: true }), bucket: 'merged' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.ok(!html.includes('class="pr-card-approve'));
+  assert.ok(!html.includes('class="pr-card-request-changes'));
 });
 
 test('renderLaunchpadHtml: shows a per-repo error banner without failing the whole board', () => {
@@ -150,4 +202,38 @@ test('renderLaunchpadHtml: refresh button posts a refresh message', () => {
   const html = renderLaunchpadHtml({ categorized: [], errors: [], now }, opts);
   assert.match(html, /id="refresh"/);
   assert.match(html, /getElementById\('refresh'\)\.addEventListener\('click', \(\) => \{\s*vscode\.postMessage\(\{ type: 'refresh' \}\);/);
+});
+
+test('renderLaunchpadHtml: renders a push/pull row per repo, keyed to that repo', () => {
+  const html = renderLaunchpadHtml(
+    { categorized: [], errors: [], repoRows: [{ key: 'github:acme/widgets', label: 'acme/widgets' }], now },
+    opts,
+  );
+  assert.match(html, /class="repo-row" data-key="github:acme\/widgets"/);
+  assert.match(html, /class="repo-row-label">acme\/widgets</);
+  assert.match(html, /class="repo-pull icon-btn" type="button" data-key="github:acme\/widgets"/);
+  assert.match(html, /class="repo-push icon-btn" type="button" data-key="github:acme\/widgets"/);
+});
+
+test('renderLaunchpadHtml: no repo list rendered when there are no repos', () => {
+  const html = renderLaunchpadHtml({ categorized: [], errors: [], repoRows: [], now }, opts);
+  assert.ok(!html.includes('class="repo-list"'));
+});
+
+test('renderLaunchpadHtml: repo push/pull buttons post keyed push/pull messages', () => {
+  const html = renderLaunchpadHtml(
+    { categorized: [], errors: [], repoRows: [{ key: 'github:acme/widgets', label: 'acme/widgets' }], now },
+    opts,
+  );
+  assert.match(html, /querySelectorAll\('\.repo-pull'\)[\s\S]*?vscode\.postMessage\(\{ type: 'pull', key: btn\.dataset\.key \}\);/);
+  assert.match(html, /querySelectorAll\('\.repo-push'\)[\s\S]*?vscode\.postMessage\(\{ type: 'push', key: btn\.dataset\.key \}\);/);
+});
+
+test('renderLaunchpadHtml: escapes HTML special characters in repo row fields', () => {
+  const html = renderLaunchpadHtml(
+    { categorized: [], errors: [], repoRows: [{ key: '<script>alert(1)</script>', label: '<img src=x onerror=alert(1)>' }], now },
+    opts,
+  );
+  assert.ok(!html.includes('<script>alert(1)</script>'));
+  assert.ok(!html.includes('<img src=x onerror=alert(1)>'));
 });

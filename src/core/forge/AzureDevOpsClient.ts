@@ -1,6 +1,8 @@
+import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
 import { splitAzureDevOpsIdentity } from './azureDevOpsIdentity';
-import type { CheckStatus, ForgeRepoRef, PullRequestSummary, ReviewDecision } from './types';
+import { describeErrorBody } from './httpError';
+import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
 
 interface AzureDevOpsIdentityRef {
   uniqueName?: string;
@@ -33,9 +35,43 @@ interface AzureDevOpsStatus {
 }
 
 interface AzureDevOpsProfile {
+  id?: string;
   emailAddress?: string;
   displayName?: string;
 }
+
+interface AzureDevOpsIteration {
+  id: number;
+}
+
+interface AzureDevOpsChangeEntry {
+  /** Absent for some entries (folder-level changes, certain property-only changes) — not every entry represents an actual file. */
+  item?: { path?: string };
+}
+
+interface AzureDevOpsIterationChanges {
+  changeEntries: AzureDevOpsChangeEntry[];
+}
+
+type AzureDevOpsThreadStatus = 'unknown' | 'active' | 'fixed' | 'wontFix' | 'closed' | 'byDesign' | 'pending';
+
+interface AzureDevOpsThreadComment {
+  content: string;
+  author: AzureDevOpsIdentityRef;
+  /** Vote-change notifications and similar auto-generated entries come through as their own threads with `commentType: 'system'` — not a genuine review conversation. */
+  commentType?: 'text' | 'codeChange' | 'system' | 'unknown';
+}
+
+interface AzureDevOpsThread {
+  id: number;
+  status?: AzureDevOpsThreadStatus;
+  comments: AzureDevOpsThreadComment[];
+  isDeleted?: boolean;
+  /** Only present on a thread attached to a specific diff line — absent (null) for a general PR thread. `rightFileStart` is the new side; `leftFileStart` is the old side, used when the thread is on a removed line. */
+  threadContext?: { filePath?: string; rightFileStart?: { line?: number }; leftFileStart?: { line?: number } } | null;
+}
+
+const UNRESOLVED_STATUSES = new Set<AzureDevOpsThreadStatus | undefined>(['active', 'pending', 'unknown', undefined]);
 
 function loginOf(ref: AzureDevOpsIdentityRef): string {
   return ref.uniqueName ?? ref.displayName ?? '';
@@ -76,20 +112,46 @@ function reviewersInfo(reviewers: AzureDevOpsReviewer[]): { requestedReviewers: 
  * whose remote uses the legacy `<org>.visualstudio.com` hostname (that hostname still resolves,
  * but `dev.azure.com` is the canonical modern one for every org).
  *
- * The identity ("who am I") check lives on a *different* host (`app.vssps.visualstudio.com`) than
- * the main API (`dev.azure.com`) — a genuine, well-documented Azure DevOps quirk, not a mistake
- * here. PR authors/reviewers are matched by `uniqueName` (their email/UPN), the same value the
- * profile API returns as `emailAddress`.
+ * The identity ("who am I") check lives on a *different* host (`vssps.dev.azure.com`) than the
+ * main API (`dev.azure.com`) — a genuine, well-documented Azure DevOps quirk, not a mistake here.
+ * That profile check must be routed through the org (`vssps.dev.azure.com/{organization}/...`),
+ * not the legacy global `app.vssps.visualstudio.com/...` host: a PAT scoped to one organization
+ * (the default Azure DevOps offers when creating one) 401s against the global host even though
+ * the exact same token works fine against every other endpoint here. PR authors/reviewers are
+ * matched by `uniqueName` (their email/UPN), the same value the profile API returns as
+ * `emailAddress`. That same profile response's `id` (a GUID) is cached and reused to scope the
+ * closed-PR search server-side via `searchCriteria.creatorId`, so the current user's own older
+ * merged/abandoned PRs aren't silently dropped by the `$top=10` window over a busy shared repo's
+ * most-recently-closed PRs before `categorizeClosedPullRequests` ever filters by author.
+ *
+ * `credentialScheme` exists because `dev.azure.com` accepts two unrelated credential shapes: a
+ * PAT (HTTP Basic) from `forgeCredentials.ts`'s manual-entry flow, or an AAD OAuth access token
+ * (HTTP Bearer) from VS Code's built-in Microsoft session — the latter is the only thing that
+ * works for organizations whose Conditional Access policy blocks PAT/Basic auth outright, no
+ * matter how broad the PAT's own scope is.
  */
+/** How `token` should be presented: a PAT (HTTP Basic, empty username) or an AAD OAuth access token from `vscode.authentication`'s built-in Microsoft session (HTTP Bearer — Basic doesn't apply to a JWT). */
+export type AzureDevOpsCredentialScheme = 'pat' | 'oauth';
+
 export class AzureDevOpsClient implements ForgeClient {
+  /** Set by `getAuthenticatedLogin` (always called once before the closed-PR list, per `LaunchpadViewProvider`) — the GUID `searchCriteria.creatorId` needs, which the shared `ForgeClient` interface has no other way to hand `listRecentlyClosedPullRequests`. */
+  private authenticatedUserId: string | undefined;
+
   constructor(
+    private readonly identity: string,
     private readonly token: string,
+    private readonly credentialScheme: AzureDevOpsCredentialScheme = 'pat',
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
   async getAuthenticatedLogin(): Promise<string | null> {
-    const res = await this.request('https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1');
+    const id = splitAzureDevOpsIdentity(this.identity);
+    const url = id
+      ? `https://vssps.dev.azure.com/${id.organization}/_apis/profile/profiles/me?api-version=7.1`
+      : 'https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1';
+    const res = await this.request(url);
     const data = (await res.json()) as AzureDevOpsProfile;
+    this.authenticatedUserId = data.id;
     return data.emailAddress ?? data.displayName ?? null;
   }
 
@@ -99,10 +161,10 @@ export class AzureDevOpsClient implements ForgeClient {
       return [];
     }
     const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
-    const listRes = await this.requestOrNull(`${base}/pullrequests?searchCriteria.status=active&api-version=7.1`);
-    if (!listRes) {
-      return [];
-    }
+    // Throws rather than soft-degrading to [] — a credential that's valid for the vssps profile
+    // check but lacks "Code" scope for this endpoint (a real, easy-to-hit PAT-setup mistake) would
+    // otherwise render as an indistinguishable-from-genuinely-empty board with zero signal.
+    const listRes = await this.request(`${base}/pullrequests?searchCriteria.status=active&api-version=7.1`);
     const data = (await listRes.json()) as AzureDevOpsListResponse<AzureDevOpsPullRequest>;
     return Promise.all(data.value.map((pr) => this.enrich(repo, id, base, pr)));
   }
@@ -129,10 +191,13 @@ export class AzureDevOpsClient implements ForgeClient {
     status: 'completed' | 'abandoned',
     merged: boolean,
   ): Promise<PullRequestSummary[]> {
-    const res = await this.requestOrNull(`${base}/pullrequests?searchCriteria.status=${status}&$top=10&api-version=7.1`);
-    if (!res) {
-      return [];
-    }
+    // Filtered server-side by creatorId, not fetched-then-filtered client-side: this repo's most
+    // recently closed PRs project-wide would otherwise push the current user's own older ones
+    // out of the $top window before `categorizeClosedPullRequests` ever gets to filter by author.
+    const creatorFilter = this.authenticatedUserId ? `&searchCriteria.creatorId=${this.authenticatedUserId}` : '';
+    // Throws rather than soft-degrading to [] — same reasoning as the open-PR list: a credential
+    // problem here should never look identical to "you genuinely have no closed PRs".
+    const res = await this.request(`${base}/pullrequests?searchCriteria.status=${status}${creatorFilter}&$top=10&api-version=7.1`);
     const data = (await res.json()) as AzureDevOpsListResponse<AzureDevOpsPullRequest>;
     return data.value.map((pr) => ({
       repo,
@@ -161,6 +226,123 @@ export class AzureDevOpsClient implements ForgeClient {
     await this.request(`${base}/pullrequests/${number}?api-version=7.1`, {
       method: 'PATCH',
       body: JSON.stringify({ status: 'abandoned' }),
+    });
+  }
+
+  async reopenPullRequest(repo: ForgeRepoRef, number: number): Promise<void> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      throw new Error('could not resolve this repo\'s Azure DevOps organization/project/repository identity');
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    await this.request(`${base}/pullrequests/${number}?api-version=7.1`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'active' }),
+    });
+  }
+
+  /**
+   * Azure DevOps has no endpoint that returns diff text — only structured changed-item lists
+   * (`iterations/{n}/changes`), which would need diffing raw file content client-side to produce
+   * hunks, and this codebase doesn't bundle a diff library for that (nor should it, for one host's
+   * gap). Returns the changed file paths with `insertions`/`deletions` at `0` (unknown, not "no
+   * changes" — see `PullRequestDiff`) and no diff text; `renderFileSections` already shows "No
+   * textual diff for this file" per file when hunks are empty, so this degrades honestly rather
+   * than fabricating numbers.
+   */
+  async getPullRequestDiff(repo: ForgeRepoRef, number: number): Promise<PullRequestDiff> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      return { files: [], diff: '' };
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    const iterationsRes = await this.request(`${base}/pullrequests/${number}/iterations?api-version=7.1`);
+    const iterations = (await iterationsRes.json()) as AzureDevOpsListResponse<AzureDevOpsIteration>;
+    const latest = iterations.value.at(-1);
+    if (!latest) {
+      return { files: [], diff: '' };
+    }
+    const changesRes = await this.request(`${base}/pullrequests/${number}/iterations/${latest.id}/changes?api-version=7.1`);
+    const changes = (await changesRes.json()) as AzureDevOpsIterationChanges;
+    const files: FileChange[] = changes.changeEntries
+      .map((entry) => entry.item?.path)
+      // Some change entries (folder-level entries, certain property-only changes) carry no `item.path`
+      // at all — real API responses, not a shape the docs guarantee never happens. Skip rather than crash.
+      .filter((path): path is string => !!path)
+      .map((path) => ({
+        // Azure DevOps paths are repo-root-absolute ("/src/foo.ts") — every other host's paths have
+        // no leading slash, so this strips it for a consistent look in the shared file-list renderer.
+        path: path.replace(/^\//, ''),
+        insertions: 0,
+        deletions: 0,
+        binary: false,
+      }));
+    return { files, diff: '' };
+  }
+
+  /** The reviewer being voted on is the authenticated user themselves — reuses the same `authenticatedUserId` `getAuthenticatedLogin` already caches for `searchCriteria.creatorId` (`AzureDevOpsClient.ts` constructor field), rather than a second profile lookup. */
+  async submitReview(repo: ForgeRepoRef, number: number, decision: ReviewSubmission): Promise<void> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      throw new Error('could not resolve this repo\'s Azure DevOps organization/project/repository identity');
+    }
+    if (!this.authenticatedUserId) {
+      throw new Error('not signed in yet — refresh Launchpad and try again');
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    await this.request(`${base}/pullrequests/${number}/reviewers/${this.authenticatedUserId}?api-version=7.1`, {
+      method: 'PUT',
+      body: JSON.stringify({ vote: decision === 'approve' ? 10 : -10 }),
+    });
+  }
+
+  /** Azure DevOps models a standalone PR comment as a new single-comment thread — `parentCommentId: 0` and `commentType: 1` ("text") match the documented shape exactly, confirmed against the REST docs' own "Comment on the pull request" example. `status: 1` ("active") is required even for a thread with no file/line context. */
+  async addComment(repo: ForgeRepoRef, number: number, body: string): Promise<void> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      throw new Error('could not resolve this repo\'s Azure DevOps organization/project/repository identity');
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    await this.request(`${base}/pullrequests/${number}/threads?api-version=7.1`, {
+      method: 'POST',
+      body: JSON.stringify({ comments: [{ parentCommentId: 0, content: body, commentType: 1 }], status: 1 }),
+    });
+  }
+
+  /** Excludes deleted threads and system-generated ones (vote-change notifications, etc. — `commentType: 'system'`) so this only ever lists genuine review conversations. */
+  async listConversationThreads(repo: ForgeRepoRef, number: number): Promise<ConversationThread[]> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      return [];
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    const res = await this.request(`${base}/pullrequests/${number}/threads?api-version=7.1`);
+    const data = (await res.json()) as AzureDevOpsListResponse<AzureDevOpsThread>;
+    return data.value
+      .filter((t) => !t.isDeleted && t.comments[0]?.commentType !== 'system')
+      .map((t) => {
+        const line = t.threadContext?.rightFileStart?.line ?? t.threadContext?.leftFileStart?.line ?? undefined;
+        return {
+          id: String(t.id),
+          body: t.comments[0]?.content ?? '',
+          authorLogin: t.comments[0] ? loginOf(t.comments[0].author) : '',
+          resolved: !UNRESOLVED_STATUSES.has(t.status),
+          ...(t.threadContext?.filePath !== undefined ? { file: t.threadContext.filePath } : {}),
+          ...(line !== undefined ? { line } : {}),
+        };
+      });
+  }
+
+  /** `"fixed"` is sent as its enum name, not a numeric ordinal — Azure DevOps' own docs and examples for this endpoint use the string form on write, matching what it always returns on read. */
+  async resolveConversationThread(repo: ForgeRepoRef, number: number, threadId: string): Promise<void> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      throw new Error('could not resolve this repo\'s Azure DevOps organization/project/repository identity');
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    await this.request(`${base}/pullrequests/${number}/threads/${threadId}?api-version=7.1`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'fixed' }),
     });
   }
 
@@ -197,17 +379,20 @@ export class AzureDevOpsClient implements ForgeClient {
     return data.value ?? [];
   }
 
-  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it — every caller except `getAuthenticatedLogin` wraps this in `requestOrNull` to keep their existing soft-degrade behavior. */
+  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it. Only `fetchStatuses` wraps this in `requestOrNull` — a single PR's check-status enrichment failing shouldn't take down the whole list the way a credential problem on the list call itself should be visible. */
   private async request(url: string, init?: RequestInit): Promise<Response> {
-    // Azure DevOps PATs authenticate via HTTP Basic with an empty username — Bearer support for
-    // raw PATs isn't consistently documented the way it is for GitHub/GitLab/Bitbucket tokens.
-    const basic = Buffer.from(`:${this.token}`).toString('base64');
+    // A PAT authenticates via HTTP Basic with an empty username — Bearer support for raw PATs
+    // isn't consistently documented the way it is for GitHub/GitLab/Bitbucket tokens. An AAD OAuth
+    // access token (from the built-in Microsoft session) is the opposite: it's a JWT, so it only
+    // ever goes as a Bearer token — Basic doesn't apply to it at all.
+    const authHeader =
+      this.credentialScheme === 'oauth' ? `Bearer ${this.token}` : `Basic ${Buffer.from(`:${this.token}`).toString('base64')}`;
     let res: Response;
     try {
       res = await this.fetchImpl(url, {
         ...init,
         headers: {
-          Authorization: `Basic ${basic}`,
+          Authorization: authHeader,
           ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
         },
       });
@@ -215,7 +400,8 @@ export class AzureDevOpsClient implements ForgeClient {
       throw new Error(`couldn't reach ${new URL(url).host}: ${err instanceof Error ? err.message : String(err)}`);
     }
     if (!res.ok) {
-      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}`);
+      const detail = describeErrorBody(await res.text());
+      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}${detail ? `: ${detail}` : ''}`);
     }
     return res;
   }

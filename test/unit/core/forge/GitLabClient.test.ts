@@ -7,7 +7,13 @@ const REPO: ForgeRepoRef = { host: 'gitlab', identity: 'acme/widgets', label: 'a
 const BASE = 'https://gitlab.com/api/v4';
 
 function jsonResponse(body: unknown, ok = true): Response {
-  return { ok, status: ok ? 200 : 401, statusText: ok ? 'OK' : 'Unauthorized', json: async () => body } as unknown as Response;
+  return {
+    ok,
+    status: ok ? 200 : 401,
+    statusText: ok ? 'OK' : 'Unauthorized',
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  } as unknown as Response;
 }
 
 function fakeFetch(routes: Record<string, unknown>): typeof fetch {
@@ -202,9 +208,9 @@ test('listOpenPullRequests: no pipeline at all -> checkStatus "none"', async () 
   assert.equal(result[0]?.checkStatus, 'none');
 });
 
-test('listOpenPullRequests: a failed list request returns an empty array, not a throw', async () => {
+test('listOpenPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {
   const client = new GitLabClient(BASE, 'tok', (async () => jsonResponse([], false)) as unknown as typeof fetch);
-  assert.deepEqual(await client.listOpenPullRequests(REPO), []);
+  await assert.rejects(() => client.listOpenPullRequests(REPO), /401 Unauthorized from gitlab\.com/);
 });
 
 test('listRecentlyClosedPullRequests: combines merged and closed lists, tagging each with the right merged flag', async () => {
@@ -229,9 +235,39 @@ test('listRecentlyClosedPullRequests: combines merged and closed lists, tagging 
   assert.equal(abandoned?.merged, false);
 });
 
-test('listRecentlyClosedPullRequests: a failed list request degrades to an empty array for that state', async () => {
+test('listRecentlyClosedPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {
   const client = new GitLabClient(BASE, 'tok', (async () => jsonResponse([], false)) as unknown as typeof fetch);
-  assert.deepEqual(await client.listRecentlyClosedPullRequests(REPO), []);
+  await assert.rejects(() => client.listRecentlyClosedPullRequests(REPO), /401 Unauthorized from gitlab\.com/);
+});
+
+test('listRecentlyClosedPullRequests: scopes the search server-side to the authenticated user via author_username, once known', async () => {
+  const requestedUrls: string[] = [];
+  const client = new GitLabClient(BASE, 'tok', (async (url: string) => {
+    requestedUrls.push(url);
+    if (url.endsWith('/user')) {
+      return jsonResponse({ username: 'raj' });
+    }
+    return jsonResponse([]);
+  }) as unknown as typeof fetch);
+
+  await client.getAuthenticatedLogin();
+  await client.listRecentlyClosedPullRequests(REPO);
+
+  const listUrls = requestedUrls.filter((url) => url.includes('merge_requests?state='));
+  assert.equal(listUrls.length, 2);
+  assert.ok(listUrls.every((url) => url.includes('author_username=raj')), listUrls.join('\n'));
+});
+
+test('listRecentlyClosedPullRequests: omits author_username when the authenticated user is not yet known', async () => {
+  const requestedUrls: string[] = [];
+  const client = new GitLabClient(BASE, 'tok', (async (url: string) => {
+    requestedUrls.push(url);
+    return jsonResponse([]);
+  }) as unknown as typeof fetch);
+
+  await client.listRecentlyClosedPullRequests(REPO);
+
+  assert.ok(requestedUrls.every((url) => !url.includes('author_username')), requestedUrls.join('\n'));
 });
 
 test('closePullRequest: PUTs state_event=close to the merge request endpoint', async () => {
@@ -246,4 +282,130 @@ test('closePullRequest: PUTs state_event=close to the merge request endpoint', a
   assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests/22');
   assert.equal(capturedInit?.method, 'PUT');
   assert.equal(capturedInit?.body, JSON.stringify({ state_event: 'close' }));
+});
+
+test('reopenPullRequest: PUTs state_event=reopen to the merge request endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.reopenPullRequest(REPO, 22);
+  assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests/22');
+  assert.equal(capturedInit?.method, 'PUT');
+  assert.equal(capturedInit?.body, JSON.stringify({ state_event: 'reopen' }));
+});
+
+test('getPullRequestDiff: synthesizes a diff --git header per file so the shared renderer can split it, and counts +/- lines itself', async () => {
+  const client = new GitLabClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/merge_requests/23/diffs?per_page=100': [
+        { old_path: 'src/a.ts', new_path: 'src/a.ts', diff: '@@ -1,2 +1,3 @@\n-old\n+new1\n+new2' },
+        { old_path: 'bin.dat', new_path: 'bin.dat', diff: '' },
+      ],
+    }),
+  );
+  const result = await client.getPullRequestDiff(REPO, 23);
+  assert.match(result.diff, /diff --git a\/src\/a\.ts b\/src\/a\.ts\n@@ -1,2 \+1,3 @@/);
+  assert.deepEqual(result.files, [
+    { path: 'src/a.ts', insertions: 2, deletions: 1, binary: false },
+    { path: 'bin.dat', insertions: 0, deletions: 0, binary: false },
+  ]);
+  // No diff fragment for the empty-diff file — nothing to synthesize a header for.
+  assert.ok(!result.diff.includes('bin.dat'));
+});
+
+test('submitReview: POSTs to the approve endpoint for an approve decision', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.submitReview(REPO, 24, 'approve');
+  assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests/24/approve');
+  assert.equal(capturedInit?.method, 'POST');
+});
+
+test('submitReview: a requestChanges decision throws a clear platform-gap error, not a silent no-op — GitLab has no such review state', async () => {
+  const client = new GitLabClient(BASE, 'tok', (async () => {
+    throw new Error('should never make a request for this decision');
+  }) as unknown as typeof fetch);
+  await assert.rejects(() => client.submitReview(REPO, 25, 'requestChanges'), /no "Request Changes" review state/);
+});
+
+test('addComment: POSTs to the notes endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.addComment(REPO, 26, 'Looks good');
+  assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests/26/notes');
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(capturedInit?.body, JSON.stringify({ body: 'Looks good' }));
+});
+
+test('listConversationThreads: only resolvable discussions are returned — a plain top-level comment is skipped', async () => {
+  const client = new GitLabClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/merge_requests/27/discussions?per_page=100': [
+        { id: 'd1', notes: [{ body: 'Fix this', author: { username: 'amy' }, resolvable: true, resolved: false }] },
+        { id: 'd2', notes: [{ body: 'Already fine', author: { username: 'raj' }, resolvable: true, resolved: true }] },
+        { id: 'd3', notes: [{ body: 'Just a comment', author: { username: 'raj' }, resolvable: false, resolved: false }] },
+      ],
+    }),
+  );
+  const result = await client.listConversationThreads(REPO, 27);
+  assert.deepEqual(result, [
+    { id: 'd1', body: 'Fix this', authorLogin: 'amy', resolved: false },
+    { id: 'd2', body: 'Already fine', authorLogin: 'raj', resolved: true },
+  ]);
+});
+
+test('listConversationThreads: surfaces the file/line a diff note is anchored to', async () => {
+  const client = new GitLabClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/merge_requests/27/discussions?per_page=100': [
+        {
+          id: 'd1',
+          notes: [
+            {
+              body: 'Fix this',
+              author: { username: 'amy' },
+              resolvable: true,
+              resolved: false,
+              position: { new_path: 'src/a.ts', old_path: 'src/a.ts', new_line: 42, old_line: null },
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  const result = await client.listConversationThreads(REPO, 27);
+  assert.deepEqual(result, [{ id: 'd1', body: 'Fix this', authorLogin: 'amy', resolved: false, file: 'src/a.ts', line: 42 }]);
+});
+
+test('resolveConversationThread: PUTs resolved=true to the discussion endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.resolveConversationThread(REPO, 27, 'd1');
+  assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests/27/discussions/d1?resolved=true');
+  assert.equal(capturedInit?.method, 'PUT');
 });
