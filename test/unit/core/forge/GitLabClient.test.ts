@@ -298,3 +298,69 @@ test('getPullRequestDiff: synthesizes a diff --git header per file so the shared
   // No diff fragment for the empty-diff file — nothing to synthesize a header for.
   assert.ok(!result.diff.includes('bin.dat'));
 });
+
+test('submitReview: POSTs to the approve endpoint for an approve decision', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.submitReview(REPO, 24, 'approve');
+  assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests/24/approve');
+  assert.equal(capturedInit?.method, 'POST');
+});
+
+test('submitReview: a requestChanges decision throws a clear platform-gap error, not a silent no-op — GitLab has no such review state', async () => {
+  const client = new GitLabClient(BASE, 'tok', (async () => {
+    throw new Error('should never make a request for this decision');
+  }) as unknown as typeof fetch);
+  await assert.rejects(() => client.submitReview(REPO, 25, 'requestChanges'), /no "Request Changes" review state/);
+});
+
+test('addComment: POSTs to the notes endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.addComment(REPO, 26, 'Looks good');
+  assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests/26/notes');
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(capturedInit?.body, JSON.stringify({ body: 'Looks good' }));
+});
+
+test('listConversationThreads: only resolvable discussions are returned — a plain top-level comment is skipped', async () => {
+  const client = new GitLabClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/merge_requests/27/discussions?per_page=100': [
+        { id: 'd1', notes: [{ body: 'Fix this', author: { username: 'amy' }, resolvable: true, resolved: false }] },
+        { id: 'd2', notes: [{ body: 'Already fine', author: { username: 'raj' }, resolvable: true, resolved: true }] },
+        { id: 'd3', notes: [{ body: 'Just a comment', author: { username: 'raj' }, resolvable: false, resolved: false }] },
+      ],
+    }),
+  );
+  const result = await client.listConversationThreads(REPO, 27);
+  assert.deepEqual(result, [
+    { id: 'd1', body: 'Fix this', authorLogin: 'amy', resolved: false },
+    { id: 'd2', body: 'Already fine', authorLogin: 'raj', resolved: true },
+  ]);
+});
+
+test('resolveConversationThread: PUTs resolved=true to the discussion endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.resolveConversationThread(REPO, 27, 'd1');
+  assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests/27/discussions/d1?resolved=true');
+  assert.equal(capturedInit?.method, 'PUT');
+});

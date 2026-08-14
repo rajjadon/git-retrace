@@ -16,6 +16,9 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **Launchpad: sign in to Azure DevOps Services with your Microsoft account** — `dev.azure.com` now uses the same built-in VS Code authentication session as GitHub, instead of requiring a Personal Access Token. This also fixes organizations whose Conditional Access policy blocks PAT/Basic auth outright, where no PAT — regardless of scope — could ever work. Self-hosted Azure DevOps Server still uses a PAT.
 - **Launchpad: per-repo Push/Pull** — a row per workspace repo Launchpad recognizes, with Pull/Push buttons, so you don't have to switch to Source Control per repo while triaging. Works even for a repo whose forge sign-in failed or was skipped, since push/pull is a local git operation with no host credential involved.
 - **Pull Request Details** — a **View diff** button on every Launchpad card opens a docked panel (next to Commit Details) showing that PR's changed files and diff, without leaving the editor. Azure DevOps doesn't expose diff text through its API, so its panel shows the changed file list without inline diffs rather than a fabricated one.
+- **Launchpad: Approve / Request changes** — two new actions on every open PR card (with a confirmation dialog first), across all four supported hosts. GitLab has no "Request Changes" review state of its own, so that action tells you so instead of silently doing nothing.
+- **Pull Request Details: add a comment** — a comment box in the panel posts a top-level comment on the PR without leaving GitLore, across all four supported hosts.
+- **Pull Request Details: resolve conversation threads** — the panel now lists review conversations with a Resolve button per unresolved one, across all four supported hosts.
 
 ### Fixed
 

@@ -333,7 +333,7 @@ test('getPullRequestDiff: fetches raw diff text via the diff media type, and sta
     (async (url: string, init?: RequestInit) => {
       if (url.endsWith('/pulls/14/files?per_page=100')) {
         return jsonResponse([
-          { filename: 'src/a.ts', additions: 3, deletions: 1 },
+          { filename: 'src/a.ts', additions: 3, deletions: 1, patch: '@@ -1 +1,3 @@\n+x' },
           { filename: 'image.png', additions: 0, deletions: 0 },
         ]);
       }
@@ -351,4 +351,100 @@ test('getPullRequestDiff: fetches raw diff text via the diff media type, and sta
     { path: 'src/a.ts', insertions: 3, deletions: 1, binary: false },
     { path: 'image.png', insertions: 0, deletions: 0, binary: true },
   ]);
+});
+
+test('submitReview: POSTs event=APPROVE for an approve decision', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitHubClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.submitReview(REPO, 15, 'approve');
+  assert.equal(capturedUrl, 'https://api.github.com/repos/acme/widgets/pulls/15/reviews');
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(capturedInit?.body, JSON.stringify({ event: 'APPROVE' }));
+});
+
+test('submitReview: POSTs event=REQUEST_CHANGES for a requestChanges decision', async () => {
+  let capturedInit: RequestInit | undefined;
+  const client = new GitHubClient(BASE, 'tok', (async (_url: string, init?: RequestInit) => {
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.submitReview(REPO, 16, 'requestChanges');
+  assert.equal(capturedInit?.body, JSON.stringify({ event: 'REQUEST_CHANGES' }));
+});
+
+test('addComment: POSTs to the issue-comments endpoint (PRs are issues for comments on GitHub)', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitHubClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.addComment(REPO, 17, 'Looks good');
+  assert.equal(capturedUrl, 'https://api.github.com/repos/acme/widgets/issues/17/comments');
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(capturedInit?.body, JSON.stringify({ body: 'Looks good' }));
+});
+
+test('listConversationThreads: POSTs a GraphQL query to /graphql (not REST) and normalizes the reviewThreads response', async () => {
+  let capturedUrl: string | undefined;
+  let capturedBody: { query: string; variables: Record<string, unknown> } | undefined;
+  const client = new GitHubClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedBody = JSON.parse(String(init?.body));
+    return jsonResponse({
+      data: {
+        repository: {
+          pullRequest: {
+            reviewThreads: {
+              nodes: [
+                { id: 'PRRT_1', isResolved: false, comments: { nodes: [{ body: 'Fix this', author: { login: 'amy' } }] } },
+                { id: 'PRRT_2', isResolved: true, comments: { nodes: [{ body: 'Already fine', author: { login: 'raj' } }] } },
+              ],
+            },
+          },
+        },
+      },
+    });
+  }) as unknown as typeof fetch);
+  const result = await client.listConversationThreads(REPO, 18);
+  assert.equal(capturedUrl, 'https://api.github.com/graphql');
+  assert.match(capturedBody?.query ?? '', /reviewThreads/);
+  assert.deepEqual(capturedBody?.variables, { owner: 'acme', name: 'widgets', number: 18 });
+  assert.deepEqual(result, [
+    { id: 'PRRT_1', body: 'Fix this', authorLogin: 'amy', resolved: false },
+    { id: 'PRRT_2', body: 'Already fine', authorLogin: 'raj', resolved: true },
+  ]);
+});
+
+test('resolveConversationThread: POSTs the resolveReviewThread mutation with the thread id', async () => {
+  let capturedBody: { query: string; variables: Record<string, unknown> } | undefined;
+  const client = new GitHubClient(BASE, 'tok', (async (_url: string, init?: RequestInit) => {
+    capturedBody = JSON.parse(String(init?.body));
+    return jsonResponse({ data: { resolveReviewThread: { thread: { id: 'PRRT_1', isResolved: true } } } });
+  }) as unknown as typeof fetch);
+  await client.resolveConversationThread(REPO, 18, 'PRRT_1');
+  assert.match(capturedBody?.query ?? '', /resolveReviewThread/);
+  assert.deepEqual(capturedBody?.variables, { threadId: 'PRRT_1' });
+});
+
+test('GraphQL calls throw the real error message when GitHub returns a 200 with an "errors" array', async () => {
+  const client = new GitHubClient(BASE, 'tok', (async () =>
+    jsonResponse({ errors: [{ message: 'Could not resolve to a PullRequest' }] })) as unknown as typeof fetch);
+  await assert.rejects(() => client.resolveConversationThread(REPO, 18, 'bad-id'), /Could not resolve to a PullRequest/);
+});
+
+test('GraphQL calls against a GitHub Enterprise Server apiBaseUrl use <host>/api/graphql, not <host>/api/v3/graphql', async () => {
+  let capturedUrl: string | undefined;
+  const client = new GitHubClient('https://ghe.example.com/api/v3', 'tok', (async (url: string) => {
+    capturedUrl = url;
+    return jsonResponse({ data: { resolveReviewThread: { thread: { id: 'x', isResolved: true } } } });
+  }) as unknown as typeof fetch);
+  await client.resolveConversationThread(REPO, 18, 'x');
+  assert.equal(capturedUrl, 'https://ghe.example.com/api/graphql');
 });

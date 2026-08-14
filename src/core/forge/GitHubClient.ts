@@ -1,6 +1,48 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision } from './types';
+import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+
+/** Fetches up to 100 review threads and each one's first comment — enough to identify and resolve a conversation without paginating replies nobody asked to see. */
+const REVIEW_THREADS_QUERY = `
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          comments(first: 1) {
+            nodes {
+              body
+              author { login }
+            }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+const RESOLVE_REVIEW_THREAD_MUTATION = `
+mutation($threadId: ID!) {
+  resolveReviewThread(input: { threadId: $threadId }) {
+    thread { id isResolved }
+  }
+}`;
+
+interface GitHubReviewThreadsResponse {
+  repository: {
+    pullRequest: {
+      reviewThreads: {
+        nodes: Array<{
+          id: string;
+          isResolved: boolean;
+          comments: { nodes: Array<{ body: string; author: { login: string } | null }> };
+        }>;
+      };
+    };
+  };
+}
 
 interface GitHubUser {
   login: string;
@@ -161,6 +203,45 @@ export class GitHubClient implements ForgeClient {
     return { files, diff };
   }
 
+  async submitReview(repo: ForgeRepoRef, number: number, decision: ReviewSubmission): Promise<void> {
+    await this.request(`/repos/${repo.identity}/pulls/${number}/reviews`, {
+      method: 'POST',
+      body: JSON.stringify({ event: decision === 'approve' ? 'APPROVE' : 'REQUEST_CHANGES' }),
+    });
+  }
+
+  /** PRs are issues for comment purposes on GitHub — there's no separate "PR comment" endpoint. */
+  async addComment(repo: ForgeRepoRef, number: number, body: string): Promise<void> {
+    await this.request(`/repos/${repo.identity}/issues/${number}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+  }
+
+  /**
+   * GitHub has no REST endpoint for review threads at all — only the GraphQL `reviewThreads`
+   * connection (see `graphql()`, a second request path alongside the REST `request()` this class
+   * otherwise exclusively uses).
+   */
+  async listConversationThreads(repo: ForgeRepoRef, number: number): Promise<ConversationThread[]> {
+    const [owner, name] = repo.identity.split('/');
+    const data = await this.graphql<GitHubReviewThreadsResponse>(REVIEW_THREADS_QUERY, { owner, name, number });
+    return data.repository.pullRequest.reviewThreads.nodes.map((thread) => {
+      const comment = thread.comments.nodes[0];
+      return {
+        id: thread.id,
+        body: comment?.body ?? '',
+        authorLogin: comment?.author?.login ?? '',
+        resolved: thread.isResolved,
+      };
+    });
+  }
+
+  /** `resolveReviewThread` — the GraphQL mutation counterpart to `reviewThreads`; same reasoning as `listConversationThreads` for why this isn't a REST call. */
+  async resolveConversationThread(_repo: ForgeRepoRef, _number: number, threadId: string): Promise<void> {
+    await this.graphql(RESOLVE_REVIEW_THREAD_MUTATION, { threadId });
+  }
+
   private async enrich(repo: ForgeRepoRef, pull: GitHubPull): Promise<PullRequestSummary> {
     const [reviews, checkRuns, mergeableState] = await Promise.all([
       this.fetchReviews(repo, pull.number),
@@ -214,7 +295,9 @@ export class GitHubClient implements ForgeClient {
 
   /** Throws with the real reason (HTTP status or network failure) instead of swallowing it. Only the per-PR enrichment calls (`fetchReviews`, `fetchCheckRuns`, `fetchMergeableState`) wrap this in `requestOrNull` — one PR's extra data failing to load shouldn't take down the whole list the way a credential problem on the list call itself should be visible. */
   private async request(path: string, init?: RequestInit): Promise<Response> {
-    const url = `${this.apiBaseUrl}${path}`;
+    // `graphql()` passes a full absolute URL (GraphQL lives at a different host path than REST,
+    // see `graphqlUrl()`) — everything else here passes a relative path against `apiBaseUrl`.
+    const url = /^https?:\/\//.test(path) ? path : `${this.apiBaseUrl}${path}`;
     let res: Response;
     try {
       res = await this.fetchImpl(url, {
@@ -244,5 +327,34 @@ export class GitHubClient implements ForgeClient {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * REST lives at `{apiBaseUrl}{path}`; GraphQL is a wholly different endpoint, not a REST path —
+   * `api.github.com`'s is `/graphql`, and a GitHub Enterprise Server instance's REST base
+   * (`<host>/api/v3`) maps to `<host>/api/graphql`, not `<host>/api/v3/graphql`.
+   */
+  private graphqlUrl(): string {
+    if (this.apiBaseUrl === 'https://api.github.com') {
+      return 'https://api.github.com/graphql';
+    }
+    return this.apiBaseUrl.replace(/\/api\/v3\/?$/, '/api/graphql');
+  }
+
+  /**
+   * GraphQL returns `200 OK` even when the query itself failed — errors live in an `errors` array
+   * in the body, not the HTTP status — so this checks for that explicitly rather than trusting
+   * `request()`'s ok-status check alone.
+   */
+  private async graphql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+    const res = await this.request(this.graphqlUrl(), { method: 'POST', body: JSON.stringify({ query, variables }) });
+    const data = (await res.json()) as { data?: T; errors?: Array<{ message: string }> };
+    if (data.errors && data.errors.length > 0) {
+      throw new Error(data.errors.map((e) => e.message).join('; '));
+    }
+    if (!data.data) {
+      throw new Error('GitHub GraphQL API returned no data');
+    }
+    return data.data;
   }
 }

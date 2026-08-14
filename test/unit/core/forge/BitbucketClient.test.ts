@@ -310,3 +310,74 @@ test('getPullRequestDiff: a removed file has no "new" path, falls back to "old"'
   const result = await client.getPullRequestDiff(REPO, 34);
   assert.deepEqual(result.files, [{ path: 'gone.ts', insertions: 0, deletions: 5, binary: false }]);
 });
+
+test('submitReview: POSTs to /approve for an approve decision', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new BitbucketClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.submitReview(REPO, 35, 'approve');
+  assert.equal(capturedUrl, 'https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests/35/approve');
+  assert.equal(capturedInit?.method, 'POST');
+});
+
+test('submitReview: POSTs to /request-changes for a requestChanges decision', async () => {
+  let capturedUrl: string | undefined;
+  const client = new BitbucketClient(BASE, 'tok', (async (url: string) => {
+    capturedUrl = url;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.submitReview(REPO, 36, 'requestChanges');
+  assert.equal(capturedUrl, 'https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests/36/request-changes');
+});
+
+test('addComment: POSTs content.raw to the comments endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new BitbucketClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.addComment(REPO, 37, 'Looks good');
+  assert.equal(capturedUrl, 'https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests/37/comments');
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(capturedInit?.body, JSON.stringify({ content: { raw: 'Looks good' } }));
+});
+
+test('listConversationThreads: only top-level comments (no parent) are returned — a reply is not its own thread', async () => {
+  const client = new BitbucketClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      'pullrequests/38/comments': {
+        values: [
+          { id: 1, content: { raw: 'Fix this' }, user: { username: 'amy' } },
+          { id: 2, content: { raw: 'On it' }, user: { username: 'raj' }, parent: { id: 1 } },
+          { id: 3, content: { raw: 'Already fine' }, user: { username: 'raj' }, resolution: { user: { username: 'raj' } } },
+        ],
+      },
+    }),
+  );
+  const result = await client.listConversationThreads(REPO, 38);
+  assert.deepEqual(result, [
+    { id: '1', body: 'Fix this', authorLogin: 'amy', resolved: false },
+    { id: '3', body: 'Already fine', authorLogin: 'raj', resolved: true },
+  ]);
+});
+
+test('resolveConversationThread: POSTs to /comments/{id}/resolve', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new BitbucketClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.resolveConversationThread(REPO, 38, '1');
+  assert.equal(capturedUrl, 'https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests/38/comments/1/resolve');
+  assert.equal(capturedInit?.method, 'POST');
+});

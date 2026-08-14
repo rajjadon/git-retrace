@@ -7,7 +7,13 @@ import { categorizeClosedPullRequests, categorizePullRequests } from '../../core
 import { detectForgeHost, type DetectedForgeHost, type ForgeHostConfig } from '../../core/forge/hostDetection';
 import type { ForgeClient } from '../../core/forge/ForgeClient';
 import { resolveForgeRepoRef } from '../../core/forge/resolveRepoRef';
-import { pullRequestKey, type CategorizedPullRequest, type ForgeRepoRef, type PullRequestSummary } from '../../core/forge/types';
+import {
+  pullRequestKey,
+  type CategorizedPullRequest,
+  type ForgeRepoRef,
+  type PullRequestSummary,
+  type ReviewSubmission,
+} from '../../core/forge/types';
 import { azureDevOpsCredentialScheme, clearForgeToken, resolveForgeToken } from '../../providers/forgeCredentials';
 import { renderLaunchpadHtml, type LaunchpadRepoError, type LaunchpadRepoRow } from './render';
 import { renderPlaceholderHtml } from '../placeholder';
@@ -255,7 +261,13 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     if (typeof message !== 'object' || message === null) {
       return;
     }
-    const { type, url, key, title } = message as { type?: unknown; url?: unknown; key?: unknown; title?: unknown };
+    const { type, url, key, title, decision } = message as {
+      type?: unknown;
+      url?: unknown;
+      key?: unknown;
+      title?: unknown;
+      decision?: unknown;
+    };
 
     if (type === 'openPr' && typeof url === 'string') {
       await vscode.env.openExternal(vscode.Uri.parse(url));
@@ -268,6 +280,10 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     }
     if (type === 'closePr' && typeof key === 'string') {
       await this.closePullRequest(key, typeof title === 'string' ? title : key);
+      return;
+    }
+    if (type === 'submitReview' && typeof key === 'string' && (decision === 'approve' || decision === 'requestChanges')) {
+      await this.submitReview(key, typeof title === 'string' ? title : key, decision);
       return;
     }
     if (type === 'showPullRequestDetails' && typeof key === 'string') {
@@ -353,6 +369,44 @@ export class LaunchpadViewProvider implements vscode.Disposable {
       return;
     }
     await client.closePullRequest(pr.repo, pr.number);
+    await this.refresh();
+  }
+
+  private async submitReview(key: string, title: string, decision: ReviewSubmission): Promise<void> {
+    const pr = this.prsByKey.get(key);
+    if (!pr) {
+      return;
+    }
+    const verb = decision === 'approve' ? 'Approve' : 'Request changes on';
+    const confirmed = await vscode.window.showWarningMessage(`${verb} "${title}" on ${pr.repo.label}?`, { modal: true }, verb);
+    if (confirmed !== verb) {
+      return;
+    }
+    const client = this.clientsByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    if (!client) {
+      return;
+    }
+    try {
+      await client.submitReview(pr.repo, pr.number, decision);
+      await this.refresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`Launchpad failed to submit a review for PR ${key}`, err);
+      void vscode.window.showErrorMessage(`GitLore: couldn't submit that review — ${message}`);
+    }
+  }
+
+  /** Test-only introspection seam — a webview button click (and the real confirmation modal it triggers) can't be driven from an integration test, so this calls the review flow directly, skipping only the modal. */
+  async submitReviewForTest(key: string, decision: ReviewSubmission): Promise<void> {
+    const pr = this.prsByKey.get(key);
+    if (!pr) {
+      return;
+    }
+    const client = this.clientsByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    if (!client) {
+      return;
+    }
+    await client.submitReview(pr.repo, pr.number, decision);
     await this.refresh();
   }
 }

@@ -25,6 +25,7 @@ export class PullRequestDetailsViewProvider implements vscode.WebviewViewProvide
   private view: vscode.WebviewView | undefined;
   private currentPr: PullRequestSummary | undefined;
   private currentUrl: string | undefined;
+  private currentClient: ForgeClient | undefined;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -68,16 +69,20 @@ export class PullRequestDetailsViewProvider implements vscode.WebviewViewProvide
     }
     this.currentPr = pr;
     this.currentUrl = pr.url;
+    this.currentClient = client;
     this.view.title = `PR #${pr.number}`;
     this.view.webview.html = shellHtml('<p>Loading pull request…</p>');
 
     try {
-      const { files, diff } = await client.getPullRequestDiff(pr.repo, pr.number);
+      const [{ files, diff }, threads] = await Promise.all([
+        client.getPullRequestDiff(pr.repo, pr.number),
+        client.listConversationThreads(pr.repo, pr.number),
+      ]);
       if (!this.view) {
         return;
       }
       this.view.webview.html = renderPullRequestDetailsHtml(
-        { pr, files, diff },
+        { pr, files, diff, threads },
         {
           nonce: createNonce(),
           cspSource: this.view.webview.cspSource,
@@ -94,9 +99,61 @@ export class PullRequestDetailsViewProvider implements vscode.WebviewViewProvide
     if (typeof message !== 'object' || message === null) {
       return;
     }
-    const { type } = message as { type?: unknown };
+    const { type, body, threadId } = message as { type?: unknown; body?: unknown; threadId?: unknown };
     if (type === 'openRemote' && this.currentUrl) {
       await vscode.env.openExternal(vscode.Uri.parse(this.currentUrl));
+      return;
     }
+    if (type === 'addComment' && typeof body === 'string' && this.currentPr && this.currentClient) {
+      await this.addComment(this.currentPr, this.currentClient, body);
+      return;
+    }
+    if (type === 'resolveThread' && typeof threadId === 'string' && this.currentPr && this.currentClient) {
+      await this.resolveThread(this.currentPr, this.currentClient, threadId);
+    }
+  }
+
+  private async resolveThread(pr: PullRequestSummary, client: ForgeClient, threadId: string): Promise<void> {
+    try {
+      await client.resolveConversationThread(pr.repo, pr.number, threadId);
+      // Reloads the whole panel (diff included) rather than patching just the thread list in
+      // place — same "confirm/act, then reload" shape every other write action in this feature
+      // uses (Launchpad's close/approve/comment all do a full refresh too), and a PR's diff is
+      // cheap enough to refetch that a separate partial-update path isn't worth the extra code.
+      await this.load(pr, client);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      void vscode.window.showErrorMessage(`GitLore: couldn't resolve that conversation — ${message}`);
+      // On success the whole panel reloads, which clears the button's disabled state along with
+      // everything else — on failure nothing else re-renders, so the button needs telling explicitly.
+      void this.view?.webview.postMessage({ type: 'resolveThreadFailed', threadId });
+    }
+  }
+
+  /** Test-only introspection seam — a webview button click can't be driven from an integration test, so this calls the resolve flow directly. */
+  async resolveThreadForTest(threadId: string): Promise<void> {
+    if (!this.currentPr || !this.currentClient) {
+      return;
+    }
+    await this.resolveThread(this.currentPr, this.currentClient, threadId);
+  }
+
+  private async addComment(pr: PullRequestSummary, client: ForgeClient, body: string): Promise<void> {
+    try {
+      await client.addComment(pr.repo, pr.number, body);
+      void this.view?.webview.postMessage({ type: 'commentPosted' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      void vscode.window.showErrorMessage(`GitLore: couldn't post that comment — ${message}`);
+      void this.view?.webview.postMessage({ type: 'commentFailed' });
+    }
+  }
+
+  /** Test-only introspection seam — a webview form submit can't be driven from an integration test, so this calls the comment flow directly. */
+  async addCommentForTest(body: string): Promise<void> {
+    if (!this.currentPr || !this.currentClient) {
+      return;
+    }
+    await this.addComment(this.currentPr, this.currentClient, body);
   }
 }

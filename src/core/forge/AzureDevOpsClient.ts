@@ -1,7 +1,7 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
 import { splitAzureDevOpsIdentity } from './azureDevOpsIdentity';
-import type { CheckStatus, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision } from './types';
+import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
 
 interface AzureDevOpsIdentityRef {
   uniqueName?: string;
@@ -50,6 +50,24 @@ interface AzureDevOpsChangeEntry {
 interface AzureDevOpsIterationChanges {
   changeEntries: AzureDevOpsChangeEntry[];
 }
+
+type AzureDevOpsThreadStatus = 'unknown' | 'active' | 'fixed' | 'wontFix' | 'closed' | 'byDesign' | 'pending';
+
+interface AzureDevOpsThreadComment {
+  content: string;
+  author: AzureDevOpsIdentityRef;
+  /** Vote-change notifications and similar auto-generated entries come through as their own threads with `commentType: 'system'` — not a genuine review conversation. */
+  commentType?: 'text' | 'codeChange' | 'system' | 'unknown';
+}
+
+interface AzureDevOpsThread {
+  id: number;
+  status?: AzureDevOpsThreadStatus;
+  comments: AzureDevOpsThreadComment[];
+  isDeleted?: boolean;
+}
+
+const UNRESOLVED_STATUSES = new Set<AzureDevOpsThreadStatus | undefined>(['active', 'pending', 'unknown', undefined]);
 
 function loginOf(ref: AzureDevOpsIdentityRef): string {
   return ref.uniqueName ?? ref.displayName ?? '';
@@ -239,6 +257,67 @@ export class AzureDevOpsClient implements ForgeClient {
       binary: false,
     }));
     return { files, diff: '' };
+  }
+
+  /** The reviewer being voted on is the authenticated user themselves — reuses the same `authenticatedUserId` `getAuthenticatedLogin` already caches for `searchCriteria.creatorId` (`AzureDevOpsClient.ts` constructor field), rather than a second profile lookup. */
+  async submitReview(repo: ForgeRepoRef, number: number, decision: ReviewSubmission): Promise<void> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      throw new Error('could not resolve this repo\'s Azure DevOps organization/project/repository identity');
+    }
+    if (!this.authenticatedUserId) {
+      throw new Error('not signed in yet — refresh Launchpad and try again');
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    await this.request(`${base}/pullrequests/${number}/reviewers/${this.authenticatedUserId}?api-version=7.1`, {
+      method: 'PUT',
+      body: JSON.stringify({ vote: decision === 'approve' ? 10 : -10 }),
+    });
+  }
+
+  /** Azure DevOps models a standalone PR comment as a new single-comment thread — `parentCommentId: 0` and `commentType: 1` ("text") match the documented shape exactly, confirmed against the REST docs' own "Comment on the pull request" example. `status: 1` ("active") is required even for a thread with no file/line context. */
+  async addComment(repo: ForgeRepoRef, number: number, body: string): Promise<void> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      throw new Error('could not resolve this repo\'s Azure DevOps organization/project/repository identity');
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    await this.request(`${base}/pullrequests/${number}/threads?api-version=7.1`, {
+      method: 'POST',
+      body: JSON.stringify({ comments: [{ parentCommentId: 0, content: body, commentType: 1 }], status: 1 }),
+    });
+  }
+
+  /** Excludes deleted threads and system-generated ones (vote-change notifications, etc. — `commentType: 'system'`) so this only ever lists genuine review conversations. */
+  async listConversationThreads(repo: ForgeRepoRef, number: number): Promise<ConversationThread[]> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      return [];
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    const res = await this.request(`${base}/pullrequests/${number}/threads?api-version=7.1`);
+    const data = (await res.json()) as AzureDevOpsListResponse<AzureDevOpsThread>;
+    return data.value
+      .filter((t) => !t.isDeleted && t.comments[0]?.commentType !== 'system')
+      .map((t) => ({
+        id: String(t.id),
+        body: t.comments[0]?.content ?? '',
+        authorLogin: t.comments[0] ? loginOf(t.comments[0].author) : '',
+        resolved: !UNRESOLVED_STATUSES.has(t.status),
+      }));
+  }
+
+  /** `"fixed"` is sent as its enum name, not a numeric ordinal — Azure DevOps' own docs and examples for this endpoint use the string form on write, matching what it always returns on read. */
+  async resolveConversationThread(repo: ForgeRepoRef, number: number, threadId: string): Promise<void> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      throw new Error('could not resolve this repo\'s Azure DevOps organization/project/repository identity');
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    await this.request(`${base}/pullrequests/${number}/threads/${threadId}?api-version=7.1`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'fixed' }),
+    });
   }
 
   private async enrich(

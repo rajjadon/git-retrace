@@ -66,6 +66,7 @@ export interface GitLoreTestApi {
   getPullRequestDetailsHtml: () => string | undefined;
   repoExplorerProvider: RepoExplorerProvider;
   launchpadProvider: LaunchpadViewProvider;
+  pullRequestDetailsProvider: PullRequestDetailsViewProvider;
   explainCommit: () => Promise<void>;
   getAiSummaryMessagesForTest: () => unknown[];
   getLineExplanationStateForTest: (filePath: string, sha: string, lineContent: string) => Promise<LineExplanationState | undefined>;
@@ -181,6 +182,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     getPullRequestDetailsHtml: () => pullRequestDetailsViewProvider.getCurrentHtmlForTest(),
     repoExplorerProvider,
     launchpadProvider,
+    pullRequestDetailsProvider: pullRequestDetailsViewProvider,
     explainCommit: () => commitDetailsViewProvider.explainCommit(),
     getAiSummaryMessagesForTest: () => commitDetailsViewProvider.getAiSummaryMessagesForTest(),
     getLineExplanationStateForTest: (filePath, sha, lineContent) =>

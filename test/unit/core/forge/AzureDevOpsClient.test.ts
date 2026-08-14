@@ -354,3 +354,103 @@ test('getPullRequestDiff: uses the latest iteration, not the first', async () =>
   await client.getPullRequestDiff(REPO, 51);
   assert.ok(requestedUrls.some((url) => url.includes('/iterations/3/changes')), requestedUrls.join('\n'));
 });
+
+test('submitReview: PUTs vote=10 to the authenticated user\'s own reviewer entry for an approve decision', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string, init?: RequestInit) => {
+    if (url.startsWith('https://vssps.dev.azure.com/')) {
+      return jsonResponse({ id: 'user-guid-123', emailAddress: 'raj@acme.com' });
+    }
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.getAuthenticatedLogin();
+  await client.submitReview(REPO, 52, 'approve');
+  assert.equal(
+    capturedUrl,
+    'https://dev.azure.com/acme/Widgets/_apis/git/repositories/widgets-api/pullrequests/52/reviewers/user-guid-123?api-version=7.1',
+  );
+  assert.equal(capturedInit?.method, 'PUT');
+  assert.equal(capturedInit?.body, JSON.stringify({ vote: 10 }));
+});
+
+test('submitReview: PUTs vote=-10 for a requestChanges decision', async () => {
+  let capturedInit: RequestInit | undefined;
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string, init?: RequestInit) => {
+    if (url.startsWith('https://vssps.dev.azure.com/')) {
+      return jsonResponse({ id: 'user-guid-123' });
+    }
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.getAuthenticatedLogin();
+  await client.submitReview(REPO, 53, 'requestChanges');
+  assert.equal(capturedInit?.body, JSON.stringify({ vote: -10 }));
+});
+
+test('submitReview: throws a clear error rather than a confusing 404 when the authenticated user isn\'t known yet', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async () => jsonResponse({})) as unknown as typeof fetch);
+  await assert.rejects(() => client.submitReview(REPO, 54, 'approve'), /not signed in yet/);
+});
+
+test('addComment: POSTs a new single-comment thread matching the documented shape', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.addComment(REPO, 55, 'Looks good');
+  assert.equal(
+    capturedUrl,
+    'https://dev.azure.com/acme/Widgets/_apis/git/repositories/widgets-api/pullrequests/55/threads?api-version=7.1',
+  );
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(
+    capturedInit?.body,
+    JSON.stringify({ comments: [{ parentCommentId: 0, content: 'Looks good', commentType: 1 }], status: 1 }),
+  );
+});
+
+test('listConversationThreads: excludes deleted threads and system-generated ones (vote-change notifications)', async () => {
+  const client = new AzureDevOpsClient(
+    IDENTITY,
+    'pat',
+    'pat',
+    fakeFetch({
+      'pullrequests/56/threads?api-version=7.1': {
+        value: [
+          { id: 1, status: 'active', comments: [{ content: 'Fix this', author: { uniqueName: 'amy@acme.com' }, commentType: 'text' }] },
+          { id: 2, status: 'fixed', comments: [{ content: 'Already fine', author: { uniqueName: 'raj@acme.com' }, commentType: 'text' }] },
+          { id: 3, status: 'closed', isDeleted: true, comments: [{ content: 'Deleted', author: { uniqueName: 'raj@acme.com' }, commentType: 'text' }] },
+          { id: 4, status: 'active', comments: [{ content: 'raj voted 10', author: { uniqueName: 'raj@acme.com' }, commentType: 'system' }] },
+        ],
+      },
+    }),
+  );
+  const result = await client.listConversationThreads(REPO, 56);
+  assert.deepEqual(result, [
+    { id: '1', body: 'Fix this', authorLogin: 'amy@acme.com', resolved: false },
+    { id: '2', body: 'Already fine', authorLogin: 'raj@acme.com', resolved: true },
+  ]);
+});
+
+test('resolveConversationThread: PATCHes status="fixed" (the enum name, not a number) to the thread endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.resolveConversationThread(REPO, 56, '1');
+  assert.equal(
+    capturedUrl,
+    'https://dev.azure.com/acme/Widgets/_apis/git/repositories/widgets-api/pullrequests/56/threads/1?api-version=7.1',
+  );
+  assert.equal(capturedInit?.method, 'PATCH');
+  assert.equal(capturedInit?.body, JSON.stringify({ status: 'fixed' }));
+});

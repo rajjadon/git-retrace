@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderPullRequestDetailsHtml } from '../../../src/views/PullRequestDetails/render';
-import type { PullRequestSummary } from '../../../src/core/forge/types';
+import type { ConversationThread, PullRequestSummary } from '../../../src/core/forge/types';
 import type { FileChange } from '../../../src/core/git/types';
 
 function pr(overrides: Partial<PullRequestSummary> = {}): PullRequestSummary {
@@ -32,7 +32,7 @@ const opts = {
 };
 
 test('renderPullRequestDetailsHtml: includes PR metadata, files, and diff', () => {
-  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff }, opts);
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads: [] }, opts);
   assert.match(html, /<h1 title="Add feature">Add feature<\/h1>/);
   assert.match(html, /raj/);
   assert.match(html, /acme\/widgets/);
@@ -45,7 +45,7 @@ test('renderPullRequestDetailsHtml: heads the file section with a count and whol
     { path: 'a.ts', insertions: 10, deletions: 2, binary: false },
     { path: 'b.ts', insertions: 5, deletions: 8, binary: false },
   ];
-  const html = renderPullRequestDetailsHtml({ pr: pr(), files: twoFiles, diff: '' }, opts);
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files: twoFiles, diff: '', threads: [] }, opts);
   assert.match(html, /class="badge">2</);
   assert.match(html, /class="stat-add">\+15</);
   assert.match(html, /class="stat-del">&minus;10</);
@@ -53,20 +53,27 @@ test('renderPullRequestDetailsHtml: heads the file section with a count and whol
 
 test('renderPullRequestDetailsHtml: no fabricated stats for a host with no diff text (Azure DevOps gap) — shows 0/0, not a guess', () => {
   const noStatFiles: FileChange[] = [{ path: 'src/a.ts', insertions: 0, deletions: 0, binary: false }];
-  const html = renderPullRequestDetailsHtml({ pr: pr(), files: noStatFiles, diff: '' }, opts);
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files: noStatFiles, diff: '', threads: [] }, opts);
   assert.match(html, /No textual diff for this file\./);
   assert.match(html, /class="stat-add">\+0</);
 });
 
 test('renderPullRequestDetailsHtml: "Open on <host>" button posts openRemote', () => {
-  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff }, opts);
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads: [] }, opts);
   assert.match(html, /id="open-remote"/);
   assert.match(html, /getElementById\('open-remote'\)\.addEventListener\('click', \(\) => \{\s*vscode\.postMessage\(\{ type: 'openRemote' \}\);/);
 });
 
+test('renderPullRequestDetailsHtml: the comment button posts addComment with the textarea\'s value', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads: [] }, opts);
+  assert.match(html, /id="comment-body"/);
+  assert.match(html, /id="post-comment"/);
+  assert.match(html, /vscode\.postMessage\(\{ type: 'addComment', body \}\);/);
+});
+
 test('renderPullRequestDetailsHtml: escapes HTML special characters in PR-sourced fields', () => {
   const html = renderPullRequestDetailsHtml(
-    { pr: pr({ title: '<script>alert(1)</script>', authorLogin: '<img src=x onerror=alert(1)>' }), files, diff },
+    { pr: pr({ title: '<script>alert(1)</script>', authorLogin: '<img src=x onerror=alert(1)>' }), files, diff, threads: [] },
     opts,
   );
   assert.ok(!html.includes('<script>alert(1)</script>'));
@@ -75,8 +82,39 @@ test('renderPullRequestDetailsHtml: escapes HTML special characters in PR-source
 });
 
 test('renderPullRequestDetailsHtml: CSP uses the provided nonce and cspSource, no unsafe-inline', () => {
-  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff }, opts);
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads: [] }, opts);
   assert.match(html, /script-src 'nonce-abc123'/);
   assert.match(html, /style-src vscode-webview:\/\/xyz/);
   assert.ok(!html.includes('unsafe-inline'));
+});
+
+test('renderPullRequestDetailsHtml: shows a "No review conversations" message when there are none', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads: [] }, opts);
+  assert.match(html, /No review conversations on this pull request\./);
+});
+
+test('renderPullRequestDetailsHtml: an unresolved thread gets a Resolve button; a resolved one doesn\'t', () => {
+  const threads: ConversationThread[] = [
+    { id: 't1', body: 'Fix this', authorLogin: 'amy', resolved: false },
+    { id: 't2', body: 'Already fine', authorLogin: 'raj', resolved: true },
+  ];
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads }, opts);
+  assert.match(html, /class="thread" data-thread-id="t1">[\s\S]*?class="thread-resolve[^"]*" type="button" data-thread-id="t1"/);
+  assert.ok(!/class="thread thread-resolved" data-thread-id="t2">[\s\S]*?class="thread-resolve/.test(html));
+  assert.match(html, /class="thread thread-resolved" data-thread-id="t2"/);
+});
+
+test('renderPullRequestDetailsHtml: the Resolve button posts resolveThread with the thread\'s id', () => {
+  const threads: ConversationThread[] = [{ id: 't1', body: 'Fix this', authorLogin: 'amy', resolved: false }];
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads }, opts);
+  assert.match(html, /vscode\.postMessage\(\{ type: 'resolveThread', threadId: btn\.dataset\.threadId \}\);/);
+});
+
+test('renderPullRequestDetailsHtml: escapes HTML special characters in thread fields', () => {
+  const threads: ConversationThread[] = [
+    { id: 't1', body: '<script>alert(1)</script>', authorLogin: '<img src=x onerror=alert(1)>', resolved: false },
+  ];
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads }, opts);
+  assert.ok(!html.includes('<script>alert(1)</script>'));
+  assert.ok(!html.includes('<img src=x onerror=alert(1)>'));
 });

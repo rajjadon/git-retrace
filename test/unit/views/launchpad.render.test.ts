@@ -125,6 +125,27 @@ test('renderLaunchpadHtml: "View diff" is offered even on a merged/closed card, 
   assert.match(html, /class="pr-card-details/);
 });
 
+test('renderLaunchpadHtml: the approve button posts submitReview with decision "approve"', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'waiting' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /class="pr-card-approve[^"]*" type="button" data-key="github:acme\/widgets#1" data-title="Add feature"/);
+  assert.match(html, /type: 'submitReview', key: btn\.dataset\.key, title: btn\.dataset\.title, decision: 'approve'/);
+});
+
+test('renderLaunchpadHtml: the request-changes button posts submitReview with decision "requestChanges"', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'waiting' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /class="pr-card-request-changes[^"]*" type="button" data-key="github:acme\/widgets#1" data-title="Add feature"/);
+  assert.match(html, /type: 'submitReview', key: btn\.dataset\.key, title: btn\.dataset\.title, decision: 'requestChanges'/);
+});
+
+test('renderLaunchpadHtml: merged/closed cards offer neither approve nor request-changes — nothing to review on a PR that is already done', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr({ closedAt: '2024-02-02T10:00:00Z', merged: true }), bucket: 'merged' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.ok(!html.includes('class="pr-card-approve'));
+  assert.ok(!html.includes('class="pr-card-request-changes'));
+});
+
 test('renderLaunchpadHtml: shows a per-repo error banner without failing the whole board', () => {
   const html = renderLaunchpadHtml(
     { categorized: [], errors: [{ repo: { host: 'gitlab', identity: 'acme/x', label: 'acme/x' }, message: 'Not signed in.' }], now },

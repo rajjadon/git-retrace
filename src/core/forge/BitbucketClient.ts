@@ -1,6 +1,6 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision } from './types';
+import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
 
 interface BitbucketUser {
   username?: string;
@@ -33,6 +33,15 @@ interface BitbucketPage<T> {
 
 interface BitbucketBuildStatus {
   state: 'SUCCESSFUL' | 'FAILED' | 'INPROGRESS' | 'STOPPED';
+}
+
+/** Bitbucket has no separate "thread" object — a top-level comment (no `parent`) *is* the conversation; replies carry a `parent`. `resolution` is present only once a top-level comment has been resolved. */
+interface BitbucketComment {
+  id: number;
+  content: { raw: string };
+  user: BitbucketUser | null;
+  parent?: { id: number };
+  resolution?: unknown;
 }
 
 interface BitbucketDiffstatEntry {
@@ -169,6 +178,36 @@ export class BitbucketClient implements ForgeClient {
       binary: false,
     }));
     return { files, diff };
+  }
+
+  async submitReview(repo: ForgeRepoRef, number: number, decision: ReviewSubmission): Promise<void> {
+    const action = decision === 'approve' ? 'approve' : 'request-changes';
+    await this.request(`/repositories/${repo.identity}/pullrequests/${number}/${action}`, { method: 'POST' });
+  }
+
+  async addComment(repo: ForgeRepoRef, number: number, body: string): Promise<void> {
+    await this.request(`/repositories/${repo.identity}/pullrequests/${number}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content: { raw: body } }),
+    });
+  }
+
+  /** Only top-level comments (no `parent`) are their own conversation here — a reply isn't independently resolvable, only the thread it belongs to is. First page only, same as this client's other list calls (`fetchBuildStatuses`) — Bitbucket's own UI shows recent comments first too. */
+  async listConversationThreads(repo: ForgeRepoRef, number: number): Promise<ConversationThread[]> {
+    const res = await this.request(`/repositories/${repo.identity}/pullrequests/${number}/comments`);
+    const page = (await res.json()) as BitbucketPage<BitbucketComment>;
+    return page.values
+      .filter((c) => !c.parent)
+      .map((c) => ({
+        id: String(c.id),
+        body: c.content.raw,
+        authorLogin: loginOf(c.user),
+        resolved: c.resolution !== undefined && c.resolution !== null,
+      }));
+  }
+
+  async resolveConversationThread(repo: ForgeRepoRef, number: number, threadId: string): Promise<void> {
+    await this.request(`/repositories/${repo.identity}/pullrequests/${number}/comments/${threadId}/resolve`, { method: 'POST' });
   }
 
   private async enrich(repo: ForgeRepoRef, pr: BitbucketPullRequest): Promise<PullRequestSummary> {

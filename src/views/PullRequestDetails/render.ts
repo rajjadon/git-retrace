@@ -1,8 +1,8 @@
-import type { PullRequestSummary } from '../../core/forge/types';
+import type { ConversationThread, PullRequestSummary } from '../../core/forge/types';
 import type { FileChange } from '../../core/git/types';
 import { escapeHtml } from '../escapeHtml';
 import { renderFileSections } from '../diffRender';
-import { EXTERNAL_ICON, FILES_ICON, SEARCH_ICON, WRAP_ICON } from '../icons';
+import { APPROVE_ICON, EXTERNAL_ICON, FILES_ICON, MESSAGE_ICON, SEARCH_ICON, WRAP_ICON } from '../icons';
 
 export interface RenderPullRequestDetailsOptions {
   nonce: string;
@@ -15,6 +15,25 @@ export interface PullRequestDetailsData {
   pr: PullRequestSummary;
   files: FileChange[];
   diff: string;
+  threads: ConversationThread[];
+}
+
+/** One review conversation, with a Resolve button only when it isn't already resolved — matches the same "no dead action on a thing that's already done" convention as a merged/closed Launchpad card's missing snooze/close buttons. */
+function renderThread(thread: ConversationThread): string {
+  const resolveBtn = thread.resolved
+    ? ''
+    : `<button class="thread-resolve icon-btn" type="button" data-thread-id="${escapeHtml(thread.id)}" title="Resolve" aria-label="Resolve this conversation">${APPROVE_ICON}</button>`;
+  return `<div class="thread${thread.resolved ? ' thread-resolved' : ''}" data-thread-id="${escapeHtml(thread.id)}">
+<div class="thread-body">${escapeHtml(thread.body)}</div>
+<div class="thread-meta"><span class="thread-author">${escapeHtml(thread.authorLogin)}</span>${resolveBtn}</div>
+</div>`;
+}
+
+function renderThreads(threads: ConversationThread[]): string {
+  if (threads.length === 0) {
+    return '<p class="empty">No review conversations on this pull request.</p>';
+  }
+  return threads.map(renderThread).join('\n');
 }
 
 /** Whole-PR totals for the section header — `0` for every file (Azure DevOps' documented gap, see `AzureDevOpsClient.getPullRequestDiff`) reads the same as "no changes", which is the honest fallback here rather than a misleading non-zero guess. */
@@ -26,7 +45,7 @@ function renderTotals(files: FileChange[]): string {
 
 /** Builds the PR Details webview's full HTML document. Pure — nonce/cspSource/styleUris come from the caller, so this is unit-testable without a real webview host. */
 export function renderPullRequestDetailsHtml(data: PullRequestDetailsData, opts: RenderPullRequestDetailsOptions): string {
-  const { pr, files, diff } = data;
+  const { pr, files, diff, threads } = data;
   const styles = opts.styleUris.map((uri) => `<link rel="stylesheet" href="${uri}" />`).join('\n');
 
   return `<!DOCTYPE html>
@@ -57,11 +76,62 @@ ${renderTotals(files)}
 ${renderFileSections(files, diff)}
 </div>
 <p class="empty" id="no-match" hidden>No files match that filter.</p>
+<div class="section-head">
+${MESSAGE_ICON}<span class="section-title">Conversations</span><span class="badge">${threads.length}</span>
+</div>
+<div class="threads" id="threads">
+${renderThreads(threads)}
+</div>
+<div class="comment-form">
+<textarea id="comment-body" placeholder="Leave a comment…" aria-label="Comment on this pull request" rows="3"></textarea>
+<div class="comment-form-actions">
+<p class="comment-status" id="comment-status" role="status" hidden></p>
+<button class="btn" id="post-comment" type="button">${MESSAGE_ICON}Comment</button>
+</div>
+</div>
 <script nonce="${opts.nonce}">
 const vscode = acquireVsCodeApi();
 
 document.getElementById('open-remote').addEventListener('click', () => {
   vscode.postMessage({ type: 'openRemote' });
+});
+
+const commentBody = document.getElementById('comment-body');
+const commentStatus = document.getElementById('comment-status');
+const postCommentBtn = document.getElementById('post-comment');
+postCommentBtn.addEventListener('click', () => {
+  const body = commentBody.value.trim();
+  if (!body) {
+    return;
+  }
+  postCommentBtn.disabled = true;
+  commentStatus.hidden = false;
+  commentStatus.textContent = 'Posting…';
+  vscode.postMessage({ type: 'addComment', body });
+});
+for (const btn of document.querySelectorAll('.thread-resolve')) {
+  btn.addEventListener('click', () => {
+    btn.disabled = true;
+    vscode.postMessage({ type: 'resolveThread', threadId: btn.dataset.threadId });
+  });
+}
+
+window.addEventListener('message', (e) => {
+  const msg = e.data;
+  if (msg.type === 'commentPosted') {
+    postCommentBtn.disabled = false;
+    commentBody.value = '';
+    commentStatus.textContent = 'Comment posted.';
+    setTimeout(() => { commentStatus.hidden = true; }, 3000);
+  } else if (msg.type === 'commentFailed') {
+    postCommentBtn.disabled = false;
+    commentStatus.hidden = true;
+  } else if (msg.type === 'resolveThreadFailed') {
+    const btn = document.querySelector('.thread-resolve[data-thread-id="' + msg.threadId + '"]');
+    if (btn) {
+      btn.disabled = false;
+    }
+  }
 });
 
 const wrapBtn = document.getElementById('wrap');

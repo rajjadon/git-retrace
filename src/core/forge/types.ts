@@ -9,6 +9,9 @@ export type CheckStatus = 'passing' | 'failing' | 'pending' | 'none';
 /** The PR-level review aggregate — GitHub calls this `review_decision`; GitLab/Bitbucket/Azure DevOps each have their own shape, normalized to this by their own client. */
 export type ReviewDecision = 'approved' | 'changesRequested' | 'reviewRequired' | 'none';
 
+/** A review decision the user is submitting — the write-side counterpart to `ReviewDecision`, which only ever describes a PR's already-settled state. */
+export type ReviewSubmission = 'approve' | 'requestChanges';
+
 /**
  * Identifies one repo on one host. `identity` is opaque and host-specific — "owner/repo" for
  * GitHub/GitLab/Bitbucket, "organization/project/repository" for Azure DevOps (which has no
@@ -54,6 +57,20 @@ export interface PullRequestSummary {
 export interface PullRequestDiff {
   files: FileChange[];
   diff: string;
+}
+
+/**
+ * One review conversation on a PR — GitHub's "review thread", GitLab's "discussion", Bitbucket's
+ * top-level comment (its resolution model has no separate thread object), Azure DevOps' "comment
+ * thread", all normalized to this shape. `id` is opaque and host-specific, only ever round-tripped
+ * back to `resolveConversationThread` on the same host's client. `body` is the thread's first/only
+ * comment — enough to identify which conversation this is without fetching every reply.
+ */
+export interface ConversationThread {
+  id: string;
+  body: string;
+  authorLogin: string;
+  resolved: boolean;
 }
 
 export const LAUNCHPAD_BUCKETS = [

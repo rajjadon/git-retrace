@@ -76,3 +76,85 @@ h1 {
 .row-btn {
   display: none;
 }
+
+/*
+ * ---------- Conversations ----------
+ * Capped and independently scrollable, unlike `.files` (flex: 1 1 auto in shared.css, the panel's
+ * one dominant scroll region) — a PR with many review threads would otherwise push the comment
+ * form below the fold, since this webview's body is a fixed-height flex column with no page-level
+ * scroll (`overflow: hidden`) for anything outside `.files`.
+ */
+
+.threads {
+  flex: 0 1 auto;
+  overflow: auto;
+  max-height: 30%;
+  padding: 0.3rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.thread {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+}
+
+.thread-resolved {
+  opacity: 0.6;
+}
+
+.thread-body {
+  overflow-wrap: anywhere;
+  margin-bottom: 0.25rem;
+}
+
+.thread-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.85em;
+}
+
+/* ---------- Comment form ---------- */
+
+.comment-form {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.comment-form textarea {
+  resize: vertical;
+  min-height: 3.5em;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-input-foreground);
+  background-color: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, transparent);
+  border-radius: 3px;
+  padding: 0.4rem;
+}
+
+.comment-form textarea:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.comment-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.comment-status {
+  margin: 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9em;
+}

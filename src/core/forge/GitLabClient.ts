@@ -1,6 +1,6 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision } from './types';
+import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
 
 interface GitLabUser {
   username: string;
@@ -23,6 +23,12 @@ interface GitLabMergeRequest {
   has_conflicts?: boolean;
   blocking_discussions_resolved?: boolean;
   head_pipeline?: GitLabPipeline | null;
+}
+
+/** A GitLab "discussion" is the thread; `notes` are its comments. Only a `resolvable` discussion (a genuine review conversation, not a plain top-level comment) can be resolved at all. */
+interface GitLabDiscussion {
+  id: string;
+  notes: Array<{ body: string; author: GitLabUser | null; resolvable: boolean; resolved: boolean }>;
 }
 
 interface GitLabApprovals {
@@ -174,6 +180,43 @@ export class GitLabClient implements ForgeClient {
       }
     }
     return { files, diff: diffParts.join('\n') };
+  }
+
+  /** GitLab has no formal "request changes" review state the way GitHub does (see `computeReviewDecision`'s own comment on this) — there's no endpoint to call, so `'requestChanges'` throws a clear, actionable message rather than silently doing nothing or faking an approval-adjacent action GitLab doesn't have. */
+  async submitReview(repo: ForgeRepoRef, number: number, decision: ReviewSubmission): Promise<void> {
+    if (decision === 'requestChanges') {
+      throw new Error("GitLab has no \"Request Changes\" review state — leave a comment explaining what needs to change instead");
+    }
+    const projectPath = encodeURIComponent(repo.identity);
+    await this.request(`/projects/${projectPath}/merge_requests/${number}/approve`, { method: 'POST' });
+  }
+
+  async addComment(repo: ForgeRepoRef, number: number, body: string): Promise<void> {
+    const projectPath = encodeURIComponent(repo.identity);
+    await this.request(`/projects/${projectPath}/merge_requests/${number}/notes`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+  }
+
+  /** Only resolvable discussions are genuine review conversations — a plain top-level comment (e.g. from `addComment`) is its own unresolvable discussion and would just be a dead "Resolve" button if included here. */
+  async listConversationThreads(repo: ForgeRepoRef, number: number): Promise<ConversationThread[]> {
+    const projectPath = encodeURIComponent(repo.identity);
+    const res = await this.request(`/projects/${projectPath}/merge_requests/${number}/discussions?per_page=100`);
+    const discussions = (await res.json()) as GitLabDiscussion[];
+    return discussions
+      .filter((d) => d.notes[0]?.resolvable)
+      .map((d) => ({
+        id: d.id,
+        body: d.notes[0]?.body ?? '',
+        authorLogin: d.notes[0]?.author?.username ?? '',
+        resolved: d.notes[0]?.resolved ?? false,
+      }));
+  }
+
+  async resolveConversationThread(repo: ForgeRepoRef, number: number, threadId: string): Promise<void> {
+    const projectPath = encodeURIComponent(repo.identity);
+    await this.request(`/projects/${projectPath}/merge_requests/${number}/discussions/${threadId}?resolved=true`, { method: 'PUT' });
   }
 
   private async enrich(repo: ForgeRepoRef, projectPath: string, mr: GitLabMergeRequest): Promise<PullRequestSummary> {

@@ -2,7 +2,17 @@ import { LAUNCHPAD_BUCKETS, pullRequestKey } from '../../core/forge/types';
 import type { CategorizedPullRequest, ForgeRepoRef, LaunchpadBucket, PullRequestSummary } from '../../core/forge/types';
 import { formatAge, formatAbsolute } from '../../utils/date';
 import { escapeHtml } from '../escapeHtml';
-import { ARROW_DOWN_ICON, ARROW_UP_ICON, AUTHOR_ICON, CLOSE_ICON, OPEN_CHANGES_ICON, REFRESH_ICON, SNOOZE_ICON } from '../icons';
+import {
+  APPROVE_ICON,
+  ARROW_DOWN_ICON,
+  ARROW_UP_ICON,
+  AUTHOR_ICON,
+  CLOSE_ICON,
+  OPEN_CHANGES_ICON,
+  REFRESH_ICON,
+  REQUEST_CHANGES_ICON,
+  SNOOZE_ICON,
+} from '../icons';
 
 const TERMINAL_BUCKETS = new Set<LaunchpadBucket>(['merged', 'closed']);
 
@@ -53,9 +63,14 @@ function renderCard(pr: PullRequestSummary, now: Date, bucket: LaunchpadBucket):
   const snoozeTitle = bucket === 'snoozed' ? 'Unsnooze' : 'Snooze';
   // Nothing to snooze or close on a PR that's already done — those two only make sense on an open
   // card. Viewing the diff applies either way, so it's not gated on `isTerminal`.
+  // Approve/request-changes only make sense on an open card too — a host rejects a self-approval
+  // attempt with its own clear error (surfaced the same way a failed close already is), so this
+  // doesn't need its own "is this my own PR" check on top of that.
   const stateActions = isTerminal
     ? ''
     : `<button class="pr-card-snooze icon-btn" type="button" data-key="${escapeHtml(key)}" title="${snoozeTitle}" aria-label="${snoozeTitle} ${escapeHtml(pr.title)}">${SNOOZE_ICON}</button>
+<button class="pr-card-approve icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" title="Approve" aria-label="Approve ${escapeHtml(pr.title)}">${APPROVE_ICON}</button>
+<button class="pr-card-request-changes icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" title="Request changes" aria-label="Request changes on ${escapeHtml(pr.title)}">${REQUEST_CHANGES_ICON}</button>
 <button class="pr-card-close icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" title="Close PR" aria-label="Close ${escapeHtml(pr.title)}">${CLOSE_ICON}</button>`;
   const actions = `<div class="pr-card-actions">
 <button class="pr-card-details icon-btn" type="button" data-key="${escapeHtml(key)}" title="View diff" aria-label="View diff for ${escapeHtml(pr.title)}">${OPEN_CHANGES_ICON}</button>
@@ -163,6 +178,22 @@ for (const btn of document.querySelectorAll('.pr-card-close')) {
     // Confirmation happens on the extension side (a real modal, not this webview's own UI) —
     // this only ever sends the request to close.
     vscode.postMessage({ type: 'closePr', key: btn.dataset.key, title: btn.dataset.title });
+  });
+}
+
+for (const btn of document.querySelectorAll('.pr-card-approve')) {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    vscode.postMessage({ type: 'submitReview', key: btn.dataset.key, title: btn.dataset.title, decision: 'approve' });
+  });
+}
+
+for (const btn of document.querySelectorAll('.pr-card-request-changes')) {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    vscode.postMessage({ type: 'submitReview', key: btn.dataset.key, title: btn.dataset.title, decision: 'requestChanges' });
   });
 }
 
