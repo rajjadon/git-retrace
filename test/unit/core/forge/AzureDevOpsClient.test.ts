@@ -222,9 +222,9 @@ test('listOpenPullRequests: status checks map to checkStatus (succeeded/failed/p
   await statusCheck('pending', 'pending');
 });
 
-test('listOpenPullRequests: a failed list request returns an empty array, not a throw', async () => {
+test('listOpenPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {
   const client = new AzureDevOpsClient(IDENTITY, 'pat', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
-  assert.deepEqual(await client.listOpenPullRequests(REPO), []);
+  await assert.rejects(() => client.listOpenPullRequests(REPO), /401 Unauthorized from dev\.azure\.com/);
 });
 
 test('listRecentlyClosedPullRequests: combines completed and abandoned, tagging each with the right merged flag', async () => {
@@ -245,6 +245,11 @@ test('listRecentlyClosedPullRequests: combines completed and abandoned, tagging 
   assert.equal(result.length, 2);
   assert.equal(result.find((r) => r.number === 40)?.merged, true);
   assert.equal(result.find((r) => r.number === 41)?.merged, false);
+});
+
+test('listRecentlyClosedPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  await assert.rejects(() => client.listRecentlyClosedPullRequests(REPO), /401 Unauthorized from dev\.azure\.com/);
 });
 
 test('listRecentlyClosedPullRequests: scopes the search server-side to the authenticated user via searchCriteria.creatorId, once known', async () => {

@@ -151,6 +151,11 @@ export class LaunchpadViewProvider implements vscode.Disposable {
           this.prsByKey.set(pullRequestKey(pr), pr);
         }
       } catch (err) {
+        // A PR list call failing (as opposed to succeeding with zero results) almost always means
+        // the credential itself is bad — expired, or scoped for identity but not this host's PR
+        // API (e.g. an Azure DevOps PAT missing "Code" scope). Clear it so the next refresh
+        // re-prompts instead of silently showing an empty board forever.
+        await clearForgeToken(this.context.secrets, detected);
         const message = err instanceof Error ? err.message : String(err);
         this.logger?.error(`Launchpad failed to load ${repo.label}`, err);
         errors.push({ repo, message });

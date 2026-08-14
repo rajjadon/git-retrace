@@ -116,10 +116,10 @@ export class AzureDevOpsClient implements ForgeClient {
       return [];
     }
     const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
-    const listRes = await this.requestOrNull(`${base}/pullrequests?searchCriteria.status=active&api-version=7.1`);
-    if (!listRes) {
-      return [];
-    }
+    // Throws rather than soft-degrading to [] — a credential that's valid for the vssps profile
+    // check but lacks "Code" scope for this endpoint (a real, easy-to-hit PAT-setup mistake) would
+    // otherwise render as an indistinguishable-from-genuinely-empty board with zero signal.
+    const listRes = await this.request(`${base}/pullrequests?searchCriteria.status=active&api-version=7.1`);
     const data = (await listRes.json()) as AzureDevOpsListResponse<AzureDevOpsPullRequest>;
     return Promise.all(data.value.map((pr) => this.enrich(repo, id, base, pr)));
   }
@@ -150,10 +150,9 @@ export class AzureDevOpsClient implements ForgeClient {
     // recently closed PRs project-wide would otherwise push the current user's own older ones
     // out of the $top window before `categorizeClosedPullRequests` ever gets to filter by author.
     const creatorFilter = this.authenticatedUserId ? `&searchCriteria.creatorId=${this.authenticatedUserId}` : '';
-    const res = await this.requestOrNull(`${base}/pullrequests?searchCriteria.status=${status}${creatorFilter}&$top=10&api-version=7.1`);
-    if (!res) {
-      return [];
-    }
+    // Throws rather than soft-degrading to [] — same reasoning as the open-PR list: a credential
+    // problem here should never look identical to "you genuinely have no closed PRs".
+    const res = await this.request(`${base}/pullrequests?searchCriteria.status=${status}${creatorFilter}&$top=10&api-version=7.1`);
     const data = (await res.json()) as AzureDevOpsListResponse<AzureDevOpsPullRequest>;
     return data.value.map((pr) => ({
       repo,
@@ -218,7 +217,7 @@ export class AzureDevOpsClient implements ForgeClient {
     return data.value ?? [];
   }
 
-  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it — every caller except `getAuthenticatedLogin` wraps this in `requestOrNull` to keep their existing soft-degrade behavior. */
+  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it. Only `fetchStatuses` wraps this in `requestOrNull` — a single PR's check-status enrichment failing shouldn't take down the whole list the way a credential problem on the list call itself should be visible. */
   private async request(url: string, init?: RequestInit): Promise<Response> {
     // Azure DevOps PATs authenticate via HTTP Basic with an empty username — Bearer support for
     // raw PATs isn't consistently documented the way it is for GitHub/GitLab/Bitbucket tokens.
