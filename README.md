@@ -22,7 +22,7 @@ It does that without leaving your editor, without signing in, and without sendin
 
 If you've used similar VS Code git extensions, GitLore covers the same core ground — inline blame, a commit graph, commit details, branch comparison — with every feature free and a deliberately smaller surface area. See [How it compares](#how-it-compares).
 
-> **Status: early but stable-channel.** Everything below works and is covered by tests — 497 unit tests and 95 integration tests against a real VS Code instance. It is still `0.x`, so expect breaking changes before `1.0`. Bug reports are very welcome.
+> **Status: 1.0, stable.** Everything below works and is covered by tests — 497 unit tests and 95 integration tests against a real VS Code instance. Bug reports are very welcome.
 
 ## Install
 
@@ -35,7 +35,7 @@ code --install-extension RajpratapsinghJadon.gitlore
 **From a `.vsix`** — grab one from [Releases](https://github.com/rajjadon/gitlore/releases), then:
 
 ```bash
-code --install-extension gitlore-0.4.0.vsix
+code --install-extension gitlore-1.0.0.vsix
 ```
 
 Requires **VS Code 1.85+** and `git` on your `PATH`. Works in Cursor and other VS Code-based editors.
@@ -84,9 +84,13 @@ Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with
 
 ### Launchpad — a cross-repo PR triage board (off by default)
 
-<img src="media/screenshots/launchpad.png" alt="Launchpad showing a six-column board: Needs Review, Ready to Merge, Waiting, Blocked, Drafts, and Snoozed, each with pull request cards" />
+<img src="media/screenshots/launchpad.png" alt="Launchpad showing an eight-column board: Needs Review, Ready to Merge, Waiting, Blocked, Drafts, Snoozed, Merged, and Closed, each with pull request cards, and a repo row above with Pull/Push buttons" />
 
-The only GitLore feature that reaches beyond your local `.git` — everything else above works fully offline. **GitLore: Open Launchpad** opens an 8-column board (Needs Review, Ready to Merge, Waiting, Blocked, Drafts, Snoozed, Merged, Closed) pooling PRs across every recognized remote in your workspace, so triaging what needs your attention — and seeing what you've recently shipped — doesn't mean tab-switching between repos and a browser. **Merged** and **Closed** show your own most-recently-completed PRs; every card in an open column also gets **Approve**, **Request changes**, and **Close PR** actions (each with a confirmation first) — right from the board, no host website required. A **Closed** (not merged) card also gets a **Reopen PR** action — Bitbucket Cloud is the one exception, since it has no way to reopen a declined PR at all, on its API or its own web UI. A row above the board lists every recognized repo with **Pull**/**Push** buttons — a purely local git operation, so it works even for a repo whose forge sign-in was skipped or failed. Every card's **View diff** button opens a docked **Pull Request Details** panel (next to Commit Details) with that PR's changed files and diff, its review conversations — each showing the `path:line` it's anchored to when it's a code comment, plus a **Resolve** button — a comment box to post a top-level comment, and a **Refresh** button to pick up changes made elsewhere — no browser round-trip just to review and weigh in.
+The only GitLore feature that reaches beyond your local `.git` — everything else above works fully offline. **GitLore: Open Launchpad** opens an 8-column board (Needs Review, Ready to Merge, Waiting, Blocked, Drafts, Snoozed, Merged, Closed) pooling PRs across every recognized remote in your workspace, so triaging what needs your attention — and seeing what you've recently shipped — doesn't mean tab-switching between repos and a browser. **Merged** and **Closed** show your own most-recently-completed PRs; every card in an open column also gets **Approve**, **Request changes**, and **Close PR** actions (each with a confirmation first) — right from the board, no host website required. A **Closed** (not merged) card also gets a **Reopen PR** action — Bitbucket Cloud is the one exception, since it has no way to reopen a declined PR at all, on its API or its own web UI. A row above the board lists every recognized repo with **Pull**/**Push** buttons — a purely local git operation, so it works even for a repo whose forge sign-in was skipped or failed.
+
+Every card's **View diff** button opens a docked **Pull Request Details** panel (next to Commit Details) with that PR's changed files and diff, its review conversations — each showing the `path:line` it's anchored to when it's a code comment, plus a **Resolve** button — a comment box to post a top-level comment, and a **Refresh** button to pick up changes made elsewhere — no browser round-trip just to review and weigh in.
+
+<img src="media/screenshots/pull-request-details.png" width="480" alt="The Pull Request Details panel showing changed files with a diff gutter, review conversations with a path:line label and a Resolve button, and a comment box" />
 
 Not GitHub-only: GitHub, GitLab, Bitbucket, and Azure DevOps are supported out of the box, plus self-hosted or custom instances (GitHub Enterprise Server, Gitea, Forgejo, self-hosted GitLab) via `gitLore.launchpad.customHosts`. GitHub and Azure DevOps Services (`dev.azure.com`) both use VS Code's own built-in sign-in (GitHub's session, and Azure DevOps' Microsoft/AAD session — the latter also works for organizations whose Conditional Access policy blocks Personal Access Tokens outright); every other host, including self-hosted Azure DevOps Server, needs a Personal Access Token, entered once and stored in VS Code's encrypted secret storage — never a GitLore backend, never a key GitLore itself handles.
 
@@ -171,6 +175,7 @@ Every command is also a title-bar button in the GitLore panel.
 | `GitLore: Step Through This Line's History` | Move the hover's line-history stepper (from the hover's Older/prev/next links) |
 | `GitLore: Toggle Full-File Blame Heatmap` | Turn the whole-file recency gradient on or off |
 | `GitLore: Open Launchpad` | Open the cross-repo PR triage board (needs `gitLore.launchpad.enabled`) |
+| `GitLore: Show Pull Request Details` | Open a PR's changed files, diff, and review conversations in a docked panel (from a Launchpad card's View diff button) |
 | `GitLore: Generate Commit Message with AI` | Draft a commit message from your staged diff, into the Source Control input box (also a title-bar button there; needs `gitLore.ai.enabled`) |
 
 ## Settings

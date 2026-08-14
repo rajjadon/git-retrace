@@ -25,6 +25,7 @@ Re-run the relevant one after any UI change instead of re-shooting by hand.
 | `visual-file-history.png` | `npm run shots` |
 | `rebase-editor.png` | `npm run shots` |
 | `launchpad.png` | `npm run shots` (sample data — see below) |
+| `pull-request-details.png` | `npm run shots` (title/files/diff are real, reused from the commit-details shot; the review conversations are sample data — see below) |
 | `inline-blame.png` | `npm run shots:native` |
 | `file-history.png` | `npm run shots:native` |
 | `sidebar-explorer.png` | `npm run shots:native` |
@@ -35,7 +36,7 @@ Re-run the relevant one after any UI change instead of re-shooting by hand.
 Two things worth knowing about what's *not* 100% real:
 
 1. **The theme.** VS Code injects ~100 `--vscode-*` custom properties into every webview; `shoot-screenshots.ts` approximates Dark Modern for the headless-Chrome renders. `shoot-native-screenshots.ts` doesn't have this problem — it's real VS Code, so the theme is exactly whatever the demo profile's default is.
-2. **Launchpad's data.** It pools PRs from real, authenticated remote hosts — there's nothing to render without a live network call and real credentials, so `launchpad.png` is built from realistic hand-written sample data instead of this repo's own history. Every other screenshot is this repo's real commits, real authors, real dates (or the demo repo's, for the native ones).
+2. **Launchpad's data.** It pools PRs from real, authenticated remote hosts — there's nothing to render without a live network call and real credentials, so `launchpad.png` is built from realistic hand-written sample data instead of this repo's own history. Same reason `pull-request-details.png`'s review conversations are sample data — the PR title, changed files, and diff underneath them are real (reused from the commit-details shot) so nothing on screen contradicts the diff actually shown. Every other screenshot is this repo's real commits, real authors, real dates (or the demo repo's, for the native ones).
 
 ## Why a separate demo repo for the native shots
 

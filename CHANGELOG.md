@@ -6,6 +6,10 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-14
+
+First stable release — closing out Phase 7 (Launchpad) of the roadmap.
+
 ### Added
 
 - A one-time warning when GitLore can't find `git` on your `PATH`, with a button to open the git install page. Previously this failed silently everywhere instead of telling you why nothing was working.

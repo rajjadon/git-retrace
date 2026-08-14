@@ -23,13 +23,14 @@ import { join, resolve } from 'node:path';
 import { GitService } from '../src/core/git/GitService';
 import { layoutGraph } from '../src/core/graph/layout';
 import { layoutFileHistory } from '../src/core/graph/fileHistoryLayout';
-import type { ForgeRepoRef, PullRequestSummary } from '../src/core/forge/types';
+import type { ConversationThread, ForgeRepoRef, PullRequestSummary } from '../src/core/forge/types';
 import { renderGraphHtml } from '../src/views/CommitGraph/render';
 import { renderCommitDetailsHtml } from '../src/views/CommitDetails/render';
 import { renderBranchComparisonHtml } from '../src/views/BranchComparison/render';
 import { renderFileHistoryHtml } from '../src/views/VisualFileHistory/render';
 import { renderRebaseEditorHtml } from '../src/views/RebaseEditor/render';
 import { renderLaunchpadHtml } from '../src/views/Launchpad/render';
+import { renderPullRequestDetailsHtml } from '../src/views/PullRequestDetails/render';
 
 const REPO = resolve(__dirname, '..');
 const MEDIA = join(REPO, 'media');
@@ -251,14 +252,53 @@ async function main(): Promise<void> {
               bucket: 'drafts',
               pr: pr({ repo: acme, number: 485, title: 'WIP: dark mode for the storefront theme', isDraft: true }),
             },
+            {
+              bucket: 'merged',
+              pr: pr({ repo: acme, number: 470, title: 'Debounce the search box instead of filtering on every keystroke', closedAt: new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString() }),
+            },
+            {
+              bucket: 'closed',
+              pr: pr({ repo: mobile, number: 112, title: 'Try React Query for the order-history screen', authorLogin: 'sam-okafor', closedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() }),
+            },
           ],
           errors: [],
+          repoRows: [
+            { key: acme.identity, label: 'acme/storefront' },
+            { key: mobile.identity, label: 'acme/mobile-app' },
+          ],
         },
         { ...base, styleUris: [cssUrl('shared.css'), cssUrl('launchpad.css')] },
       ),
     ),
   );
-  shoot(dir, 'launchpad', 1400, 460);
+  shoot(dir, 'launchpad', 1850, 480);
+
+  // Threads need a live PR to exist on, so — like the Launchpad board above — these are realistic
+  // sample data rather than this repo's own history. Files/diff/title are real, reused from the
+  // commit shot above (rather than an unrelated fictional title), so nothing on screen contradicts
+  // the diff actually shown.
+  const threads: ConversationThread[] = [
+    { id: 't1', body: 'Worth a code comment on why this shrinks instead of truncating with an ellipsis?', authorLogin: 'sam-okafor', resolved: false, file: files[0]?.path, line: 12 },
+    { id: 't2', body: 'Added one — the truncation was hiding the action buttons on long labels.', authorLogin: 'maya-chen', resolved: true, file: files[0]?.path, line: 12 },
+    { id: 't3', body: 'LGTM, thanks for the quick turnaround.', authorLogin: 'diego-alvarez', resolved: false },
+  ];
+  writeFileSync(
+    join(dir, 'pull-request-details.html'),
+    expandFirstFile(
+      forBrowser(
+        renderPullRequestDetailsHtml(
+          {
+            pr: pr({ repo: acme, number: 482, title: commit.message, requestedReviewers: ['you'], reviewDecision: 'reviewRequired' }),
+            files,
+            diff,
+            threads,
+          },
+          { ...base, styleUris: [cssUrl('shared.css'), cssUrl('pullRequestDetails.css')] },
+        ),
+      ),
+    ),
+  );
+  shoot(dir, 'pull-request-details', 680, 620);
 }
 
 void main();
