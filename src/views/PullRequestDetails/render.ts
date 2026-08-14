@@ -2,7 +2,7 @@ import type { ConversationThread, PullRequestSummary } from '../../core/forge/ty
 import type { FileChange } from '../../core/git/types';
 import { escapeHtml } from '../escapeHtml';
 import { renderFileSections } from '../diffRender';
-import { APPROVE_ICON, EXTERNAL_ICON, FILES_ICON, MESSAGE_ICON, SEARCH_ICON, WRAP_ICON } from '../icons';
+import { APPROVE_ICON, EXTERNAL_ICON, FILES_ICON, MESSAGE_ICON, REFRESH_ICON, SEARCH_ICON, WRAP_ICON } from '../icons';
 
 export interface RenderPullRequestDetailsOptions {
   nonce: string;
@@ -23,7 +23,14 @@ function renderThread(thread: ConversationThread): string {
   const resolveBtn = thread.resolved
     ? ''
     : `<button class="thread-resolve icon-btn" type="button" data-thread-id="${escapeHtml(thread.id)}" title="Resolve" aria-label="Resolve this conversation">${APPROVE_ICON}</button>`;
+  // Absent for a general PR-level comment, not attached to any diff line — only shown when the
+  // host actually reported one, so a thread never claims a location it doesn't have.
+  const location =
+    thread.file !== undefined
+      ? `<div class="thread-location">${escapeHtml(thread.file.replace(/^\//, ''))}${thread.line !== undefined ? `:${thread.line}` : ''}</div>`
+      : '';
   return `<div class="thread${thread.resolved ? ' thread-resolved' : ''}" data-thread-id="${escapeHtml(thread.id)}">
+${location}
 <div class="thread-body">${escapeHtml(thread.body)}</div>
 <div class="thread-meta"><span class="thread-author">${escapeHtml(thread.authorLogin)}</span>${resolveBtn}</div>
 </div>`;
@@ -65,6 +72,7 @@ ${styles}
 </div>
 <div class="actions">
 <button class="btn" id="open-remote" type="button" title="${escapeHtml(pr.url)}">${EXTERNAL_ICON}Open on ${escapeHtml(pr.repo.host)}</button>
+<button class="icon-btn" id="refresh-pr" type="button" title="Refresh — picks up changes made elsewhere (e.g. a review submitted from Launchpad)" aria-label="Refresh this pull request's details">${REFRESH_ICON}</button>
 </div>
 <div class="section-head">
 ${FILES_ICON}<span class="section-title">Files changed</span><span class="badge">${files.length}</span>
@@ -94,6 +102,10 @@ const vscode = acquireVsCodeApi();
 
 document.getElementById('open-remote').addEventListener('click', () => {
   vscode.postMessage({ type: 'openRemote' });
+});
+
+document.getElementById('refresh-pr').addEventListener('click', () => {
+  vscode.postMessage({ type: 'refresh' });
 });
 
 const commentBody = document.getElementById('comment-body');

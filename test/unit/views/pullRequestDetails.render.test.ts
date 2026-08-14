@@ -118,3 +118,27 @@ test('renderPullRequestDetailsHtml: escapes HTML special characters in thread fi
   assert.ok(!html.includes('<script>alert(1)</script>'));
   assert.ok(!html.includes('<img src=x onerror=alert(1)>'));
 });
+
+test('renderPullRequestDetailsHtml: a thread anchored to a diff line shows its file and line', () => {
+  const threads: ConversationThread[] = [{ id: 't1', body: 'Fix this', authorLogin: 'amy', resolved: false, file: 'src/a.ts', line: 42 }];
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads }, opts);
+  assert.match(html, /class="thread-location">src\/a\.ts:42</);
+});
+
+test('renderPullRequestDetailsHtml: Azure DevOps\' leading-slash file paths are shown without it', () => {
+  const threads: ConversationThread[] = [{ id: 't1', body: 'Fix this', authorLogin: 'amy', resolved: false, file: '/src/a.ts', line: 3 }];
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads }, opts);
+  assert.match(html, /class="thread-location">src\/a\.ts:3</);
+});
+
+test('renderPullRequestDetailsHtml: a general PR-level comment (not attached to any line) shows no location', () => {
+  const threads: ConversationThread[] = [{ id: 't1', body: 'Looks good overall', authorLogin: 'amy', resolved: false }];
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads }, opts);
+  assert.ok(!html.includes('thread-location'));
+});
+
+test('renderPullRequestDetailsHtml: a Refresh button posts refresh', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads: [] }, opts);
+  assert.match(html, /id="refresh-pr"/);
+  assert.match(html, /getElementById\('refresh-pr'\)\.addEventListener\('click', \(\) => \{\s*vscode\.postMessage\(\{ type: 'refresh' \}\);/);
+});

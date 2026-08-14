@@ -1,6 +1,7 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
 import { splitAzureDevOpsIdentity } from './azureDevOpsIdentity';
+import { describeErrorBody } from './httpError';
 import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
 
 interface AzureDevOpsIdentityRef {
@@ -66,6 +67,8 @@ interface AzureDevOpsThread {
   status?: AzureDevOpsThreadStatus;
   comments: AzureDevOpsThreadComment[];
   isDeleted?: boolean;
+  /** Only present on a thread attached to a specific diff line — absent (null) for a general PR thread. `rightFileStart` is the new side; `leftFileStart` is the old side, used when the thread is on a removed line. */
+  threadContext?: { filePath?: string; rightFileStart?: { line?: number }; leftFileStart?: { line?: number } } | null;
 }
 
 const UNRESOLVED_STATUSES = new Set<AzureDevOpsThreadStatus | undefined>(['active', 'pending', 'unknown', undefined]);
@@ -305,12 +308,17 @@ export class AzureDevOpsClient implements ForgeClient {
     const data = (await res.json()) as AzureDevOpsListResponse<AzureDevOpsThread>;
     return data.value
       .filter((t) => !t.isDeleted && t.comments[0]?.commentType !== 'system')
-      .map((t) => ({
-        id: String(t.id),
-        body: t.comments[0]?.content ?? '',
-        authorLogin: t.comments[0] ? loginOf(t.comments[0].author) : '',
-        resolved: !UNRESOLVED_STATUSES.has(t.status),
-      }));
+      .map((t) => {
+        const line = t.threadContext?.rightFileStart?.line ?? t.threadContext?.leftFileStart?.line ?? undefined;
+        return {
+          id: String(t.id),
+          body: t.comments[0]?.content ?? '',
+          authorLogin: t.comments[0] ? loginOf(t.comments[0].author) : '',
+          resolved: !UNRESOLVED_STATUSES.has(t.status),
+          ...(t.threadContext?.filePath !== undefined ? { file: t.threadContext.filePath } : {}),
+          ...(line !== undefined ? { line } : {}),
+        };
+      });
   }
 
   /** `"fixed"` is sent as its enum name, not a numeric ordinal — Azure DevOps' own docs and examples for this endpoint use the string form on write, matching what it always returns on read. */
@@ -380,7 +388,8 @@ export class AzureDevOpsClient implements ForgeClient {
       throw new Error(`couldn't reach ${new URL(url).host}: ${err instanceof Error ? err.message : String(err)}`);
     }
     if (!res.ok) {
-      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}`);
+      const detail = describeErrorBody(await res.text());
+      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}${detail ? `: ${detail}` : ''}`);
     }
     return res;
   }

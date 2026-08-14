@@ -155,6 +155,7 @@ suite('Launchpad', () => {
           status: 401,
           statusText: 'Unauthorized',
           json: async () => ({}),
+          text: async () => '{}',
         })) as unknown as typeof fetch);
 
         try {
@@ -517,7 +518,10 @@ suite('Launchpad', () => {
                 iid: 61,
                 title: 'Reviewable PR',
                 web_url: 'https://gitlab.com/acme/widgets/-/merge_requests/61',
-                author: { username: 'raj' },
+                // A different author than the signed-in user ('raj', mocked via /user below) —
+                // Launchpad now refuses to submit a review on your own PR before ever calling the
+                // API, so this needs to be someone else's PR to actually exercise the approve call.
+                author: { username: 'other-dev' },
                 created_at: '2024-01-01T00:00:00Z',
                 updated_at: '2024-01-01T00:00:00Z',
               },
@@ -548,6 +552,54 @@ suite('Launchpad', () => {
 
         await api.launchpadProvider.submitReviewForTest('gitlab:acme/widgets#61', 'approve');
         assert.ok(approveCalled, 'expected the approve endpoint to be called');
+      }),
+    ));
+
+  test('submitting a review on your own PR never calls the host — every host rejects self-review anyway, so this is caught before the request', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/widgets.git', async () => {
+        let approveCalled = false;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 62,
+                title: 'My own PR',
+                web_url: 'https://gitlab.com/acme/widgets/-/merge_requests/62',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: false, approved_by: [] });
+          }
+          if (url.endsWith('/merge_requests/62/approve') && init?.method === 'POST') {
+            approveCalled = true;
+            return jsonResponse({});
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('My own PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        await api.launchpadProvider.submitReviewForTest('gitlab:acme/widgets#62', 'approve');
+        assert.ok(!approveCalled, 'expected the approve endpoint to never be called for your own PR');
       }),
     ));
 

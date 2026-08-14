@@ -1,6 +1,7 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
 import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import { describeErrorBody } from './httpError';
 
 /** Fetches up to 100 review threads and each one's first comment — enough to identify and resolve a conversation without paginating replies nobody asked to see. */
 const REVIEW_THREADS_QUERY = `
@@ -11,6 +12,9 @@ query($owner: String!, $name: String!, $number: Int!) {
         nodes {
           id
           isResolved
+          path
+          line
+          originalLine
           comments(first: 1) {
             nodes {
               body
@@ -37,6 +41,10 @@ interface GitHubReviewThreadsResponse {
         nodes: Array<{
           id: string;
           isResolved: boolean;
+          path: string;
+          /** Null once the thread's commit is no longer part of the PR (an outdated/superseded diff) — `originalLine` is always set for a line comment, so it's the fallback. */
+          line: number | null;
+          originalLine: number | null;
           comments: { nodes: Array<{ body: string; author: { login: string } | null }> };
         }>;
       };
@@ -228,11 +236,14 @@ export class GitHubClient implements ForgeClient {
     const data = await this.graphql<GitHubReviewThreadsResponse>(REVIEW_THREADS_QUERY, { owner, name, number });
     return data.repository.pullRequest.reviewThreads.nodes.map((thread) => {
       const comment = thread.comments.nodes[0];
+      const line = thread.line ?? thread.originalLine ?? undefined;
       return {
         id: thread.id,
         body: comment?.body ?? '',
         authorLogin: comment?.author?.login ?? '',
         resolved: thread.isResolved,
+        ...(thread.path !== undefined ? { file: thread.path } : {}),
+        ...(line !== undefined ? { line } : {}),
       };
     });
   }
@@ -315,7 +326,8 @@ export class GitHubClient implements ForgeClient {
       throw new Error(`couldn't reach ${new URL(url).host}: ${err instanceof Error ? err.message : String(err)}`);
     }
     if (!res.ok) {
-      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}`);
+      const detail = describeErrorBody(await res.text());
+      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}${detail ? `: ${detail}` : ''}`);
     }
     return res;
   }

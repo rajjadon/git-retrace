@@ -8,7 +8,13 @@ const IDENTITY = buildAzureDevOpsIdentity({ organization: 'acme', project: 'Widg
 const REPO: ForgeRepoRef = { host: 'azureDevOps', identity: IDENTITY, label: 'acme/Widgets/widgets-api' };
 
 function jsonResponse(body: unknown, ok = true): Response {
-  return { ok, status: ok ? 200 : 401, statusText: ok ? 'OK' : 'Unauthorized', json: async () => body } as unknown as Response;
+  return {
+    ok,
+    status: ok ? 200 : 401,
+    statusText: ok ? 'OK' : 'Unauthorized',
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  } as unknown as Response;
 }
 
 function fakeFetch(routes: Record<string, unknown>): typeof fetch {
@@ -456,6 +462,28 @@ test('listConversationThreads: excludes deleted threads and system-generated one
     { id: '1', body: 'Fix this', authorLogin: 'amy@acme.com', resolved: false },
     { id: '2', body: 'Already fine', authorLogin: 'raj@acme.com', resolved: true },
   ]);
+});
+
+test('listConversationThreads: surfaces the file/line a code thread is anchored to', async () => {
+  const client = new AzureDevOpsClient(
+    IDENTITY,
+    'pat',
+    'pat',
+    fakeFetch({
+      'pullrequests/56/threads?api-version=7.1': {
+        value: [
+          {
+            id: 1,
+            status: 'active',
+            comments: [{ content: 'Fix this', author: { uniqueName: 'amy@acme.com' }, commentType: 'text' }],
+            threadContext: { filePath: '/src/a.ts', rightFileStart: { line: 42 } },
+          },
+        ],
+      },
+    }),
+  );
+  const result = await client.listConversationThreads(REPO, 56);
+  assert.deepEqual(result, [{ id: '1', body: 'Fix this', authorLogin: 'amy@acme.com', resolved: false, file: '/src/a.ts', line: 42 }]);
 });
 
 test('resolveConversationThread: PATCHes status="fixed" (the enum name, not a number) to the thread endpoint', async () => {

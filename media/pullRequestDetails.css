@@ -105,6 +105,13 @@ h1 {
   opacity: 0.6;
 }
 
+.thread-location {
+  font-family: var(--vscode-editor-font-family);
+  font-size: 0.85em;
+  color: var(--vscode-textLink-foreground, var(--vscode-descriptionForeground));
+  margin-bottom: 0.2rem;
+}
+
 .thread-body {
   overflow-wrap: anywhere;
   margin-bottom: 0.25rem;

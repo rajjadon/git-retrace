@@ -7,7 +7,13 @@ const REPO: ForgeRepoRef = { host: 'bitbucket', identity: 'acme/widgets', label:
 const BASE = 'https://api.bitbucket.org/2.0';
 
 function jsonResponse(body: unknown, ok = true): Response {
-  return { ok, status: ok ? 200 : 401, statusText: ok ? 'OK' : 'Unauthorized', json: async () => body } as unknown as Response;
+  return {
+    ok,
+    status: ok ? 200 : 401,
+    statusText: ok ? 'OK' : 'Unauthorized',
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  } as unknown as Response;
 }
 
 function textResponse(body: string): Response {
@@ -367,6 +373,20 @@ test('listConversationThreads: only top-level comments (no parent) are returned 
     { id: '1', body: 'Fix this', authorLogin: 'amy', resolved: false },
     { id: '3', body: 'Already fine', authorLogin: 'raj', resolved: true },
   ]);
+});
+
+test('listConversationThreads: surfaces the file/line an inline comment is anchored to', async () => {
+  const client = new BitbucketClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      'pullrequests/38/comments': {
+        values: [{ id: 1, content: { raw: 'Fix this' }, user: { username: 'amy' }, inline: { path: 'src/a.ts', to: 42 } }],
+      },
+    }),
+  );
+  const result = await client.listConversationThreads(REPO, 38);
+  assert.deepEqual(result, [{ id: '1', body: 'Fix this', authorLogin: 'amy', resolved: false, file: 'src/a.ts', line: 42 }]);
 });
 
 test('resolveConversationThread: POSTs to /comments/{id}/resolve', async () => {

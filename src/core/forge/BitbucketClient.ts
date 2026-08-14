@@ -1,6 +1,7 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
 import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import { describeErrorBody } from './httpError';
 
 interface BitbucketUser {
   username?: string;
@@ -42,6 +43,8 @@ interface BitbucketComment {
   user: BitbucketUser | null;
   parent?: { id: number };
   resolution?: unknown;
+  /** Only present on a comment attached to a specific diff line — absent for a general PR comment. `to` is the line on the new side; `from` is the old side, used when the comment is on a removed line. */
+  inline?: { path: string; to?: number | null; from?: number | null };
 }
 
 interface BitbucketDiffstatEntry {
@@ -198,12 +201,17 @@ export class BitbucketClient implements ForgeClient {
     const page = (await res.json()) as BitbucketPage<BitbucketComment>;
     return page.values
       .filter((c) => !c.parent)
-      .map((c) => ({
-        id: String(c.id),
-        body: c.content.raw,
-        authorLogin: loginOf(c.user),
-        resolved: c.resolution !== undefined && c.resolution !== null,
-      }));
+      .map((c) => {
+        const line = c.inline?.to ?? c.inline?.from ?? undefined;
+        return {
+          id: String(c.id),
+          body: c.content.raw,
+          authorLogin: loginOf(c.user),
+          resolved: c.resolution !== undefined && c.resolution !== null,
+          ...(c.inline?.path !== undefined ? { file: c.inline.path } : {}),
+          ...(line !== undefined ? { line } : {}),
+        };
+      });
   }
 
   async resolveConversationThread(repo: ForgeRepoRef, number: number, threadId: string): Promise<void> {
@@ -254,7 +262,8 @@ export class BitbucketClient implements ForgeClient {
       throw new Error(`couldn't reach ${new URL(url).host}: ${err instanceof Error ? err.message : String(err)}`);
     }
     if (!res.ok) {
-      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}`);
+      const detail = describeErrorBody(await res.text());
+      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}${detail ? `: ${detail}` : ''}`);
     }
     return res;
   }

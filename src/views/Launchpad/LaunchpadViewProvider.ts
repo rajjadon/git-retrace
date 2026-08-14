@@ -51,6 +51,8 @@ export class LaunchpadViewProvider implements vscode.Disposable {
   private prsByKey = new Map<string, PullRequestSummary>();
   /** Rebuilt on every refresh — lets Push/Pull find the right local working copy from a repo row's stable key. Populated regardless of forge auth outcome: push/pull is a local git operation that doesn't need a host credential at all. */
   private repoRootByKey = new Map<string, string>();
+  /** Rebuilt on every refresh — the signed-in login per repo, so `submitReview` can catch "you're reviewing your own PR" before ever calling the host's API. Every host we support rejects a self-review one way or another; catching it here turns that into one clear message instead of a different opaque API error per host. */
+  private loginByRepoKey = new Map<string, string>();
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -99,11 +101,20 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     return this.panel?.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', name)).toString() ?? '';
   }
 
-  private async refresh(): Promise<void> {
+  /**
+   * `showLoadingPlaceholder` defaults to true for the initial open and an explicit "Refresh"
+   * click, where a brief loading state is expected. A refresh that follows a card action
+   * (snooze/close/approve) passes `false` — setting `webview.html` at all forces VS Code to fully
+   * reset the webview's DOM, so blanking it out first (as this always used to do) made every
+   * successful action visibly flash back to a loading screen before repainting the board.
+   */
+  private async refresh(showLoadingPlaceholder = true): Promise<void> {
     if (!this.panel) {
       return;
     }
-    this.panel.webview.html = shellHtml('<p>Loading Launchpad…</p>');
+    if (showLoadingPlaceholder) {
+      this.panel.webview.html = shellHtml('<p>Loading Launchpad…</p>');
+    }
     const styleUris = [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.launchpad)];
     const renderOpts = { nonce: createNonce(), cspSource: this.panel.webview.cspSource, styleUris };
 
@@ -122,6 +133,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     this.clientsByRepoKey = new Map();
     this.prsByKey = new Map();
     this.repoRootByKey = new Map();
+    this.loginByRepoKey = new Map();
     const repoRows: LaunchpadRepoRow[] = [];
 
     for (const { repo, detected, repoRoot } of repos) {
@@ -163,6 +175,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
           continue;
         }
         this.clientsByRepoKey.set(`${repo.host}:${repo.identity}`, client);
+        this.loginByRepoKey.set(`${repo.host}:${repo.identity}`, login);
         const [prs, closedPrs] = await Promise.all([client.listOpenPullRequests(repo), client.listRecentlyClosedPullRequests(repo)]);
         const openCategorized = categorizePullRequests(prs, login, (pr) => this.isSnoozed(pr));
         const closedCategorized = categorizeClosedPullRequests(closedPrs, login);
@@ -254,7 +267,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
   /** Test-only introspection seam — a webview button click can't be simulated in an integration test, so this drives the same toggle-then-refresh flow the snooze button's message handler does. */
   async toggleSnoozeForTest(key: string): Promise<void> {
     await this.toggleSnooze(key);
-    await this.refresh();
+    await this.refresh(false);
   }
 
   private async handleMessage(message: unknown): Promise<void> {
@@ -275,7 +288,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     }
     if (type === 'toggleSnooze' && typeof key === 'string') {
       await this.toggleSnooze(key);
-      await this.refresh();
+      await this.refresh(false);
       return;
     }
     if (type === 'closePr' && typeof key === 'string') {
@@ -350,7 +363,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     }
     try {
       await client.closePullRequest(pr.repo, pr.number);
-      await this.refresh();
+      await this.refresh(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger?.error(`Launchpad failed to close PR ${key}`, err);
@@ -369,12 +382,22 @@ export class LaunchpadViewProvider implements vscode.Disposable {
       return;
     }
     await client.closePullRequest(pr.repo, pr.number);
-    await this.refresh();
+    await this.refresh(false);
+  }
+
+  /** Every host we support rejects a review from the PR's own author one way or another — catching it here, before the API call, turns that into one clear message instead of a different opaque rejection per host (see the 422 GitHub returns for exactly this). */
+  private isOwnPullRequest(pr: PullRequestSummary): boolean {
+    const login = this.loginByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    return !!login && pr.authorLogin.toLowerCase() === login.toLowerCase();
   }
 
   private async submitReview(key: string, title: string, decision: ReviewSubmission): Promise<void> {
     const pr = this.prsByKey.get(key);
     if (!pr) {
+      return;
+    }
+    if (this.isOwnPullRequest(pr)) {
+      void vscode.window.showWarningMessage("GitLore: you can't review your own pull request.");
       return;
     }
     const verb = decision === 'approve' ? 'Approve' : 'Request changes on';
@@ -388,7 +411,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     }
     try {
       await client.submitReview(pr.repo, pr.number, decision);
-      await this.refresh();
+      await this.refresh(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger?.error(`Launchpad failed to submit a review for PR ${key}`, err);
@@ -402,11 +425,14 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     if (!pr) {
       return;
     }
+    if (this.isOwnPullRequest(pr)) {
+      return;
+    }
     const client = this.clientsByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
     if (!client) {
       return;
     }
     await client.submitReview(pr.repo, pr.number, decision);
-    await this.refresh();
+    await this.refresh(false);
   }
 }

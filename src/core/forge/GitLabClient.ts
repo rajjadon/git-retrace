@@ -1,6 +1,7 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
 import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import { describeErrorBody } from './httpError';
 
 interface GitLabUser {
   username: string;
@@ -28,7 +29,14 @@ interface GitLabMergeRequest {
 /** A GitLab "discussion" is the thread; `notes` are its comments. Only a `resolvable` discussion (a genuine review conversation, not a plain top-level comment) can be resolved at all. */
 interface GitLabDiscussion {
   id: string;
-  notes: Array<{ body: string; author: GitLabUser | null; resolvable: boolean; resolved: boolean }>;
+  notes: Array<{
+    body: string;
+    author: GitLabUser | null;
+    resolvable: boolean;
+    resolved: boolean;
+    /** Only present on a note attached to a specific diff line — absent for a plain discussion note. */
+    position?: { new_path?: string; old_path?: string; new_line?: number | null; old_line?: number | null };
+  }>;
 }
 
 interface GitLabApprovals {
@@ -206,12 +214,19 @@ export class GitLabClient implements ForgeClient {
     const discussions = (await res.json()) as GitLabDiscussion[];
     return discussions
       .filter((d) => d.notes[0]?.resolvable)
-      .map((d) => ({
-        id: d.id,
-        body: d.notes[0]?.body ?? '',
-        authorLogin: d.notes[0]?.author?.username ?? '',
-        resolved: d.notes[0]?.resolved ?? false,
-      }));
+      .map((d) => {
+        const position = d.notes[0]?.position;
+        const file = position?.new_path ?? position?.old_path;
+        const line = position?.new_line ?? position?.old_line ?? undefined;
+        return {
+          id: d.id,
+          body: d.notes[0]?.body ?? '',
+          authorLogin: d.notes[0]?.author?.username ?? '',
+          resolved: d.notes[0]?.resolved ?? false,
+          ...(file !== undefined ? { file } : {}),
+          ...(line !== undefined ? { line } : {}),
+        };
+      });
   }
 
   async resolveConversationThread(repo: ForgeRepoRef, number: number, threadId: string): Promise<void> {
@@ -269,7 +284,8 @@ export class GitLabClient implements ForgeClient {
       throw new Error(`couldn't reach ${new URL(url).host}: ${err instanceof Error ? err.message : String(err)}`);
     }
     if (!res.ok) {
-      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}`);
+      const detail = describeErrorBody(await res.text());
+      throw new Error(`${res.status} ${res.statusText} from ${new URL(url).host}${detail ? `: ${detail}` : ''}`);
     }
     return res;
   }

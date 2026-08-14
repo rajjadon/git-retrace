@@ -19,6 +19,8 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **Launchpad: Approve / Request changes** — two new actions on every open PR card (with a confirmation dialog first), across all four supported hosts. GitLab has no "Request Changes" review state of its own, so that action tells you so instead of silently doing nothing.
 - **Pull Request Details: add a comment** — a comment box in the panel posts a top-level comment on the PR without leaving GitLore, across all four supported hosts.
 - **Pull Request Details: resolve conversation threads** — the panel now lists review conversations with a Resolve button per unresolved one, across all four supported hosts.
+- **Pull Request Details: a Refresh button** — picks up state that changed elsewhere (e.g. approving the same PR from a Launchpad card while its Details panel is open), across all four supported hosts.
+- **Pull Request Details: conversations show which file/line they're on** — a review comment attached to a specific diff line now shows a `path:line` label above it, so you can tell which part of the diff a reviewer was actually commenting on instead of only seeing the comment text.
 
 ### Fixed
 
@@ -30,6 +32,8 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - A failed PR-list request on any host (bad credential, insufficient scope, etc.) was silently rendered as an empty board, indistinguishable from a repo with genuinely no PRs. Now surfaces as a visible error, and clears the bad credential so the next refresh re-prompts instead of repeating the same failure forever.
 - Launchpad card buttons (view diff, snooze, approve, request changes, close) relied on the browser's native hover tooltip, which several of them weren't reliably showing. Every icon button in Launchpad now uses a tooltip GitLore renders and positions itself, so hovering any of them — including the snooze/unsnooze clock icon — reliably tells you what it does.
 - Azure DevOps' **View diff** panel could crash with "Cannot read properties of null" instead of loading, because some real change entries (folder-level entries, property-only changes) have no file path at all. Those entries are now skipped instead of assumed to always have one.
+- Approving or requesting changes on your own PR failed with a bare "422 Unprocessable Entity" and no explanation — every host rejects a self-review, so Launchpad now catches this before ever calling the API and tells you plainly instead. Any other review/close/comment failure now also surfaces the host's actual rejection reason (e.g. GitHub's real validation message), not just the HTTP status code.
+- Approving, requesting changes on, closing, or snoozing a Launchpad card made the whole board flash back to a "Loading Launchpad…" screen before repainting. These actions now refresh in place instead of blanking the board first.
 
 ## [0.4.0] - 2026-08-14
 

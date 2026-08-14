@@ -110,6 +110,13 @@ export class PullRequestDetailsViewProvider implements vscode.WebviewViewProvide
     }
     if (type === 'resolveThread' && typeof threadId === 'string' && this.currentPr && this.currentClient) {
       await this.resolveThread(this.currentPr, this.currentClient, threadId);
+      return;
+    }
+    if (type === 'refresh' && this.currentPr && this.currentClient) {
+      // The panel doesn't know about actions taken elsewhere (e.g. approving this same PR from a
+      // Launchpad card) — a manual refresh is the deliberately simple fix over wiring up
+      // cross-webview notifications for what's a rare case.
+      await this.load(this.currentPr, this.currentClient);
     }
   }
 

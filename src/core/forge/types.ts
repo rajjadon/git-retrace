@@ -71,6 +71,9 @@ export interface ConversationThread {
   body: string;
   authorLogin: string;
   resolved: boolean;
+  /** The file/line this conversation is anchored to, when it's a code comment rather than a general PR-level one — every host we support already returns this alongside the thread data `listConversationThreads` fetches, it just wasn't being read. `line` is absent for a thread that isn't attached to any specific line. */
+  file?: string;
+  line?: number;
 }
 
 export const LAUNCHPAD_BUCKETS = [

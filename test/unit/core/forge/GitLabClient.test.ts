@@ -7,7 +7,13 @@ const REPO: ForgeRepoRef = { host: 'gitlab', identity: 'acme/widgets', label: 'a
 const BASE = 'https://gitlab.com/api/v4';
 
 function jsonResponse(body: unknown, ok = true): Response {
-  return { ok, status: ok ? 200 : 401, statusText: ok ? 'OK' : 'Unauthorized', json: async () => body } as unknown as Response;
+  return {
+    ok,
+    status: ok ? 200 : 401,
+    statusText: ok ? 'OK' : 'Unauthorized',
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  } as unknown as Response;
 }
 
 function fakeFetch(routes: Record<string, unknown>): typeof fetch {
@@ -350,6 +356,31 @@ test('listConversationThreads: only resolvable discussions are returned — a pl
     { id: 'd1', body: 'Fix this', authorLogin: 'amy', resolved: false },
     { id: 'd2', body: 'Already fine', authorLogin: 'raj', resolved: true },
   ]);
+});
+
+test('listConversationThreads: surfaces the file/line a diff note is anchored to', async () => {
+  const client = new GitLabClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/merge_requests/27/discussions?per_page=100': [
+        {
+          id: 'd1',
+          notes: [
+            {
+              body: 'Fix this',
+              author: { username: 'amy' },
+              resolvable: true,
+              resolved: false,
+              position: { new_path: 'src/a.ts', old_path: 'src/a.ts', new_line: 42, old_line: null },
+            },
+          ],
+        },
+      ],
+    }),
+  );
+  const result = await client.listConversationThreads(REPO, 27);
+  assert.deepEqual(result, [{ id: 'd1', body: 'Fix this', authorLogin: 'amy', resolved: false, file: 'src/a.ts', line: 42 }]);
 });
 
 test('resolveConversationThread: PUTs resolved=true to the discussion endpoint', async () => {

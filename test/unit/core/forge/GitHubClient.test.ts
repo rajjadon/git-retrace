@@ -7,7 +7,13 @@ const REPO: ForgeRepoRef = { host: 'github', identity: 'acme/widgets', label: 'a
 const BASE = 'https://api.github.com';
 
 function jsonResponse(body: unknown, ok = true): Response {
-  return { ok, status: ok ? 200 : 401, statusText: ok ? 'OK' : 'Unauthorized', json: async () => body } as unknown as Response;
+  return {
+    ok,
+    status: ok ? 200 : 401,
+    statusText: ok ? 'OK' : 'Unauthorized',
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  } as unknown as Response;
 }
 
 function textResponse(body: string): Response {
@@ -419,6 +425,45 @@ test('listConversationThreads: POSTs a GraphQL query to /graphql (not REST) and 
   assert.deepEqual(result, [
     { id: 'PRRT_1', body: 'Fix this', authorLogin: 'amy', resolved: false },
     { id: 'PRRT_2', body: 'Already fine', authorLogin: 'raj', resolved: true },
+  ]);
+});
+
+test('listConversationThreads: surfaces the file/line a review comment is anchored to', async () => {
+  const client = new GitHubClient(BASE, 'tok', (async () =>
+    jsonResponse({
+      data: {
+        repository: {
+          pullRequest: {
+            reviewThreads: {
+              nodes: [
+                {
+                  id: 'PRRT_1',
+                  isResolved: false,
+                  path: 'src/a.ts',
+                  line: 42,
+                  originalLine: 40,
+                  comments: { nodes: [{ body: 'Fix this', author: { login: 'amy' } }] },
+                },
+                {
+                  // Outdated — the thread's commit is no longer part of the PR, so `line` is null
+                  // and `originalLine` (always set for a line comment) is the fallback.
+                  id: 'PRRT_2',
+                  isResolved: false,
+                  path: 'src/b.ts',
+                  line: null,
+                  originalLine: 7,
+                  comments: { nodes: [{ body: 'Also fix this', author: { login: 'amy' } }] },
+                },
+              ],
+            },
+          },
+        },
+      },
+    })) as unknown as typeof fetch);
+  const result = await client.listConversationThreads(REPO, 18);
+  assert.deepEqual(result, [
+    { id: 'PRRT_1', body: 'Fix this', authorLogin: 'amy', resolved: false, file: 'src/a.ts', line: 42 },
+    { id: 'PRRT_2', body: 'Also fix this', authorLogin: 'amy', resolved: false, file: 'src/b.ts', line: 7 },
   ]);
 });
 
