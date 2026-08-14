@@ -53,7 +53,7 @@ body {
   flex: 0 1 auto;
   min-width: 0;
   padding: 0 0.3rem 0 0.35rem;
-  border-radius: 3px;
+  border-radius: var(--gitlore-radius-md);
   border-left: 2px solid currentColor;
 }
 
@@ -78,7 +78,7 @@ body {
   color: inherit;
   background-color: var(--vscode-dropdown-background);
   border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
-  border-radius: 2px;
+  border-radius: var(--gitlore-radius-sm);
   cursor: pointer;
 }
 
@@ -178,10 +178,12 @@ body {
   height: 24px;
   padding: 0 0.75rem;
   cursor: pointer;
+  transition: transform var(--gitlore-motion), background-color var(--gitlore-motion);
 }
 
 .commit-row:hover {
   background-color: var(--vscode-list-hoverBackground);
+  transform: translateY(-1px);
 }
 
 .commit-row:focus-visible {
@@ -231,4 +233,11 @@ body {
 .empty-icon {
   flex: 0 0 auto;
   color: var(--vscode-gitDecoration-addedResourceForeground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }

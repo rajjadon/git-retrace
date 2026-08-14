@@ -98,7 +98,7 @@ h1 {
 .thread {
   padding: 0.4rem 0.5rem;
   border: 1px solid var(--vscode-panel-border);
-  border-radius: 3px;
+  border-radius: var(--gitlore-radius-md);
 }
 
 .thread-resolved {
@@ -144,7 +144,7 @@ h1 {
   color: var(--vscode-input-foreground);
   background-color: var(--vscode-input-background);
   border: 1px solid var(--vscode-input-border, transparent);
-  border-radius: 3px;
+  border-radius: var(--gitlore-radius-md);
   padding: 0.4rem;
 }
 
@@ -164,4 +164,11 @@ h1 {
   margin: 0;
   color: var(--vscode-descriptionForeground);
   font-size: 0.9em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }

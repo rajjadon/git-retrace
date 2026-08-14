@@ -380,7 +380,7 @@ ${bubbles}
 ${axisLabels}
 </svg>
 </div>
-<div id="fh-tooltip" class="fh-tooltip" role="tooltip" aria-hidden="true" hidden></div>
+<div id="fh-tooltip" class="fh-tooltip gitlore-enter" role="tooltip" aria-hidden="true" hidden></div>
 <script nonce="${opts.nonce}">
 const vscode = acquireVsCodeApi();
 const tooltipEl = document.getElementById('fh-tooltip');

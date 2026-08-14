@@ -99,9 +99,9 @@ test('renderPullRequestDetailsHtml: an unresolved thread gets a Resolve button; 
     { id: 't2', body: 'Already fine', authorLogin: 'raj', resolved: true },
   ];
   const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads }, opts);
-  assert.match(html, /class="thread" data-thread-id="t1">[\s\S]*?class="thread-resolve[^"]*" type="button" data-thread-id="t1"/);
-  assert.ok(!/class="thread thread-resolved" data-thread-id="t2">[\s\S]*?class="thread-resolve/.test(html));
-  assert.match(html, /class="thread thread-resolved" data-thread-id="t2"/);
+  assert.match(html, /class="thread gitlore-enter" data-thread-id="t1">[\s\S]*?class="thread-resolve[^"]*" type="button" data-thread-id="t1"/);
+  assert.ok(!/class="thread gitlore-enter thread-resolved" data-thread-id="t2">[\s\S]*?class="thread-resolve/.test(html));
+  assert.match(html, /class="thread gitlore-enter thread-resolved" data-thread-id="t2"/);
 });
 
 test('renderPullRequestDetailsHtml: the Resolve button posts resolveThread with the thread\'s id', () => {

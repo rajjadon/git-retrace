@@ -6,6 +6,12 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-14
+
+### Changed
+
+- **Visual polish across every panel** — hover states on rows, cards, and buttons now ease in instead of snapping; PR cards, review threads, and hover tooltips gently fade/slide in on load; and border-radius is now consistent everywhere instead of drifting between 2px and 4px per view. All motion respects your OS's reduced-motion setting.
+
 ## [1.0.0] - 2026-08-14
 
 First stable release — closing out Phase 7 (Launchpad) of the roadmap.

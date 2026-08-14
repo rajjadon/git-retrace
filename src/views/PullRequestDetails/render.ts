@@ -29,7 +29,7 @@ function renderThread(thread: ConversationThread): string {
     thread.file !== undefined
       ? `<div class="thread-location">${escapeHtml(thread.file.replace(/^\//, ''))}${thread.line !== undefined ? `:${thread.line}` : ''}</div>`
       : '';
-  return `<div class="thread${thread.resolved ? ' thread-resolved' : ''}" data-thread-id="${escapeHtml(thread.id)}">
+  return `<div class="thread gitlore-enter${thread.resolved ? ' thread-resolved' : ''}" data-thread-id="${escapeHtml(thread.id)}">
 ${location}
 <div class="thread-body">${escapeHtml(thread.body)}</div>
 <div class="thread-meta"><span class="thread-author">${escapeHtml(thread.authorLogin)}</span>${resolveBtn}</div>

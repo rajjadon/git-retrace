@@ -81,7 +81,7 @@ function renderCard(pr: PullRequestSummary, now: Date, bucket: LaunchpadBucket):
 <button class="pr-card-details icon-btn" type="button" data-key="${escapeHtml(key)}" data-tooltip="View PR diff" aria-label="View diff for ${escapeHtml(pr.title)}">${OPEN_CHANGES_ICON}</button>
 ${stateActions}
 </div>`;
-  return `<div class="pr-card" data-key="${escapeHtml(key)}" data-url="${escapeHtml(pr.url)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(pr.title)} on ${escapeHtml(pr.repo.label)}">
+  return `<div class="pr-card gitlore-enter" data-key="${escapeHtml(key)}" data-url="${escapeHtml(pr.url)}" tabindex="0" role="button" aria-label="Open ${escapeHtml(pr.title)} on ${escapeHtml(pr.repo.label)}">
 <div class="pr-card-header">
 <div class="pr-card-repo" title="${escapeHtml(pr.repo.label)}">${escapeHtml(pr.repo.label)}</div>
 ${actions}
