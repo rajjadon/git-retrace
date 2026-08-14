@@ -144,8 +144,10 @@ body {
   margin-left: auto;
 }
 
-.pr-card-snooze {
+.pr-card-actions {
   position: absolute;
   top: 0.3rem;
   right: 0.3rem;
+  display: flex;
+  gap: 0.1rem;
 }

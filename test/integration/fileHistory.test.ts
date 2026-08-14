@@ -4,6 +4,8 @@ import * as vscode from 'vscode';
 import { MANIFEST_PATH, type FixtureManifest } from '../fixtures/build-fixture-repo';
 import type { GitLoreTestApi } from '../../src/extension';
 import { COMMANDS } from '../../src/constants';
+import { isLoadMoreNode } from '../../src/providers/FileHistoryProvider';
+import type { Commit } from '../../src/core/git/types';
 import { EXTENSION_ID } from './extensionId';
 
 
@@ -35,7 +37,7 @@ suite('File history', () => {
     await vscode.commands.executeCommand(COMMANDS.showFileHistory);
     await waitFor(() => api.fileHistoryProvider.getChildren().length > 0);
 
-    const commits = api.fileHistoryProvider.getChildren();
+    const commits = api.fileHistoryProvider.getChildren().filter((n): n is Commit => !isLoadMoreNode(n));
     assert.equal(commits.length, 2);
     assert.equal(commits[0]?.message, 'add line three');
     assert.equal(commits[0]?.author, 'Amy Dev');
@@ -49,6 +51,35 @@ suite('File history', () => {
 
     await waitFor(() => api.fileHistoryProvider.getChildren().length === 0, 5000);
     assert.equal(api.fileHistoryProvider.getChildren().length, 0);
+  });
+
+  test('offers "Load more" when the cap is hit, and loading more reveals the rest', async () => {
+    const config = vscode.workspace.getConfiguration('gitLore');
+    await config.update('maxHistoryItems', 1, vscode.ConfigurationTarget.Global);
+    try {
+      const doc = await vscode.workspace.openTextDocument(manifest.trackedFile);
+      await vscode.window.showTextDocument(doc);
+      await vscode.commands.executeCommand(COMMANDS.showFileHistory);
+      await waitFor(() => api.fileHistoryProvider.getChildren().length > 0);
+
+      const firstPage = api.fileHistoryProvider.getChildren();
+      assert.equal(firstPage.length, 2, 'expected the one capped commit plus a "Load more" row');
+      const secondRow = firstPage[1];
+      assert.ok(secondRow && isLoadMoreNode(secondRow), 'expected the second row to be the "Load more" node');
+      const cappedCommits = firstPage.filter((n): n is Commit => !isLoadMoreNode(n));
+      assert.equal(cappedCommits.length, 1);
+      assert.equal(cappedCommits[0]?.message, 'add line three');
+
+      await vscode.commands.executeCommand(COMMANDS.loadMoreFileHistory);
+      await waitFor(() => api.fileHistoryProvider.getChildren().filter((n) => !isLoadMoreNode(n)).length > 1);
+
+      const secondPage = api.fileHistoryProvider.getChildren().filter((n): n is Commit => !isLoadMoreNode(n));
+      assert.equal(secondPage.length, 2);
+      assert.equal(secondPage[0]?.message, 'add line three');
+      assert.equal(secondPage[1]?.message, 'first commit');
+    } finally {
+      await config.update('maxHistoryItems', undefined, vscode.ConfigurationTarget.Global);
+    }
   });
 });
 

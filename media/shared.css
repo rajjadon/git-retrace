@@ -155,6 +155,57 @@
   text-align: center;
 }
 
+/*
+ * `border` is deliberate, not decorative: `--vscode-button-secondaryBackground` is nearly
+ * identical to the panel background in some themes, which left this reading as plain text with no
+ * visible button shape at all. A guaranteed-visible edge (the same divider color used everywhere
+ * else in GitLore) means it still reads as a button regardless of how a given theme tunes that
+ * fill color. `.btn-accent` doesn't need this — its gradient fill already has its own contrast.
+ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  font-family: inherit;
+  font-size: 0.92em;
+  color: var(--vscode-button-secondaryForeground);
+  background-color: var(--vscode-button-secondaryBackground);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.btn:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* The one accent-colored action in a panel — reserved for AI, so it reads as that panel's
+   signature feature rather than another utility button next to the rest. Uses GitLore's own
+   signature accent gradient (below) rather than the default button color every other extension
+   uses. `filter: brightness` (not a second hardcoded hover color) keeps the hover state correct
+   against whatever the accent resolves to under any theme. */
+.btn-accent {
+  color: var(--vscode-button-foreground);
+  background: var(--gitlore-accent-gradient-diag);
+}
+
+.btn-accent:hover {
+  filter: brightness(1.15);
+}
+
 /* ---------- Changed-file rows ---------- */
 
 .files {

@@ -92,6 +92,54 @@ export class GitLabClient implements ForgeClient {
     return Promise.all(raw.map((mr) => this.enrich(repo, projectPath, mr)));
   }
 
+  async listRecentlyClosedPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
+    // Unlike GitHub, GitLab's `state` distinguishes "merged" from "closed" (without merging) as
+    // two separate values — no single call covers both.
+    const projectPath = encodeURIComponent(repo.identity);
+    const [merged, closed] = await Promise.all([
+      this.fetchClosedList(repo, projectPath, 'merged', true),
+      this.fetchClosedList(repo, projectPath, 'closed', false),
+    ]);
+    return [...merged, ...closed];
+  }
+
+  private async fetchClosedList(
+    repo: ForgeRepoRef,
+    projectPath: string,
+    state: 'merged' | 'closed',
+    merged: boolean,
+  ): Promise<PullRequestSummary[]> {
+    const res = await this.requestOrNull(`/projects/${projectPath}/merge_requests?state=${state}&order_by=updated_at&per_page=10`);
+    if (!res) {
+      return [];
+    }
+    const raw = (await res.json()) as GitLabMergeRequest[];
+    return raw.map((mr) => ({
+      repo,
+      number: mr.iid,
+      title: mr.title,
+      url: mr.web_url,
+      authorLogin: mr.author?.username ?? '',
+      isDraft: false,
+      createdAt: mr.created_at,
+      updatedAt: mr.updated_at,
+      requestedReviewers: [],
+      checkStatus: 'none',
+      reviewDecision: 'none',
+      hasConflicts: false,
+      closedAt: mr.updated_at,
+      merged,
+    }));
+  }
+
+  async closePullRequest(repo: ForgeRepoRef, number: number): Promise<void> {
+    const projectPath = encodeURIComponent(repo.identity);
+    await this.request(`/projects/${projectPath}/merge_requests/${number}`, {
+      method: 'PUT',
+      body: JSON.stringify({ state_event: 'close' }),
+    });
+  }
+
   private async enrich(repo: ForgeRepoRef, projectPath: string, mr: GitLabMergeRequest): Promise<PullRequestSummary> {
     const approvals = await this.fetchApprovals(projectPath, mr.iid);
     const approvedByUsernames = new Set(approvals.approved_by.map((a) => a.user.username));
@@ -127,11 +175,17 @@ export class GitLabClient implements ForgeClient {
   }
 
   /** Throws with the real reason (HTTP status or network failure) instead of swallowing it — every caller except `getAuthenticatedLogin` wraps this in `requestOrNull` to keep their existing soft-degrade behavior. */
-  private async request(path: string): Promise<Response> {
+  private async request(path: string, init?: RequestInit): Promise<Response> {
     const url = `${this.apiBaseUrl}${path}`;
     let res: Response;
     try {
-      res = await this.fetchImpl(url, { headers: { 'PRIVATE-TOKEN': this.token } });
+      res = await this.fetchImpl(url, {
+        ...init,
+        headers: {
+          'PRIVATE-TOKEN': this.token,
+          ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        },
+      });
     } catch (err) {
       throw new Error(`couldn't reach ${new URL(url).host}: ${err instanceof Error ? err.message : String(err)}`);
     }

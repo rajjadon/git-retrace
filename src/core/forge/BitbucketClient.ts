@@ -101,6 +101,44 @@ export class BitbucketClient implements ForgeClient {
     return Promise.all(page.values.map((pr) => this.enrich(repo, pr)));
   }
 
+  async listRecentlyClosedPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
+    // Bitbucket calls a closed-without-merging PR "declined" — MERGED and DECLINED are separate
+    // state values, same as GitLab's merged/closed split.
+    const [merged, declined] = await Promise.all([
+      this.fetchClosedList(repo, 'MERGED', true),
+      this.fetchClosedList(repo, 'DECLINED', false),
+    ]);
+    return [...merged, ...declined];
+  }
+
+  private async fetchClosedList(repo: ForgeRepoRef, state: 'MERGED' | 'DECLINED', merged: boolean): Promise<PullRequestSummary[]> {
+    const res = await this.requestOrNull(`/repositories/${repo.identity}/pullrequests?state=${state}`);
+    if (!res) {
+      return [];
+    }
+    const page = (await res.json()) as BitbucketPage<BitbucketPullRequest>;
+    return page.values.slice(0, 10).map((pr) => ({
+      repo,
+      number: pr.id,
+      title: pr.title,
+      url: pr.links.html.href,
+      authorLogin: loginOf(pr.author),
+      isDraft: false,
+      createdAt: pr.created_on,
+      updatedAt: pr.updated_on,
+      requestedReviewers: [],
+      checkStatus: 'none',
+      reviewDecision: 'none',
+      hasConflicts: false,
+      closedAt: pr.updated_on,
+      merged,
+    }));
+  }
+
+  async closePullRequest(repo: ForgeRepoRef, number: number): Promise<void> {
+    await this.request(`/repositories/${repo.identity}/pullrequests/${number}/decline`, { method: 'POST' });
+  }
+
   private async enrich(repo: ForgeRepoRef, pr: BitbucketPullRequest): Promise<PullRequestSummary> {
     const statuses = await this.fetchBuildStatuses(repo, pr.source.commit.hash);
     const { requestedReviewers, reviewDecision } = reviewersInfo(pr);
@@ -130,11 +168,17 @@ export class BitbucketClient implements ForgeClient {
   }
 
   /** Throws with the real reason (HTTP status or network failure) instead of swallowing it — every caller except `getAuthenticatedLogin` wraps this in `requestOrNull` to keep their existing soft-degrade behavior. */
-  private async request(path: string): Promise<Response> {
+  private async request(path: string, init?: RequestInit): Promise<Response> {
     const url = `${this.apiBaseUrl}${path}`;
     let res: Response;
     try {
-      res = await this.fetchImpl(url, { headers: { Authorization: `Bearer ${this.token}` } });
+      res = await this.fetchImpl(url, {
+        ...init,
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        },
+      });
     } catch (err) {
       throw new Error(`couldn't reach ${new URL(url).host}: ${err instanceof Error ? err.message : String(err)}`);
     }

@@ -248,3 +248,75 @@ test('listOpenPullRequests: a network failure on an enrichment call degrades tha
   const result = await client.listOpenPullRequests(REPO);
   assert.equal(result[0]?.checkStatus, 'none');
 });
+
+test('listRecentlyClosedPullRequests: merged_at present -> merged true, and closedAt uses closed_at', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/pulls?state=closed&sort=updated&direction=desc&per_page=20': [
+        {
+          number: 10,
+          title: 'Shipped feature',
+          html_url: 'https://github.com/acme/widgets/pull/10',
+          user: { login: 'raj' },
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-05T00:00:00Z',
+          closed_at: '2024-01-05T00:00:00Z',
+          merged_at: '2024-01-05T00:00:00Z',
+        },
+      ],
+    }),
+  );
+  const result = await client.listRecentlyClosedPullRequests(REPO);
+  assert.equal(result.length, 1);
+  assert.equal(result[0]?.merged, true);
+  assert.equal(result[0]?.closedAt, '2024-01-05T00:00:00Z');
+});
+
+test('listRecentlyClosedPullRequests: merged_at null -> merged false (closed without merging)', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/pulls?state=closed&sort=updated&direction=desc&per_page=20': [
+        {
+          number: 11,
+          title: 'Abandoned idea',
+          html_url: 'u',
+          user: { login: 'raj' },
+          created_at: 'c',
+          updated_at: 'u',
+          closed_at: '2024-01-06T00:00:00Z',
+          merged_at: null,
+        },
+      ],
+    }),
+  );
+  const result = await client.listRecentlyClosedPullRequests(REPO);
+  assert.equal(result[0]?.merged, false);
+});
+
+test('listRecentlyClosedPullRequests: a failed list request returns an empty array, not a throw', async () => {
+  const client = new GitHubClient(BASE, 'tok', (async () => jsonResponse([], false)) as unknown as typeof fetch);
+  assert.deepEqual(await client.listRecentlyClosedPullRequests(REPO), []);
+});
+
+test('closePullRequest: PATCHes state=closed to the PR endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitHubClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.closePullRequest(REPO, 12);
+  assert.equal(capturedUrl, 'https://api.github.com/repos/acme/widgets/pulls/12');
+  assert.equal(capturedInit?.method, 'PATCH');
+  assert.equal(capturedInit?.body, JSON.stringify({ state: 'closed' }));
+});
+
+test('closePullRequest: a rejected request throws with the real HTTP status', async () => {
+  const client = new GitHubClient(BASE, 'tok', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  await assert.rejects(() => client.closePullRequest(REPO, 13), /401 Unauthorized from api\.github\.com/);
+});

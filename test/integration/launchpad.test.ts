@@ -113,6 +113,9 @@ suite('Launchpad', () => {
               },
             ]);
           }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
           if (url.endsWith('/approvals')) {
             return jsonResponse({ approved: false, approved_by: [] });
           }
@@ -194,6 +197,12 @@ suite('Launchpad', () => {
               ],
             });
           }
+          if (
+            url.includes('/pullrequests?searchCriteria.status=completed') ||
+            url.includes('/pullrequests?searchCriteria.status=abandoned')
+          ) {
+            return jsonResponse({ value: [] });
+          }
           throw new Error(`unmocked request in test: ${url}`);
         }) as unknown as typeof fetch);
 
@@ -245,6 +254,9 @@ suite('Launchpad', () => {
                 },
               ]);
             }
+            if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+              return jsonResponse([]);
+            }
             if (url.endsWith('/approvals')) {
               return jsonResponse({ approved: false, approved_by: [] });
             }
@@ -289,6 +301,9 @@ suite('Launchpad', () => {
                   updated_at: '2024-01-01T00:00:00Z',
                 },
               ]);
+            }
+            if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+              return jsonResponse([]);
             }
             if (url.endsWith('/approvals')) {
               return jsonResponse({ approved: false, approved_by: [] });
@@ -335,6 +350,9 @@ suite('Launchpad', () => {
               },
             ]);
           }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
           if (url.endsWith('/approvals')) {
             return jsonResponse({ approved: false, approved_by: [] });
           }
@@ -362,6 +380,117 @@ suite('Launchpad', () => {
 
         // Clean up the persisted snooze state so it doesn't leak into a later test run.
         await api.launchpadProvider.toggleSnoozeForTest('gitlab:acme/widgets#9');
+      }),
+    ));
+
+  test('a recently merged and a recently closed PR render in the "Merged" and "Closed" columns', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/widgets.git', async () => {
+        api.launchpadProvider.setFetchImplForTest((async (url: string) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([]);
+          }
+          if (url.includes('merge_requests?state=merged')) {
+            return jsonResponse([
+              {
+                iid: 50,
+                title: 'Shipped feature',
+                web_url: 'https://gitlab.com/acme/widgets/-/merge_requests/50',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-03T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=closed')) {
+            return jsonResponse([
+              {
+                iid: 51,
+                title: 'Abandoned idea',
+                web_url: 'https://gitlab.com/acme/widgets/-/merge_requests/51',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-04T00:00:00Z',
+              },
+            ]);
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Shipped feature'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        const html = api.getLaunchpadHtml() ?? '';
+        assert.match(columnHtml(html, 'merged'), /Shipped feature/);
+        assert.match(columnHtml(html, 'closed'), /Abandoned idea/);
+        assert.ok(!columnHtml(html, 'closed').includes('Shipped feature'));
+        assert.ok(!columnHtml(html, 'merged').includes('Abandoned idea'));
+      }),
+    ));
+
+  test('closing a PR calls the client and removes it from the board on the next refresh', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/widgets.git', async () => {
+        let closeCalled = false;
+        let openCallCount = 0;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            openCallCount++;
+            return jsonResponse(
+              openCallCount === 1
+                ? [
+                    {
+                      iid: 60,
+                      title: 'Closable PR',
+                      web_url: 'https://gitlab.com/acme/widgets/-/merge_requests/60',
+                      author: { username: 'raj' },
+                      created_at: '2024-01-01T00:00:00Z',
+                      updated_at: '2024-01-01T00:00:00Z',
+                    },
+                  ]
+                : [],
+            );
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: false, approved_by: [] });
+          }
+          if (url.endsWith('/merge_requests/60') && init?.method === 'PUT') {
+            closeCalled = true;
+            assert.equal(init.body, JSON.stringify({ state_event: 'close' }));
+            return jsonResponse({});
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Closable PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        await api.launchpadProvider.closePullRequestForTest('gitlab:acme/widgets#60');
+        assert.ok(closeCalled, 'expected the close endpoint to be called');
+        await waitFor(() => !(api.getLaunchpadHtml() ?? '').includes('Closable PR'));
       }),
     ));
 });

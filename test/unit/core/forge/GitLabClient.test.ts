@@ -206,3 +206,44 @@ test('listOpenPullRequests: a failed list request returns an empty array, not a 
   const client = new GitLabClient(BASE, 'tok', (async () => jsonResponse([], false)) as unknown as typeof fetch);
   assert.deepEqual(await client.listOpenPullRequests(REPO), []);
 });
+
+test('listRecentlyClosedPullRequests: combines merged and closed lists, tagging each with the right merged flag', async () => {
+  const client = new GitLabClient(BASE, 'tok', (async (url: string) => {
+    if (url.includes('state=merged')) {
+      return jsonResponse([
+        { iid: 20, title: 'Shipped', web_url: 'u1', author: { username: 'raj' }, created_at: 'c', updated_at: '2024-01-05T00:00:00Z' },
+      ]);
+    }
+    if (url.includes('state=closed')) {
+      return jsonResponse([
+        { iid: 21, title: 'Abandoned', web_url: 'u2', author: { username: 'raj' }, created_at: 'c', updated_at: '2024-01-06T00:00:00Z' },
+      ]);
+    }
+    throw new Error(`unmocked request: ${url}`);
+  }) as unknown as typeof fetch);
+  const result = await client.listRecentlyClosedPullRequests(REPO);
+  assert.equal(result.length, 2);
+  const shipped = result.find((r) => r.number === 20);
+  const abandoned = result.find((r) => r.number === 21);
+  assert.equal(shipped?.merged, true);
+  assert.equal(abandoned?.merged, false);
+});
+
+test('listRecentlyClosedPullRequests: a failed list request degrades to an empty array for that state', async () => {
+  const client = new GitLabClient(BASE, 'tok', (async () => jsonResponse([], false)) as unknown as typeof fetch);
+  assert.deepEqual(await client.listRecentlyClosedPullRequests(REPO), []);
+});
+
+test('closePullRequest: PUTs state_event=close to the merge request endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.closePullRequest(REPO, 22);
+  assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests/22');
+  assert.equal(capturedInit?.method, 'PUT');
+  assert.equal(capturedInit?.body, JSON.stringify({ state_event: 'close' }));
+});

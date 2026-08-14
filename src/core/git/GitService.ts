@@ -348,6 +348,20 @@ export class GitService {
     }
   }
 
+  /** The staged diff (`git diff --staged`), for AI commit-message generation. Empty string if nothing is staged, the path isn't in a repo, or the diff can't be read. */
+  async getStagedDiff(filePath: string): Promise<string> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return '';
+    }
+    try {
+      return await this.gitFor(repoRoot).raw(['diff', '--staged']);
+    } catch (err) {
+      this.logger?.warn(`git diff --staged failed for ${repoRoot}: ${String(err)}`);
+      return '';
+    }
+  }
+
   /**
    * One file's full contents at a given ref, for the "before"/"after" sides of a diff editor.
    * Returns '' when the path doesn't exist at that ref — which is the correct left-hand side for

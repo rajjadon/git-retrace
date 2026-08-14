@@ -35,9 +35,22 @@ export interface PullRequestSummary {
   checkStatus: CheckStatus;
   reviewDecision: ReviewDecision;
   hasConflicts: boolean;
+  /** Only set on a PR returned by `listRecentlyClosedPullRequests` — when it was closed (merged or not). Undefined for an open PR. */
+  closedAt?: string;
+  /** Only meaningful alongside `closedAt`: true if the PR was merged, false if it was closed without merging. */
+  merged?: boolean;
 }
 
-export const LAUNCHPAD_BUCKETS = ['needsReview', 'readyToMerge', 'waiting', 'blocked', 'drafts', 'snoozed'] as const;
+export const LAUNCHPAD_BUCKETS = [
+  'needsReview',
+  'readyToMerge',
+  'waiting',
+  'blocked',
+  'drafts',
+  'snoozed',
+  'merged',
+  'closed',
+] as const;
 
 export type LaunchpadBucket = (typeof LAUNCHPAD_BUCKETS)[number];
 

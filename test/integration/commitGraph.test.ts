@@ -138,4 +138,25 @@ suite('Commit graph webview', () => {
 
     await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('ref-head" title="pretend-origin-main (current)"'));
   });
+
+  test('offers "Load more" when the cap is hit, and loading more reveals the rest', async () => {
+    const config = vscode.workspace.getConfiguration('gitLore');
+    await config.update('maxGraphItems', 1, vscode.ConfigurationTarget.Global);
+    try {
+      const doc = await vscode.workspace.openTextDocument(manifest.trackedFile);
+      await vscode.window.showTextDocument(doc);
+      await vscode.commands.executeCommand(COMMANDS.openGraph);
+      await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('add line three'));
+
+      const firstHtml = api.getCommitGraphHtml() ?? '';
+      assert.match(firstHtml, /id="load-more"/);
+      assert.ok(!firstHtml.includes('first commit'), 'expected the cap to hide the older commit');
+
+      await api.loadMoreCommitGraph();
+      await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('first commit'));
+      assert.match(api.getCommitGraphHtml() ?? '', /add line three/);
+    } finally {
+      await config.update('maxGraphItems', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
 });

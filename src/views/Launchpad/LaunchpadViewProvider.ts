@@ -3,8 +3,9 @@ import { GitService } from '../../core/git/GitService';
 import type { GitLogger } from '../../core/git/errors';
 import { parseRemoteUrl } from '../../core/git/parsers';
 import { buildForgeClient } from '../../core/forge/buildForgeClient';
-import { categorizePullRequests } from '../../core/forge/categorize';
+import { categorizeClosedPullRequests, categorizePullRequests } from '../../core/forge/categorize';
 import { detectForgeHost, type DetectedForgeHost, type ForgeHostConfig } from '../../core/forge/hostDetection';
+import type { ForgeClient } from '../../core/forge/ForgeClient';
 import { resolveForgeRepoRef } from '../../core/forge/resolveRepoRef';
 import { pullRequestKey, type CategorizedPullRequest, type ForgeRepoRef, type PullRequestSummary } from '../../core/forge/types';
 import { clearForgeToken, resolveForgeToken } from '../../providers/forgeCredentials';
@@ -38,6 +39,10 @@ export class LaunchpadViewProvider implements vscode.Disposable {
 
   /** Overridable only for tests — a real network call has no place in an automated suite. Defaults to the real global `fetch`. */
   private fetchImpl: typeof fetch;
+
+  /** Rebuilt on every refresh — lets the "Close PR" action find the right host's client and the PR's `repo`/`number` from just the card's stable key, without re-parsing that key's opaque `identity`. */
+  private clientsByRepoKey = new Map<string, ForgeClient>();
+  private prsByKey = new Map<string, PullRequestSummary>();
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -106,6 +111,8 @@ export class LaunchpadViewProvider implements vscode.Disposable {
 
     const categorized: CategorizedPullRequest[] = [];
     const errors: LaunchpadRepoError[] = [];
+    this.clientsByRepoKey = new Map();
+    this.prsByKey = new Map();
 
     for (const { repo, detected } of repos) {
       try {
@@ -135,8 +142,14 @@ export class LaunchpadViewProvider implements vscode.Disposable {
           errors.push({ repo, message: `Couldn't authenticate with ${detected.displayHost}.` });
           continue;
         }
-        const prs = await client.listOpenPullRequests(repo);
-        categorized.push(...categorizePullRequests(prs, login, (pr) => this.isSnoozed(pr)));
+        this.clientsByRepoKey.set(`${repo.host}:${repo.identity}`, client);
+        const [prs, closedPrs] = await Promise.all([client.listOpenPullRequests(repo), client.listRecentlyClosedPullRequests(repo)]);
+        const openCategorized = categorizePullRequests(prs, login, (pr) => this.isSnoozed(pr));
+        const closedCategorized = categorizeClosedPullRequests(closedPrs, login);
+        categorized.push(...openCategorized, ...closedCategorized);
+        for (const { pr } of openCategorized) {
+          this.prsByKey.set(pullRequestKey(pr), pr);
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.logger?.error(`Launchpad failed to load ${repo.label}`, err);
@@ -223,7 +236,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     if (typeof message !== 'object' || message === null) {
       return;
     }
-    const { type, url, key } = message as { type?: unknown; url?: unknown; key?: unknown };
+    const { type, url, key, title } = message as { type?: unknown; url?: unknown; key?: unknown; title?: unknown };
 
     if (type === 'openPr' && typeof url === 'string') {
       await vscode.env.openExternal(vscode.Uri.parse(url));
@@ -234,8 +247,49 @@ export class LaunchpadViewProvider implements vscode.Disposable {
       await this.refresh();
       return;
     }
+    if (type === 'closePr' && typeof key === 'string') {
+      await this.closePullRequest(key, typeof title === 'string' ? title : key);
+      return;
+    }
     if (type === 'refresh') {
       await this.refresh();
     }
+  }
+
+  private async closePullRequest(key: string, title: string): Promise<void> {
+    const pr = this.prsByKey.get(key);
+    if (!pr) {
+      return;
+    }
+    const confirmed = await vscode.window.showWarningMessage(`Close "${title}"? This closes it on ${pr.repo.label} without merging.`, { modal: true }, 'Close PR');
+    if (confirmed !== 'Close PR') {
+      return;
+    }
+    const client = this.clientsByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    if (!client) {
+      return;
+    }
+    try {
+      await client.closePullRequest(pr.repo, pr.number);
+      await this.refresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`Launchpad failed to close PR ${key}`, err);
+      void vscode.window.showErrorMessage(`GitLore: couldn't close the PR — ${message}`);
+    }
+  }
+
+  /** Test-only introspection seam — a webview button click (and the real confirmation modal it triggers) can't be driven from an integration test, so this calls the close flow directly, skipping only the modal. */
+  async closePullRequestForTest(key: string): Promise<void> {
+    const pr = this.prsByKey.get(key);
+    if (!pr) {
+      return;
+    }
+    const client = this.clientsByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    if (!client) {
+      return;
+    }
+    await client.closePullRequest(pr.repo, pr.number);
+    await this.refresh();
   }
 }

@@ -24,7 +24,11 @@ export class BlameHoverProvider implements vscode.HoverProvider {
     private readonly lineHistoryNavStore: LruCache<string, number>,
   ) {}
 
-  async provideHover(doc: vscode.TextDocument, pos: vscode.Position): Promise<vscode.Hover | undefined> {
+  async provideHover(
+    doc: vscode.TextDocument,
+    pos: vscode.Position,
+    token?: vscode.CancellationToken,
+  ): Promise<vscode.Hover | undefined> {
     if (doc.uri.scheme !== 'file' || !this.getConfig<boolean>(CONFIG.blameEnabled, true)) {
       return undefined;
     }
@@ -37,12 +41,18 @@ export class BlameHoverProvider implements vscode.HoverProvider {
     try {
       const ignoreWhitespace = this.getConfig<boolean>(CONFIG.blameIgnoreWhitespace, true);
       const lines = await this.source.getBlameLines(doc.uri.fsPath, { ignoreWhitespace });
+      if (token?.isCancellationRequested) {
+        return undefined;
+      }
       const entry = lines?.find((l) => l.line === pos.line);
       if (!entry) {
         return undefined;
       }
 
       const issueLinking = await resolveIssueLinking(this.git, doc.uri.fsPath);
+      if (token?.isCancellationRequested) {
+        return undefined;
+      }
 
       if (!entry.isUncommitted) {
         const repoRoot = await this.git.getRepoRoot(doc.uri.fsPath);
@@ -51,12 +61,18 @@ export class BlameHoverProvider implements vscode.HoverProvider {
 
         if (navIndex > 0) {
           const history = await this.git.getLineHistory(doc.uri.fsPath, pos.line);
+          if (token?.isCancellationRequested) {
+            return undefined;
+          }
           const clampedIndex = Math.min(navIndex, history.length - 1);
           const commit = history[clampedIndex];
           // A history of only one entry (or none — e.g. the file changed on disk since the
           // stepper last ran) has nothing to step *to*; fall through to the live card instead.
           if (commit && history.length > 1) {
             const diffStat = await this.git.getFileDiffStat(doc.uri.fsPath, commit.sha);
+            if (token?.isCancellationRequested) {
+              return undefined;
+            }
             const markdown = new vscode.MarkdownString(
               formatLineHistoryHover(commit, diffStat, doc.uri.fsPath, pos.line, clampedIndex, history.length, undefined, issueLinking),
             );
@@ -68,6 +84,9 @@ export class BlameHoverProvider implements vscode.HoverProvider {
       }
 
       const diffStat = entry.isUncommitted ? null : await this.git.getFileDiffStat(doc.uri.fsPath, entry.sha);
+      if (token?.isCancellationRequested) {
+        return undefined;
+      }
       const lineContent = doc.lineAt(pos.line).text.slice(0, 500);
 
       let lineExplanation: LineExplanationState | undefined;

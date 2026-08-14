@@ -32,3 +32,14 @@ ${body}
 
 Find the line above within the diff and explain why it was introduced or changed, in 2-4 sentences. Do not repeat the commit message verbatim. If the diff was truncated and the line isn't visible in what's shown, say so instead of guessing.`;
 }
+
+/** Builds the prompt for "Generate Commit Message with AI". Pure — no I/O, no vscode import, unit-tested in isolation. */
+export function buildCommitMessagePrompt(diff: string, maxDiffChars: number): string {
+  const body = diff.length > maxDiffChars ? diff.slice(0, maxDiffChars) + TRUNCATION_MARKER : diff;
+  return `You are writing a git commit message for the staged changes below.
+
+Diff:
+${body}
+
+Write a commit message: a short imperative subject line (under 72 characters, no trailing period), and if the change needs more context, a blank line followed by a brief body explaining what changed and why. Do not wrap the message in quotes or a code block. If the diff was truncated, base the message only on what's shown.`;
+}

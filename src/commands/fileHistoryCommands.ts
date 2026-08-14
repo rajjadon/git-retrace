@@ -9,6 +9,13 @@ export function handleShowFileHistoryCommand(provider: FileHistoryProvider): vsc
   });
 }
 
+/** Hidden from the command palette — only meaningful as the "Load more commits" tree item's own command. */
+export function handleLoadMoreFileHistoryCommand(provider: FileHistoryProvider): vscode.Disposable {
+  return vscode.commands.registerCommand(COMMANDS.loadMoreFileHistory, () => {
+    void provider.loadMore();
+  });
+}
+
 /** Pulls a sha out of either invocation shape, or null when there's nothing usable. */
 function resolveSha(arg: unknown): string | null {
   if (typeof arg === 'string' && arg.length > 0) {

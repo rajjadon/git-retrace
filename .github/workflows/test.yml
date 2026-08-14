@@ -1,0 +1,43 @@
+name: Test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:unit
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # @vscode/test-electron downloads a real VS Code build to run the extension host against;
+      # caching it keeps repeat runs fast without pinning (and going stale on) a specific version.
+      - uses: actions/cache@v4
+        with:
+          path: .vscode-test
+          key: vscode-test-${{ runner.os }}
+      # Headless Linux runners have no display; xvfb-run gives Electron one to render into.
+      # Preinstalled on GitHub-hosted ubuntu-latest runners.
+      - run: xvfb-run -a npm run test:integration

@@ -11,13 +11,18 @@ import { GitContentProvider } from './providers/GitContentProvider';
 import { StaleCodeLensProvider } from './providers/CodeLensProvider';
 import { OwnershipDecorationProvider } from './providers/OwnershipDecorationProvider';
 import { FullFileBlameDecorationProvider } from './providers/FullFileBlameDecorationProvider';
+import { warnIfGitUnavailable } from './providers/GitAvailabilityCheck';
 import { handleToggleBlameCommand, handleStepLineHistoryCommand, handleToggleFullFileBlameCommand } from './commands/blameCommands';
-import { handleShowFileHistoryCommand, handleCopyShaCommand } from './commands/fileHistoryCommands';
+import {
+  handleShowFileHistoryCommand,
+  handleCopyShaCommand,
+  handleLoadMoreFileHistoryCommand,
+} from './commands/fileHistoryCommands';
 import { handleShowCommitCommand } from './commands/commitCommands';
 import { handleOpenGraphCommand } from './commands/graphCommands';
 import { handleShowVisualFileHistoryCommand } from './commands/visualFileHistoryCommands';
 import { handleCompareBranchesCommand } from './commands/branchCommands';
-import { handleExplainCommitCommand, handleExplainLineCommand } from './commands/aiCommands';
+import { handleExplainCommitCommand, handleExplainLineCommand, handleGenerateCommitMessageCommand } from './commands/aiCommands';
 import { handleShowFileOwnershipCommand, buildOwnershipQuickPickItems } from './commands/ownershipCommands';
 import { handleRebaseInteractivelyCommand } from './commands/rebaseCommands';
 import {
@@ -37,6 +42,7 @@ import { handleOpenLaunchpadCommand } from './commands/launchpadCommands';
 import { RepoExplorerProvider } from './providers/RepoExplorerProvider';
 import { LanguageModelClient } from './ai/LanguageModelClient';
 import { LineExplanationService } from './ai/LineExplanationService';
+import { CommitMessageService } from './ai/CommitMessageService';
 import { LruCache } from './core/cache/LruCache';
 import type { LineExplanationState } from './core/ai/lineExplanationKey';
 
@@ -50,6 +56,7 @@ export interface GitLoreTestApi {
   git: GitService;
   getCommitDetailsHtml: () => string | undefined;
   getCommitGraphHtml: () => string | undefined;
+  loadMoreCommitGraph: () => Promise<void>;
   getBranchComparisonHtml: () => string | undefined;
   getVisualFileHistoryHtml: () => string | undefined;
   getRebaseEditorHtml: () => string | undefined;
@@ -77,6 +84,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
   const languageModelClient = new LanguageModelClient(logger);
   const lineExplanationStore = new LruCache<string, LineExplanationState>(50);
   const lineExplanationService = new LineExplanationService(git, languageModelClient, logger, lineExplanationStore);
+  const commitMessageService = new CommitMessageService(git, languageModelClient, logger);
   const lineHistoryNavStore = new LruCache<string, number>(50);
   const blameSource = new BlameSource(git, logger);
   const blameProvider = new BlameDecorationProvider(blameSource);
@@ -107,6 +115,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     handleToggleFullFileBlameCommand(fullFileBlameProvider),
     handleStepLineHistoryCommand(git, lineHistoryNavStore),
     handleShowFileHistoryCommand(fileHistoryProvider),
+    handleLoadMoreFileHistoryCommand(fileHistoryProvider),
     handleCopyShaCommand(),
     handleShowCommitCommand(commitDetailsViewProvider),
     handleOpenGraphCommand(commitGraphViewProvider),
@@ -114,6 +123,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     handleCompareBranchesCommand(git, branchComparisonViewProvider),
     handleExplainCommitCommand(commitDetailsViewProvider),
     handleExplainLineCommand(lineExplanationService),
+    handleGenerateCommitMessageCommand(commitMessageService, git),
     handleShowFileOwnershipCommand(blameSource),
     handleRebaseInteractivelyCommand(git),
     launchpadProvider,
@@ -144,6 +154,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     // those run first.
     setImmediate(() => void repoExplorerProvider.refresh(initialRepoPath));
   }
+  setImmediate(() => void warnIfGitUnavailable(ctx, git));
 
   output.appendLine('GitLore activated.');
 
@@ -156,6 +167,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     git,
     getCommitDetailsHtml: () => commitDetailsViewProvider.getCurrentHtmlForTest(),
     getCommitGraphHtml: () => commitGraphViewProvider.getCurrentHtmlForTest(),
+    loadMoreCommitGraph: () => commitGraphViewProvider.loadMore(),
     getBranchComparisonHtml: () => branchComparisonViewProvider.getCurrentHtmlForTest(),
     getVisualFileHistoryHtml: () => visualFileHistoryViewProvider.getCurrentHtmlForTest(),
     getRebaseEditorHtml: () => rebaseEditorProvider.getCurrentHtmlForTest(),

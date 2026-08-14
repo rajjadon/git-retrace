@@ -40,3 +40,17 @@ export function categorizePullRequests(
     .filter((pr) => pr.authorLogin === currentUserLogin || pr.requestedReviewers.includes(currentUserLogin))
     .map((pr) => ({ pr, bucket: bucketFor(pr, currentUserLogin, isSnoozed(pr)) }));
 }
+
+/**
+ * Buckets recently closed/merged PRs into "merged" or "closed" — a completed PR's review/check
+ * state is no longer actionable, so this skips `bucketFor` entirely rather than reusing it.
+ *
+ * Scoped to PRs the user authored, not ones they merely reviewed: `listRecentlyClosedPullRequests`
+ * doesn't fetch reviewer data (nothing to enrich on a PR that's already done), so "requested
+ * reviewer" isn't available to filter on the way it is for open PRs.
+ */
+export function categorizeClosedPullRequests(pullRequests: PullRequestSummary[], currentUserLogin: string): CategorizedPullRequest[] {
+  return pullRequests
+    .filter((pr) => pr.authorLogin === currentUserLogin)
+    .map((pr) => ({ pr, bucket: pr.merged ? 'merged' : 'closed' }));
+}

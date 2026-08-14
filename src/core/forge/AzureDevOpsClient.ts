@@ -18,6 +18,7 @@ interface AzureDevOpsPullRequest {
   createdBy: AzureDevOpsIdentityRef;
   isDraft?: boolean;
   creationDate: string;
+  closedDate?: string;
   reviewers?: AzureDevOpsReviewer[];
   lastMergeSourceCommit?: { commitId: string };
   mergeStatus?: 'succeeded' | 'conflicts' | 'failure' | 'queued' | 'notSet';
@@ -106,6 +107,63 @@ export class AzureDevOpsClient implements ForgeClient {
     return Promise.all(data.value.map((pr) => this.enrich(repo, id, base, pr)));
   }
 
+  async listRecentlyClosedPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      return [];
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    // Azure DevOps calls a closed-without-merging PR "abandoned" — completed/abandoned are
+    // separate status values, same as GitLab's merged/closed split.
+    const [completed, abandoned] = await Promise.all([
+      this.fetchClosedList(repo, id, base, 'completed', true),
+      this.fetchClosedList(repo, id, base, 'abandoned', false),
+    ]);
+    return [...completed, ...abandoned];
+  }
+
+  private async fetchClosedList(
+    repo: ForgeRepoRef,
+    id: { organization: string; project: string; repository: string },
+    base: string,
+    status: 'completed' | 'abandoned',
+    merged: boolean,
+  ): Promise<PullRequestSummary[]> {
+    const res = await this.requestOrNull(`${base}/pullrequests?searchCriteria.status=${status}&$top=10&api-version=7.1`);
+    if (!res) {
+      return [];
+    }
+    const data = (await res.json()) as AzureDevOpsListResponse<AzureDevOpsPullRequest>;
+    return data.value.map((pr) => ({
+      repo,
+      number: pr.pullRequestId,
+      title: pr.title,
+      url: `https://dev.azure.com/${id.organization}/${id.project}/_git/${id.repository}/pullrequest/${pr.pullRequestId}`,
+      authorLogin: loginOf(pr.createdBy),
+      isDraft: false,
+      createdAt: pr.creationDate,
+      updatedAt: pr.closedDate ?? pr.creationDate,
+      requestedReviewers: [],
+      checkStatus: 'none',
+      reviewDecision: 'none',
+      hasConflicts: false,
+      closedAt: pr.closedDate ?? pr.creationDate,
+      merged,
+    }));
+  }
+
+  async closePullRequest(repo: ForgeRepoRef, number: number): Promise<void> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      throw new Error('could not resolve this repo\'s Azure DevOps organization/project/repository identity');
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    await this.request(`${base}/pullrequests/${number}?api-version=7.1`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'abandoned' }),
+    });
+  }
+
   private async enrich(
     repo: ForgeRepoRef,
     id: { organization: string; project: string; repository: string },
@@ -140,13 +198,19 @@ export class AzureDevOpsClient implements ForgeClient {
   }
 
   /** Throws with the real reason (HTTP status or network failure) instead of swallowing it — every caller except `getAuthenticatedLogin` wraps this in `requestOrNull` to keep their existing soft-degrade behavior. */
-  private async request(url: string): Promise<Response> {
+  private async request(url: string, init?: RequestInit): Promise<Response> {
     // Azure DevOps PATs authenticate via HTTP Basic with an empty username — Bearer support for
     // raw PATs isn't consistently documented the way it is for GitHub/GitLab/Bitbucket tokens.
     const basic = Buffer.from(`:${this.token}`).toString('base64');
     let res: Response;
     try {
-      res = await this.fetchImpl(url, { headers: { Authorization: `Basic ${basic}` } });
+      res = await this.fetchImpl(url, {
+        ...init,
+        headers: {
+          Authorization: `Basic ${basic}`,
+          ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        },
+      });
     } catch (err) {
       throw new Error(`couldn't reach ${new URL(url).host}: ${err instanceof Error ? err.message : String(err)}`);
     }
