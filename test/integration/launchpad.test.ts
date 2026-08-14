@@ -567,7 +567,10 @@ suite('Launchpad', () => {
                 // A different author than the signed-in user ('raj', mocked via /user below) —
                 // Launchpad now refuses to submit a review on your own PR before ever calling the
                 // API, so this needs to be someone else's PR to actually exercise the approve call.
+                // 'raj' as a requested reviewer is what makes categorizePullRequests keep this PR
+                // at all — it only surfaces PRs you authored or were asked to review.
                 author: { username: 'other-dev' },
+                reviewers: [{ username: 'raj' }],
                 created_at: '2024-01-01T00:00:00Z',
                 updated_at: '2024-01-01T00:00:00Z',
               },
