@@ -95,21 +95,20 @@ export class GitHubClient implements ForgeClient {
   }
 
   async listOpenPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
-    const listRes = await this.requestOrNull(`/repos/${repo.identity}/pulls?state=open&per_page=100`);
-    if (!listRes) {
-      return [];
-    }
+    const listRes = await this.request(`/repos/${repo.identity}/pulls?state=open&per_page=100`);
     const raw = (await listRes.json()) as GitHubPull[];
     return Promise.all(raw.map((pull) => this.enrich(repo, pull)));
   }
 
   async listRecentlyClosedPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
     // GitHub's one "closed" state covers both merged and closed-without-merging — `merged_at`
-    // (present only on merged ones) is what tells the two apart.
-    const listRes = await this.requestOrNull(`/repos/${repo.identity}/pulls?state=closed&sort=updated&direction=desc&per_page=20`);
-    if (!listRes) {
-      return [];
-    }
+    // (present only on merged ones) is what tells the two apart. No server-side "authored by me"
+    // filter here (unlike GitLab/Bitbucket/Azure DevOps): the REST pulls endpoint has no author
+    // param, and the one that does (the Search API) has a much tighter rate limit (30/min) that a
+    // multi-repo board refreshing repeatedly could burn through fast — `per_page=100` (the max)
+    // is the safer mitigation for the same "your own older PRs got pushed out of the window"
+    // truncation risk, even though it's not a complete server-side fix the way the other hosts get.
+    const listRes = await this.request(`/repos/${repo.identity}/pulls?state=closed&sort=updated&direction=desc&per_page=100`);
     const raw = (await listRes.json()) as GitHubClosedPull[];
     return raw.map((pull) => ({
       repo,
@@ -187,7 +186,7 @@ export class GitHubClient implements ForgeClient {
     return data.mergeable_state ?? null;
   }
 
-  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it — every caller except `getAuthenticatedLogin` wraps this in `requestOrNull` to keep their existing soft-degrade behavior. */
+  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it. Only the per-PR enrichment calls (`fetchReviews`, `fetchCheckRuns`, `fetchMergeableState`) wrap this in `requestOrNull` — one PR's extra data failing to load shouldn't take down the whole list the way a credential problem on the list call itself should be visible. */
   private async request(path: string, init?: RequestInit): Promise<Response> {
     const url = `${this.apiBaseUrl}${path}`;
     let res: Response;

@@ -70,6 +70,9 @@ function computeReviewDecision(mr: GitLabMergeRequest, approved: boolean, review
  * just pointed at its own base URL via `gitLore.launchpad.customHosts`.
  */
 export class GitLabClient implements ForgeClient {
+  /** Set by `getAuthenticatedLogin` (always called once before the closed-MR list, per `LaunchpadViewProvider`) — used to scope `fetchClosedList`'s `author_username` filter server-side. */
+  private authenticatedUsername: string | undefined;
+
   constructor(
     private readonly apiBaseUrl: string,
     private readonly token: string,
@@ -79,15 +82,13 @@ export class GitLabClient implements ForgeClient {
   async getAuthenticatedLogin(): Promise<string | null> {
     const res = await this.request('/user');
     const data = (await res.json()) as GitLabUser;
+    this.authenticatedUsername = data.username;
     return data.username ?? null;
   }
 
   async listOpenPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
     const projectPath = encodeURIComponent(repo.identity);
-    const listRes = await this.requestOrNull(`/projects/${projectPath}/merge_requests?state=opened&per_page=100`);
-    if (!listRes) {
-      return [];
-    }
+    const listRes = await this.request(`/projects/${projectPath}/merge_requests?state=opened&per_page=100`);
     const raw = (await listRes.json()) as GitLabMergeRequest[];
     return Promise.all(raw.map((mr) => this.enrich(repo, projectPath, mr)));
   }
@@ -109,10 +110,12 @@ export class GitLabClient implements ForgeClient {
     state: 'merged' | 'closed',
     merged: boolean,
   ): Promise<PullRequestSummary[]> {
-    const res = await this.requestOrNull(`/projects/${projectPath}/merge_requests?state=${state}&order_by=updated_at&per_page=10`);
-    if (!res) {
-      return [];
-    }
+    // Filtered server-side by author_username, not fetched-then-filtered client-side: this
+    // project's most recently closed/merged MRs project-wide would otherwise push the current
+    // user's own older ones out of the `per_page` window before `categorizeClosedPullRequests`
+    // ever gets to filter by author.
+    const authorFilter = this.authenticatedUsername ? `&author_username=${encodeURIComponent(this.authenticatedUsername)}` : '';
+    const res = await this.request(`/projects/${projectPath}/merge_requests?state=${state}${authorFilter}&order_by=updated_at&per_page=10`);
     const raw = (await res.json()) as GitLabMergeRequest[];
     return raw.map((mr) => ({
       repo,
@@ -174,7 +177,7 @@ export class GitLabClient implements ForgeClient {
     return { approved: data.approved ?? false, approved_by: data.approved_by ?? [] };
   }
 
-  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it — every caller except `getAuthenticatedLogin` wraps this in `requestOrNull` to keep their existing soft-degrade behavior. */
+  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it. Only `fetchApprovals` wraps this in `requestOrNull` — one MR's approval data failing to load shouldn't take down the whole list the way a credential problem on the list call itself should be visible. */
   private async request(path: string, init?: RequestInit): Promise<Response> {
     const url = `${this.apiBaseUrl}${path}`;
     let res: Response;

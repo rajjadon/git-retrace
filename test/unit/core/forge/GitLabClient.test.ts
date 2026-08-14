@@ -202,9 +202,9 @@ test('listOpenPullRequests: no pipeline at all -> checkStatus "none"', async () 
   assert.equal(result[0]?.checkStatus, 'none');
 });
 
-test('listOpenPullRequests: a failed list request returns an empty array, not a throw', async () => {
+test('listOpenPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {
   const client = new GitLabClient(BASE, 'tok', (async () => jsonResponse([], false)) as unknown as typeof fetch);
-  assert.deepEqual(await client.listOpenPullRequests(REPO), []);
+  await assert.rejects(() => client.listOpenPullRequests(REPO), /401 Unauthorized from gitlab\.com/);
 });
 
 test('listRecentlyClosedPullRequests: combines merged and closed lists, tagging each with the right merged flag', async () => {
@@ -229,9 +229,39 @@ test('listRecentlyClosedPullRequests: combines merged and closed lists, tagging 
   assert.equal(abandoned?.merged, false);
 });
 
-test('listRecentlyClosedPullRequests: a failed list request degrades to an empty array for that state', async () => {
+test('listRecentlyClosedPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {
   const client = new GitLabClient(BASE, 'tok', (async () => jsonResponse([], false)) as unknown as typeof fetch);
-  assert.deepEqual(await client.listRecentlyClosedPullRequests(REPO), []);
+  await assert.rejects(() => client.listRecentlyClosedPullRequests(REPO), /401 Unauthorized from gitlab\.com/);
+});
+
+test('listRecentlyClosedPullRequests: scopes the search server-side to the authenticated user via author_username, once known', async () => {
+  const requestedUrls: string[] = [];
+  const client = new GitLabClient(BASE, 'tok', (async (url: string) => {
+    requestedUrls.push(url);
+    if (url.endsWith('/user')) {
+      return jsonResponse({ username: 'raj' });
+    }
+    return jsonResponse([]);
+  }) as unknown as typeof fetch);
+
+  await client.getAuthenticatedLogin();
+  await client.listRecentlyClosedPullRequests(REPO);
+
+  const listUrls = requestedUrls.filter((url) => url.includes('merge_requests?state='));
+  assert.equal(listUrls.length, 2);
+  assert.ok(listUrls.every((url) => url.includes('author_username=raj')), listUrls.join('\n'));
+});
+
+test('listRecentlyClosedPullRequests: omits author_username when the authenticated user is not yet known', async () => {
+  const requestedUrls: string[] = [];
+  const client = new GitLabClient(BASE, 'tok', (async (url: string) => {
+    requestedUrls.push(url);
+    return jsonResponse([]);
+  }) as unknown as typeof fetch);
+
+  await client.listRecentlyClosedPullRequests(REPO);
+
+  assert.ok(requestedUrls.every((url) => !url.includes('author_username')), requestedUrls.join('\n'));
 });
 
 test('closePullRequest: PUTs state_event=close to the merge request endpoint', async () => {

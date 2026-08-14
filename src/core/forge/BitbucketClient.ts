@@ -4,6 +4,7 @@ import type { CheckStatus, ForgeRepoRef, PullRequestSummary, ReviewDecision } fr
 interface BitbucketUser {
   username?: string;
   nickname?: string;
+  uuid?: string;
 }
 
 interface BitbucketParticipant {
@@ -79,6 +80,9 @@ function reviewersInfo(pr: BitbucketPullRequest): { requestedReviewers: string[]
  * GitLab's `has_conflicts` are. Documented gap, not a silent guess.
  */
 export class BitbucketClient implements ForgeClient {
+  /** Set by `getAuthenticatedLogin` (always called once before the closed-PR list, per `LaunchpadViewProvider`) — `username`/`nickname` can be hidden by privacy settings, but `uuid` is always present, so it's what scopes `fetchClosedList`'s author filter. */
+  private authenticatedUserUuid: string | undefined;
+
   constructor(
     private readonly apiBaseUrl: string,
     private readonly token: string,
@@ -88,15 +92,13 @@ export class BitbucketClient implements ForgeClient {
   async getAuthenticatedLogin(): Promise<string | null> {
     const res = await this.request('/user');
     const data = (await res.json()) as BitbucketUser;
+    this.authenticatedUserUuid = data.uuid;
     const login = loginOf(data);
     return login || null;
   }
 
   async listOpenPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
-    const listRes = await this.requestOrNull(`/repositories/${repo.identity}/pullrequests?state=OPEN`);
-    if (!listRes) {
-      return [];
-    }
+    const listRes = await this.request(`/repositories/${repo.identity}/pullrequests?state=OPEN`);
     const page = (await listRes.json()) as BitbucketPage<BitbucketPullRequest>;
     return Promise.all(page.values.map((pr) => this.enrich(repo, pr)));
   }
@@ -112,12 +114,16 @@ export class BitbucketClient implements ForgeClient {
   }
 
   private async fetchClosedList(repo: ForgeRepoRef, state: 'MERGED' | 'DECLINED', merged: boolean): Promise<PullRequestSummary[]> {
-    const res = await this.requestOrNull(`/repositories/${repo.identity}/pullrequests?state=${state}`);
-    if (!res) {
-      return [];
-    }
+    // Filtered server-side by author.uuid, not fetched-then-filtered client-side: this repo's
+    // most recently closed/declined PRs project-wide would otherwise push the current user's own
+    // older ones out of the `pagelen` window before `categorizeClosedPullRequests` ever gets to
+    // filter by author.
+    const authorFilter = this.authenticatedUserUuid
+      ? `&q=${encodeURIComponent(`author.uuid="${this.authenticatedUserUuid}"`)}`
+      : '';
+    const res = await this.request(`/repositories/${repo.identity}/pullrequests?state=${state}${authorFilter}&pagelen=10`);
     const page = (await res.json()) as BitbucketPage<BitbucketPullRequest>;
-    return page.values.slice(0, 10).map((pr) => ({
+    return page.values.map((pr) => ({
       repo,
       number: pr.id,
       title: pr.title,
@@ -167,7 +173,7 @@ export class BitbucketClient implements ForgeClient {
     return page.values ?? [];
   }
 
-  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it — every caller except `getAuthenticatedLogin` wraps this in `requestOrNull` to keep their existing soft-degrade behavior. */
+  /** Throws with the real reason (HTTP status or network failure) instead of swallowing it. Only `fetchBuildStatuses` wraps this in `requestOrNull` — one PR's build-status data failing to load shouldn't take down the whole list the way a credential problem on the list call itself should be visible. */
   private async request(path: string, init?: RequestInit): Promise<Response> {
     const url = `${this.apiBaseUrl}${path}`;
     let res: Response;

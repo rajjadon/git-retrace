@@ -218,9 +218,9 @@ test('listOpenPullRequests: mergeable_state null (still computing) is treated as
   assert.equal(result[0]?.hasConflicts, false);
 });
 
-test('listOpenPullRequests: a failed list request returns an empty array, not a throw', async () => {
+test('listOpenPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {
   const client = new GitHubClient(BASE, 'tok', (async () => jsonResponse([], false)) as unknown as typeof fetch);
-  assert.deepEqual(await client.listOpenPullRequests(REPO), []);
+  await assert.rejects(() => client.listOpenPullRequests(REPO), /401 Unauthorized from api\.github\.com/);
 });
 
 test('listOpenPullRequests: a network failure on an enrichment call degrades that field instead of throwing for the whole PR', async () => {
@@ -254,7 +254,7 @@ test('listRecentlyClosedPullRequests: merged_at present -> merged true, and clos
     BASE,
     'tok',
     fakeFetch({
-      '/pulls?state=closed&sort=updated&direction=desc&per_page=20': [
+      '/pulls?state=closed&sort=updated&direction=desc&per_page=100': [
         {
           number: 10,
           title: 'Shipped feature',
@@ -279,7 +279,7 @@ test('listRecentlyClosedPullRequests: merged_at null -> merged false (closed wit
     BASE,
     'tok',
     fakeFetch({
-      '/pulls?state=closed&sort=updated&direction=desc&per_page=20': [
+      '/pulls?state=closed&sort=updated&direction=desc&per_page=100': [
         {
           number: 11,
           title: 'Abandoned idea',
@@ -297,9 +297,9 @@ test('listRecentlyClosedPullRequests: merged_at null -> merged false (closed wit
   assert.equal(result[0]?.merged, false);
 });
 
-test('listRecentlyClosedPullRequests: a failed list request returns an empty array, not a throw', async () => {
+test('listRecentlyClosedPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {
   const client = new GitHubClient(BASE, 'tok', (async () => jsonResponse([], false)) as unknown as typeof fetch);
-  assert.deepEqual(await client.listRecentlyClosedPullRequests(REPO), []);
+  await assert.rejects(() => client.listRecentlyClosedPullRequests(REPO), /401 Unauthorized from api\.github\.com/);
 });
 
 test('closePullRequest: PATCHes state=closed to the PR endpoint', async () => {

@@ -196,9 +196,9 @@ test('listOpenPullRequests: build status maps to checkStatus (SUCCESSFUL/FAILED/
   await statusCheck('INPROGRESS', 'pending');
 });
 
-test('listOpenPullRequests: a failed list request returns an empty array, not a throw', async () => {
+test('listOpenPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {
   const client = new BitbucketClient(BASE, 'tok', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
-  assert.deepEqual(await client.listOpenPullRequests(REPO), []);
+  await assert.rejects(() => client.listOpenPullRequests(REPO), /401 Unauthorized from api\.bitbucket\.org/);
 });
 
 test('listRecentlyClosedPullRequests: combines MERGED and DECLINED, tagging each with the right merged flag', async () => {
@@ -223,6 +223,44 @@ test('listRecentlyClosedPullRequests: combines MERGED and DECLINED, tagging each
   assert.equal(result.length, 2);
   assert.equal(result.find((r) => r.number === 30)?.merged, true);
   assert.equal(result.find((r) => r.number === 31)?.merged, false);
+});
+
+test('listRecentlyClosedPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {
+  const client = new BitbucketClient(BASE, 'tok', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  await assert.rejects(() => client.listRecentlyClosedPullRequests(REPO), /401 Unauthorized from api\.bitbucket\.org/);
+});
+
+test('listRecentlyClosedPullRequests: scopes the search server-side to the authenticated user via author.uuid, once known', async () => {
+  const requestedUrls: string[] = [];
+  const client = new BitbucketClient(BASE, 'tok', (async (url: string) => {
+    requestedUrls.push(url);
+    if (url.endsWith('/user')) {
+      return jsonResponse({ username: 'raj', uuid: '{user-uuid-123}' });
+    }
+    return jsonResponse({ values: [] });
+  }) as unknown as typeof fetch);
+
+  await client.getAuthenticatedLogin();
+  await client.listRecentlyClosedPullRequests(REPO);
+
+  const listUrls = requestedUrls.filter((url) => url.includes('pullrequests?state='));
+  assert.equal(listUrls.length, 2);
+  assert.ok(
+    listUrls.every((url) => url.includes(encodeURIComponent('author.uuid="{user-uuid-123}"'))),
+    listUrls.join('\n'),
+  );
+});
+
+test('listRecentlyClosedPullRequests: omits the author filter when the authenticated user is not yet known', async () => {
+  const requestedUrls: string[] = [];
+  const client = new BitbucketClient(BASE, 'tok', (async (url: string) => {
+    requestedUrls.push(url);
+    return jsonResponse({ values: [] });
+  }) as unknown as typeof fetch);
+
+  await client.listRecentlyClosedPullRequests(REPO);
+
+  assert.ok(requestedUrls.every((url) => !url.includes('q=')), requestedUrls.join('\n'));
 });
 
 test('closePullRequest: POSTs to the decline endpoint', async () => {
