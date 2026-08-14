@@ -21,3 +21,14 @@ test('buildForgeClient: bitbucket flavor builds a BitbucketClient', () => {
 test('buildForgeClient: azureDevOps flavor builds an AzureDevOpsClient', () => {
   assert.ok(buildForgeClient('azureDevOps', 'ignored', 'acme/Widgets/widgets-api', 'tok') instanceof AzureDevOpsClient);
 });
+
+test('buildForgeClient: azureDevOps credentialScheme "oauth" reaches the client as a Bearer token', async () => {
+  let capturedAuth: string | undefined;
+  const fetchImpl = (async (_url: string, init?: RequestInit) => {
+    capturedAuth = (init?.headers as Record<string, string>).Authorization;
+    return { ok: true, json: async () => ({}) } as unknown as Response;
+  }) as unknown as typeof fetch;
+  const client = buildForgeClient('azureDevOps', 'ignored', 'acme/Widgets/widgets-api', 'aad-token', 'oauth', fetchImpl);
+  await client.getAuthenticatedLogin();
+  assert.equal(capturedAuth, 'Bearer aad-token');
+});

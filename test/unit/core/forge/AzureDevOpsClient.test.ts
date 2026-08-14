@@ -26,6 +26,7 @@ test('getAuthenticatedLogin: reads emailAddress from the org-scoped vssps profil
   const client = new AzureDevOpsClient(
     IDENTITY,
     'pat',
+    'pat',
     (async (url: string) => {
       assert.ok(url.startsWith('https://vssps.dev.azure.com/acme/'), `expected the org-scoped profile host, got ${url}`);
       return jsonResponse({ emailAddress: 'raj@acme.com' });
@@ -38,6 +39,7 @@ test('getAuthenticatedLogin: falls back to the global vssps host when the identi
   const client = new AzureDevOpsClient(
     'not-a-valid-identity',
     'pat',
+    'pat',
     (async (url: string) => {
       assert.ok(url.startsWith('https://app.vssps.visualstudio.com/'), `expected the global profile host, got ${url}`);
       return jsonResponse({ emailAddress: 'raj@acme.com' });
@@ -47,18 +49,38 @@ test('getAuthenticatedLogin: falls back to the global vssps host when the identi
 });
 
 test('getAuthenticatedLogin: falls back to displayName when emailAddress is absent', async () => {
-  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async () => jsonResponse({ displayName: 'Raj Jadon' })) as unknown as typeof fetch);
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async () => jsonResponse({ displayName: 'Raj Jadon' })) as unknown as typeof fetch);
   assert.equal(await client.getAuthenticatedLogin(), 'Raj Jadon');
 });
 
 test('getAuthenticatedLogin: an invalid PAT throws with the real HTTP status, not a generic message', async () => {
-  const client = new AzureDevOpsClient(IDENTITY, 'bad', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  const client = new AzureDevOpsClient(IDENTITY, 'bad', 'pat', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
   await assert.rejects(() => client.getAuthenticatedLogin(), /401 Unauthorized from vssps\.dev\.azure\.com/);
+});
+
+test('credentialScheme "pat": sends the token as HTTP Basic with an empty username', async () => {
+  let capturedAuth: string | undefined;
+  const client = new AzureDevOpsClient(IDENTITY, 'my-pat', 'pat', (async (_url: string, init?: RequestInit) => {
+    capturedAuth = (init?.headers as Record<string, string>).Authorization;
+    return jsonResponse({ emailAddress: 'raj@acme.com' });
+  }) as unknown as typeof fetch);
+  await client.getAuthenticatedLogin();
+  assert.equal(capturedAuth, `Basic ${Buffer.from(':my-pat').toString('base64')}`);
+});
+
+test('credentialScheme "oauth": sends the token as a Bearer, not Basic — a JWT can\'t be Basic-authed', async () => {
+  let capturedAuth: string | undefined;
+  const client = new AzureDevOpsClient(IDENTITY, 'aad-access-token', 'oauth', (async (_url: string, init?: RequestInit) => {
+    capturedAuth = (init?.headers as Record<string, string>).Authorization;
+    return jsonResponse({ emailAddress: 'raj@acme.com' });
+  }) as unknown as typeof fetch);
+  await client.getAuthenticatedLogin();
+  assert.equal(capturedAuth, 'Bearer aad-access-token');
 });
 
 test('listOpenPullRequests: builds the repo URL from organization/project/repository, not owner/repo', async () => {
   let requestedListUrl = '';
-  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async (url: string) => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
     if (url.includes('pullrequests?searchCriteria.status=active')) {
       requestedListUrl = url;
       return jsonResponse({ value: [] });
@@ -70,7 +92,7 @@ test('listOpenPullRequests: builds the repo URL from organization/project/reposi
 });
 
 test('listOpenPullRequests: a malformed identity (not 3 parts) returns an empty array rather than throwing', async () => {
-  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async () => jsonResponse({ value: [] })) as unknown as typeof fetch);
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async () => jsonResponse({ value: [] })) as unknown as typeof fetch);
   const malformed: ForgeRepoRef = { host: 'azureDevOps', identity: 'acme/widgets-api', label: 'acme/widgets-api' };
   assert.deepEqual(await client.listOpenPullRequests(malformed), []);
 });
@@ -78,6 +100,7 @@ test('listOpenPullRequests: a malformed identity (not 3 parts) returns an empty 
 test('listOpenPullRequests: normalizes a plain PR with no reviewers or statuses', async () => {
   const client = new AzureDevOpsClient(
     IDENTITY,
+    'pat',
     'pat',
     fakeFetch({
       'searchCriteria.status=active&api-version=7.1': {
@@ -106,6 +129,7 @@ test('listOpenPullRequests: a reviewer who rejected (vote -10) -> reviewDecision
   const client = new AzureDevOpsClient(
     IDENTITY,
     'pat',
+    'pat',
     fakeFetch({
       'searchCriteria.status=active&api-version=7.1': {
         value: [
@@ -128,6 +152,7 @@ test('listOpenPullRequests: a reviewer who rejected (vote -10) -> reviewDecision
 test('listOpenPullRequests: a reviewer who has not voted (vote 0) -> "reviewRequired"', async () => {
   const client = new AzureDevOpsClient(
     IDENTITY,
+    'pat',
     'pat',
     fakeFetch({
       'searchCriteria.status=active&api-version=7.1': {
@@ -152,6 +177,7 @@ test('listOpenPullRequests: every reviewer approved (vote 10) -> "approved"', as
   const client = new AzureDevOpsClient(
     IDENTITY,
     'pat',
+    'pat',
     fakeFetch({
       'searchCriteria.status=active&api-version=7.1': {
         value: [
@@ -175,6 +201,7 @@ test('listOpenPullRequests: mergeStatus "conflicts" -> hasConflicts true', async
   const client = new AzureDevOpsClient(
     IDENTITY,
     'pat',
+    'pat',
     fakeFetch({
       'searchCriteria.status=active&api-version=7.1': {
         value: [
@@ -197,6 +224,7 @@ test('listOpenPullRequests: status checks map to checkStatus (succeeded/failed/p
   async function statusCheck(state: string, expected: string): Promise<void> {
     const client = new AzureDevOpsClient(
       IDENTITY,
+      'pat',
       'pat',
       fakeFetch({
         'searchCriteria.status=active&api-version=7.1': {
@@ -223,12 +251,12 @@ test('listOpenPullRequests: status checks map to checkStatus (succeeded/failed/p
 });
 
 test('listOpenPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {
-  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
   await assert.rejects(() => client.listOpenPullRequests(REPO), /401 Unauthorized from dev\.azure\.com/);
 });
 
 test('listRecentlyClosedPullRequests: combines completed and abandoned, tagging each with the right merged flag', async () => {
-  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async (url: string) => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
     if (url.includes('searchCriteria.status=completed')) {
       return jsonResponse({
         value: [{ pullRequestId: 40, title: 'Shipped', createdBy: { uniqueName: 'raj@acme.com' }, creationDate: 'c' }],
@@ -248,13 +276,13 @@ test('listRecentlyClosedPullRequests: combines completed and abandoned, tagging 
 });
 
 test('listRecentlyClosedPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {
-  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
   await assert.rejects(() => client.listRecentlyClosedPullRequests(REPO), /401 Unauthorized from dev\.azure\.com/);
 });
 
 test('listRecentlyClosedPullRequests: scopes the search server-side to the authenticated user via searchCriteria.creatorId, once known', async () => {
   const requestedUrls: string[] = [];
-  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async (url: string) => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
     requestedUrls.push(url);
     if (url.startsWith('https://vssps.dev.azure.com/')) {
       return jsonResponse({ id: 'user-guid-123', emailAddress: 'raj@acme.com' });
@@ -272,7 +300,7 @@ test('listRecentlyClosedPullRequests: scopes the search server-side to the authe
 
 test('listRecentlyClosedPullRequests: omits creatorId when the authenticated user is not yet known', async () => {
   const requestedUrls: string[] = [];
-  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async (url: string) => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
     requestedUrls.push(url);
     return jsonResponse({ value: [] });
   }) as unknown as typeof fetch);
@@ -285,7 +313,7 @@ test('listRecentlyClosedPullRequests: omits creatorId when the authenticated use
 test('closePullRequest: PATCHes status=abandoned to the pull request endpoint', async () => {
   let capturedUrl: string | undefined;
   let capturedInit: RequestInit | undefined;
-  const client = new AzureDevOpsClient(IDENTITY, 'pat', (async (url: string, init?: RequestInit) => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string, init?: RequestInit) => {
     capturedUrl = url;
     capturedInit = init;
     return jsonResponse({});

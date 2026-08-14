@@ -8,7 +8,7 @@ import { detectForgeHost, type DetectedForgeHost, type ForgeHostConfig } from '.
 import type { ForgeClient } from '../../core/forge/ForgeClient';
 import { resolveForgeRepoRef } from '../../core/forge/resolveRepoRef';
 import { pullRequestKey, type CategorizedPullRequest, type ForgeRepoRef, type PullRequestSummary } from '../../core/forge/types';
-import { clearForgeToken, resolveForgeToken } from '../../providers/forgeCredentials';
+import { azureDevOpsCredentialScheme, clearForgeToken, resolveForgeToken } from '../../providers/forgeCredentials';
 import { renderLaunchpadHtml, type LaunchpadRepoError } from './render';
 import { renderPlaceholderHtml } from '../placeholder';
 import { CONFIG, MEDIA, VIEWS } from '../../constants';
@@ -121,7 +121,14 @@ export class LaunchpadViewProvider implements vscode.Disposable {
           errors.push({ repo, message: 'Not signed in.' });
           continue;
         }
-        const client = buildForgeClient(detected.flavor, detected.apiBaseUrl, repo.identity, token, this.fetchImpl);
+        const client = buildForgeClient(
+          detected.flavor,
+          detected.apiBaseUrl,
+          repo.identity,
+          token,
+          azureDevOpsCredentialScheme(detected),
+          this.fetchImpl,
+        );
 
         let login: string | null;
         try {

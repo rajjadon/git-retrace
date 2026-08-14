@@ -1,17 +1,46 @@
 import * as vscode from 'vscode';
+import type { AzureDevOpsCredentialScheme } from '../core/forge/AzureDevOpsClient';
 import type { DetectedForgeHost } from '../core/forge/hostDetection';
+
+/**
+ * Azure DevOps' well-known AAD resource ID — stable across every organization, not a GitLore- or
+ * tenant-specific value. `.default` requests whatever access the signed-in account already has;
+ * `offline_access` lets VS Code silently refresh the token instead of re-prompting every session.
+ */
+const AZURE_DEVOPS_AAD_SCOPES = ['499b84ac-1321-427f-aa17-267ca6975798/.default', 'offline_access'];
 
 function secretKeyFor(displayHost: string): string {
   return `gitLore.launchpad.pat.${displayHost}`;
 }
 
+/** True for the two hosts VS Code ships a built-in authentication session for — github.com's GitHub session, and Azure DevOps Services' Microsoft/AAD session. Self-hosted instances of either (GHE, on-prem Azure DevOps Server via `customHosts`) still need a PAT: neither ships (or necessarily *can* ship) the same built-in session. */
+function usesBuiltInSession(detected: DetectedForgeHost): boolean {
+  return (
+    (detected.flavor === 'github' && detected.displayHost === 'github.com') ||
+    (detected.flavor === 'azureDevOps' && detected.displayHost === 'dev.azure.com')
+  );
+}
+
 /**
- * Resolves the credential Launchpad needs to call a host's API. GitHub's public `github.com` gets
- * VS Code's own built-in authentication session — no GitLore backend, no key ever handled by
- * GitLore itself. Every other host (GitLab, Bitbucket, Azure DevOps, and GitHub Enterprise
- * Server/Gitea/Forgejo via `customHosts`, none of which VS Code ships a built-in session
- * provider for) needs a Personal Access Token, entered once and stored in VS Code's own encrypted
- * `SecretStorage` — the user's token, on their machine, never sent anywhere but that host itself.
+ * Which credential shape `AzureDevOpsClient` should present: `oauth` for the built-in Microsoft
+ * session (a JWT, sent as Bearer), `pat` for everything else (sent as Basic). Meaningless for the
+ * other three hosts, whose `ForgeClient`s only ever speak one credential shape.
+ */
+export function azureDevOpsCredentialScheme(detected: DetectedForgeHost): AzureDevOpsCredentialScheme {
+  return detected.flavor === 'azureDevOps' && detected.displayHost === 'dev.azure.com' ? 'oauth' : 'pat';
+}
+
+/**
+ * Resolves the credential Launchpad needs to call a host's API. GitHub's public `github.com` and
+ * Azure DevOps Services' `dev.azure.com` both get a VS Code built-in authentication session — no
+ * GitLore backend, no key ever handled by GitLore itself. This matters beyond convenience for
+ * Azure DevOps specifically: some organizations' Conditional Access policies block PAT/Basic auth
+ * entirely, so a PAT can 401 there no matter how broad its scope is, while an interactive AAD
+ * sign-in (this session) still succeeds. Every other host (GitLab, Bitbucket, self-hosted Azure
+ * DevOps Server, and GitHub Enterprise Server/Gitea/Forgejo via `customHosts`, none of which VS
+ * Code ships a built-in session provider for) needs a Personal Access Token, entered once and
+ * stored in VS Code's own encrypted `SecretStorage` — the user's token, on their machine, never
+ * sent anywhere but that host itself.
  *
  * Returns null if the user declines to sign in / enter a token — the caller shows that repo as
  * "not signed in" rather than failing the whole board.
@@ -22,6 +51,10 @@ export async function resolveForgeToken(
 ): Promise<string | null> {
   if (detected.flavor === 'github' && detected.displayHost === 'github.com') {
     const session = await vscode.authentication.getSession('github', ['repo'], { createIfNone: true });
+    return session?.accessToken ?? null;
+  }
+  if (detected.flavor === 'azureDevOps' && detected.displayHost === 'dev.azure.com') {
+    const session = await vscode.authentication.getSession('microsoft', AZURE_DEVOPS_AAD_SCOPES, { createIfNone: true });
     return session?.accessToken ?? null;
   }
 
@@ -44,9 +77,9 @@ export async function resolveForgeToken(
   return entered;
 }
 
-/** Clears a stored token — used when a host rejects it, so the next refresh re-prompts instead of retrying the same bad credential forever. Never touches the GitHub session (VS Code owns that lifecycle, not GitLore). */
+/** Clears a stored token — used when a host rejects it, so the next refresh re-prompts instead of retrying the same bad credential forever. Never touches a built-in session (VS Code owns that lifecycle, not GitLore). */
 export async function clearForgeToken(secrets: vscode.SecretStorage, detected: DetectedForgeHost): Promise<void> {
-  if (detected.flavor === 'github' && detected.displayHost === 'github.com') {
+  if (usesBuiltInSession(detected)) {
     return;
   }
   await secrets.delete(secretKeyFor(detected.displayHost));

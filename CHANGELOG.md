@@ -13,12 +13,16 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **AI commit message generation** — a sparkle button in the Source Control panel's title bar (**GitLore: Generate Commit Message with AI**) writes a message straight into the commit box, generated from your staged diff. Same opt-in gate and infrastructure as the existing AI commit summaries: off by default via `gitLore.ai.enabled`, degrades to an inline hint with no model registered, and nothing is sent anywhere unless you've turned AI on.
 - **Launchpad: Merged and Closed columns** — two new columns show your own most-recently-completed PRs (merged separately from closed-without-merging), so the board also reflects what you've shipped, not just what's still open.
 - **Launchpad: Close PR** — a close action on every open-PR card (with a confirmation dialog first) closes it on its host without merging, across all four supported hosts, without leaving GitLore.
+- **Launchpad: sign in to Azure DevOps Services with your Microsoft account** — `dev.azure.com` now uses the same built-in VS Code authentication session as GitHub, instead of requiring a Personal Access Token. This also fixes organizations whose Conditional Access policy blocks PAT/Basic auth outright, where no PAT — regardless of scope — could ever work. Self-hosted Azure DevOps Server still uses a PAT.
 
 ### Fixed
 
 - Removed `gitLore.dateFormat`, a setting that was documented but never actually wired into any date display and had no effect.
 - Commit Graph, Branch Comparison, and File History could show stale data if a second load started (a fast ref-picker change, a quick tab switch, an auto-refresh) before an earlier one finished — whichever request happened to resolve last won, not whichever was requested last. Each now tracks its own request generation and discards results from a superseded load.
 - The blame hover now honors VS Code's cancellation token instead of ignoring it, so a hover that's no longer needed (the mouse already moved on) stops doing further git lookups instead of finishing work nobody will see.
+- Azure DevOps' identity check was routed through a legacy global endpoint that 401s for an organization-scoped PAT even though the same token works everywhere else — now routed through the org, the way Azure DevOps actually expects.
+- Launchpad's Merged/Closed columns for Azure DevOps could render empty despite you having older merged PRs: the closed-PR search fetched the repo's most-recently-closed PRs project-wide, so a busy shared repo could push your own older ones out of the window before the "authored by you" filter ever saw them. Now filtered server-side to your own PRs from the start.
+- A failed Azure DevOps PR-list request (bad credential, insufficient scope, etc.) was silently rendered as an empty board, indistinguishable from a repo with genuinely no PRs. Now surfaces as a visible error, and clears the bad credential so the next refresh re-prompts instead of repeating the same failure forever.
 
 ## [0.4.0] - 2026-08-14
 

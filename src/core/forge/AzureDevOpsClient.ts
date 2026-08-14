@@ -88,7 +88,16 @@ function reviewersInfo(reviewers: AzureDevOpsReviewer[]): { requestedReviewers: 
  * closed-PR search server-side via `searchCriteria.creatorId`, so the current user's own older
  * merged/abandoned PRs aren't silently dropped by the `$top=10` window over a busy shared repo's
  * most-recently-closed PRs before `categorizeClosedPullRequests` ever filters by author.
+ *
+ * `credentialScheme` exists because `dev.azure.com` accepts two unrelated credential shapes: a
+ * PAT (HTTP Basic) from `forgeCredentials.ts`'s manual-entry flow, or an AAD OAuth access token
+ * (HTTP Bearer) from VS Code's built-in Microsoft session — the latter is the only thing that
+ * works for organizations whose Conditional Access policy blocks PAT/Basic auth outright, no
+ * matter how broad the PAT's own scope is.
  */
+/** How `token` should be presented: a PAT (HTTP Basic, empty username) or an AAD OAuth access token from `vscode.authentication`'s built-in Microsoft session (HTTP Bearer — Basic doesn't apply to a JWT). */
+export type AzureDevOpsCredentialScheme = 'pat' | 'oauth';
+
 export class AzureDevOpsClient implements ForgeClient {
   /** Set by `getAuthenticatedLogin` (always called once before the closed-PR list, per `LaunchpadViewProvider`) — the GUID `searchCriteria.creatorId` needs, which the shared `ForgeClient` interface has no other way to hand `listRecentlyClosedPullRequests`. */
   private authenticatedUserId: string | undefined;
@@ -96,6 +105,7 @@ export class AzureDevOpsClient implements ForgeClient {
   constructor(
     private readonly identity: string,
     private readonly token: string,
+    private readonly credentialScheme: AzureDevOpsCredentialScheme = 'pat',
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
@@ -219,15 +229,18 @@ export class AzureDevOpsClient implements ForgeClient {
 
   /** Throws with the real reason (HTTP status or network failure) instead of swallowing it. Only `fetchStatuses` wraps this in `requestOrNull` — a single PR's check-status enrichment failing shouldn't take down the whole list the way a credential problem on the list call itself should be visible. */
   private async request(url: string, init?: RequestInit): Promise<Response> {
-    // Azure DevOps PATs authenticate via HTTP Basic with an empty username — Bearer support for
-    // raw PATs isn't consistently documented the way it is for GitHub/GitLab/Bitbucket tokens.
-    const basic = Buffer.from(`:${this.token}`).toString('base64');
+    // A PAT authenticates via HTTP Basic with an empty username — Bearer support for raw PATs
+    // isn't consistently documented the way it is for GitHub/GitLab/Bitbucket tokens. An AAD OAuth
+    // access token (from the built-in Microsoft session) is the opposite: it's a JWT, so it only
+    // ever goes as a Bearer token — Basic doesn't apply to it at all.
+    const authHeader =
+      this.credentialScheme === 'oauth' ? `Bearer ${this.token}` : `Basic ${Buffer.from(`:${this.token}`).toString('base64')}`;
     let res: Response;
     try {
       res = await this.fetchImpl(url, {
         ...init,
         headers: {
-          Authorization: `Basic ${basic}`,
+          Authorization: authHeader,
           ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
         },
       });
