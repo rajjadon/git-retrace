@@ -45,6 +45,7 @@ body {
   gap: 0.6rem;
   padding: 0.4rem 1rem;
   min-height: 32px;
+  transition: transform var(--gitlore-motion), background-color var(--gitlore-motion);
 }
 
 .rb-row[draggable='true'] {
@@ -57,6 +58,7 @@ body {
 
 .rb-row:hover {
   background-color: var(--vscode-list-hoverBackground);
+  transform: translateY(-1px);
 }
 
 .rb-drag-handle {
@@ -89,7 +91,7 @@ body {
   color: var(--vscode-dropdown-foreground);
   background-color: var(--vscode-dropdown-background);
   border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
-  border-radius: 2px;
+  border-radius: var(--gitlore-radius-sm);
   cursor: pointer;
   text-transform: capitalize;
 }

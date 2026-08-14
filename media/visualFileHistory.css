@@ -103,6 +103,10 @@ body {
   cursor: pointer;
 }
 
+.fh-bubble {
+  transition: stroke var(--gitlore-motion), stroke-width var(--gitlore-motion);
+}
+
 .fh-point:focus-visible .fh-bubble,
 .fh-point:hover .fh-bubble {
   stroke: var(--vscode-focusBorder);
@@ -130,7 +134,7 @@ body {
     var(--gitlore-accent-gradient-diag) border-box;
   border: 1px solid transparent;
   color: var(--vscode-editorWidget-foreground, var(--vscode-foreground));
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--gitlore-shadow-hover);
   font-size: 0.9em;
   pointer-events: none;
 }
@@ -167,4 +171,11 @@ body {
   display: flex;
   gap: 0.6rem;
   font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }

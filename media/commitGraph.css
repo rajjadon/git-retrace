@@ -81,7 +81,7 @@ body {
   color: var(--vscode-dropdown-foreground);
   background-color: var(--vscode-dropdown-background);
   border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
-  border-radius: 2px;
+  border-radius: var(--gitlore-radius-sm);
 }
 
 /* Wider than shared.css's default — the graph toolbar has more room than a section header. */
@@ -166,11 +166,13 @@ body {
 .row.wip {
   height: var(--graph-row-height);
   cursor: pointer;
+  transition: transform var(--gitlore-motion), background-color var(--gitlore-motion);
 }
 
 .row.commit:hover,
 .row.wip:hover {
   background-color: var(--vscode-list-hoverBackground);
+  transform: translateY(-1px);
 }
 
 .row.selected {
@@ -258,7 +260,7 @@ body {
   max-width: 100%;
   padding: 0 0.35rem;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: var(--gitlore-radius-md);
   font-size: 0.9em;
   line-height: 1.5;
 }
@@ -353,6 +355,7 @@ body {
     var(--gitlore-accent-gradient-diag) border-box;
   border: 1px solid transparent;
   color: var(--vscode-editorHoverWidget-foreground);
+  box-shadow: var(--gitlore-shadow-hover);
   font-size: 0.95em;
   line-height: 1.5;
   pointer-events: none;

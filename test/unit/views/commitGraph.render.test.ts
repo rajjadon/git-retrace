@@ -64,7 +64,7 @@ test('renderGraphHtml: includes exactly one shared row-tooltip container', () =>
   const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
   const matches = html.match(/id="row-tooltip"/g) ?? [];
   assert.equal(matches.length, 1);
-  assert.match(html, /<div id="row-tooltip" class="row-tooltip" role="tooltip" aria-hidden="true" hidden><\/div>/);
+  assert.match(html, /<div id="row-tooltip" class="row-tooltip gitlore-enter" role="tooltip" aria-hidden="true" hidden><\/div>/);
 });
 
 test('renderGraphHtml: rows show/hide the tooltip on hover, keyboard focus, scroll, and Escape', () => {

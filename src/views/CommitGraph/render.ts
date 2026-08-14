@@ -302,7 +302,7 @@ ${rows}
 ${empty ? '<p class="empty">No commits yet.</p>' : ''}
 </div>
 ${hasMore ? '<div class="load-more"><button id="load-more" class="btn" type="button">Load more commits</button></div>' : ''}
-<div id="row-tooltip" class="row-tooltip" role="tooltip" aria-hidden="true" hidden></div>
+<div id="row-tooltip" class="row-tooltip gitlore-enter" role="tooltip" aria-hidden="true" hidden></div>
 <script nonce="${opts.nonce}">
 const vscode = acquireVsCodeApi();
 const rowsEl = document.getElementById('rows');

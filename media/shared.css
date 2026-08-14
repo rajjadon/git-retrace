@@ -25,6 +25,17 @@
   /* Shared radius for every hover card (Commit Graph's row tooltip, Visual File History's) — they
      previously drifted (3px vs 6px) despite being the same kind of element. */
   --gitlore-radius-lg: 6px;
+  /* Smaller two rungs of the same scale — replaces hardcoded 2px/3px (and one 4px outlier) that had
+     drifted per view with no shared value at all. */
+  --gitlore-radius-sm: 2px;
+  --gitlore-radius-md: 3px;
+  /* One shared hover/transition pace, so every view's row/card hover feels like the same product
+     instead of each file picking its own timing. */
+  --gitlore-motion: 140ms ease-out;
+  /* Theme-derived elevation for the one true "card" surface (Launchpad) and existing hover cards —
+     `--vscode-widget-shadow` is a long-stable VS Code color token. The fallback keeps this valid in
+     contexts that don't define it (e.g. the screenshot script's mocked theme). */
+  --gitlore-shadow-hover: 0 2px 6px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
 }
 
 /* ---------- Section header ---------- */
@@ -91,7 +102,7 @@
   color: var(--vscode-input-foreground);
   background-color: var(--vscode-input-background);
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-radius: 2px;
+  border-radius: var(--gitlore-radius-sm);
 }
 
 .search:focus-within {
@@ -129,12 +140,14 @@
   color: inherit;
   background: none;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--gitlore-radius-md);
   cursor: pointer;
+  transition: transform var(--gitlore-motion), background-color var(--gitlore-motion);
 }
 
 .icon-btn:hover {
   background-color: var(--vscode-toolbar-hoverBackground);
+  transform: translateY(-1px);
 }
 
 .icon-btn:focus-visible {
@@ -172,13 +185,15 @@
   color: var(--vscode-button-secondaryForeground);
   background-color: var(--vscode-button-secondaryBackground);
   border: 1px solid var(--vscode-panel-border);
-  border-radius: 3px;
+  border-radius: var(--gitlore-radius-md);
   cursor: pointer;
   white-space: nowrap;
+  transition: transform var(--gitlore-motion), background-color var(--gitlore-motion);
 }
 
 .btn:hover {
   background-color: var(--vscode-button-secondaryHoverBackground);
+  transform: translateY(-1px);
 }
 
 .btn:focus-visible {
@@ -225,6 +240,7 @@
   cursor: pointer;
   list-style: none;
   user-select: none;
+  transition: background-color var(--gitlore-motion);
 }
 
 /* Chevron drawn from borders — no icon asset, and it inherits the theme foreground for free. */
@@ -294,7 +310,7 @@
   width: 48px;
   height: 6px;
   margin-left: 0.5rem;
-  border-radius: 2px;
+  border-radius: var(--gitlore-radius-sm);
   overflow: hidden;
   background-color: var(--vscode-widget-border, transparent);
 }
@@ -318,7 +334,7 @@
   color: inherit;
   background: none;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--gitlore-radius-md);
   cursor: pointer;
   opacity: 0;
 }
@@ -371,7 +387,7 @@ pre.diff {
   margin: 0 0.75rem 0.5rem 1.4rem;
   padding: 0.4rem 0;
   background-color: var(--vscode-textCodeBlock-background);
-  border-radius: 3px;
+  border-radius: var(--gitlore-radius-md);
   font-family: var(--vscode-editor-font-family);
   /* One notch below the editor's own size, same rule the Commit Graph already follows: a docked
      panel — often a third of the window wide, with two others open beside it — is dense reading
@@ -452,6 +468,24 @@ body.wrap .dc {
 
 .diff-ctx {
   color: inherit;
+}
+
+/* One reusable entrance animation — opt in per element with `.gitlore-enter` rather than redefining
+   a keyframe per view. transform/opacity only, so it's compositor-only: no layout cost beyond the
+   element's own initial paint. */
+@keyframes gitlore-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gitlore-enter {
+  animation: gitlore-enter 180ms ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
