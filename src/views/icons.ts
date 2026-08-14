@@ -122,3 +122,6 @@ export const APPROVE_ICON = icon('<path d="M3 8.5 6.5 12 13 4.5" />', 'action-ic
 
 /** Request changes on a PR review — an exclamation-in-circle, distinct from Close's X so the two aren't mistaken for one another. */
 export const REQUEST_CHANGES_ICON = icon('<circle cx="8" cy="8" r="5.3" /><path d="M8 5.3v3" /><circle cx="8" cy="11" r="0.2" />', 'action-icon', 12);
+
+/** Reopen a closed PR — a counter-clockwise restore arrow, distinct from Refresh's full circle so "reopen this" isn't mistaken for "reload the board". */
+export const REOPEN_ICON = icon('<path d="M3.5 8a4.5 4.5 0 1 0 1.4-3.27" /><path d="M2.5 2.5v3h3" />', 'action-icon', 12);

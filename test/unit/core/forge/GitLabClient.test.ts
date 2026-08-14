@@ -284,6 +284,20 @@ test('closePullRequest: PUTs state_event=close to the merge request endpoint', a
   assert.equal(capturedInit?.body, JSON.stringify({ state_event: 'close' }));
 });
 
+test('reopenPullRequest: PUTs state_event=reopen to the merge request endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.reopenPullRequest(REPO, 22);
+  assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests/22');
+  assert.equal(capturedInit?.method, 'PUT');
+  assert.equal(capturedInit?.body, JSON.stringify({ state_event: 'reopen' }));
+});
+
 test('getPullRequestDiff: synthesizes a diff --git header per file so the shared renderer can split it, and counts +/- lines itself', async () => {
   const client = new GitLabClient(
     BASE,

@@ -26,6 +26,14 @@ export interface ForgeClient {
   listRecentlyClosedPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]>;
   /** Closes an open PR/MR without merging it. Throws with the real reason (HTTP status, network failure, or a permissions rejection) on failure — the caller surfaces it as an error toast. */
   closePullRequest(repo: ForgeRepoRef, number: number): Promise<void>;
+  /**
+   * Reopens a PR/MR that was closed without merging (never a merged one — no host we support lets
+   * a merge be undone through this endpoint). Throws with the real reason on failure, same
+   * contract as `closePullRequest`. Bitbucket Cloud has no way to reopen a declined PR at all —
+   * not through its API, not even through its own web UI — so that call throws a clear
+   * platform-gap message instead of pretending it's possible.
+   */
+  reopenPullRequest(repo: ForgeRepoRef, number: number): Promise<void>;
   /** This PR's changed files and diff text, for the PR Details panel. See `PullRequestDiff` for what an empty `diff` means. */
   getPullRequestDiff(repo: ForgeRepoRef, number: number): Promise<PullRequestDiff>;
   /**

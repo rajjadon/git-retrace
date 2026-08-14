@@ -229,6 +229,18 @@ export class AzureDevOpsClient implements ForgeClient {
     });
   }
 
+  async reopenPullRequest(repo: ForgeRepoRef, number: number): Promise<void> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      throw new Error('could not resolve this repo\'s Azure DevOps organization/project/repository identity');
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    await this.request(`${base}/pullrequests/${number}?api-version=7.1`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'active' }),
+    });
+  }
+
   /**
    * Azure DevOps has no endpoint that returns diff text — only structured changed-item lists
    * (`iterations/{n}/changes`), which would need diffing raw file content client-side to produce

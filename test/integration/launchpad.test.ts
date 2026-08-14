@@ -504,6 +504,52 @@ suite('Launchpad', () => {
       }),
     ));
 
+  test('reopening a closed (not merged) PR calls the client\'s reopen endpoint', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/widgets.git', async () => {
+        let reopenCalled = false;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened') || url.includes('merge_requests?state=merged')) {
+            return jsonResponse([]);
+          }
+          if (url.includes('merge_requests?state=closed')) {
+            return jsonResponse([
+              {
+                iid: 70,
+                title: 'Reopenable PR',
+                web_url: 'https://gitlab.com/acme/widgets/-/merge_requests/70',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-04T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.endsWith('/merge_requests/70') && init?.method === 'PUT') {
+            reopenCalled = true;
+            assert.equal(init.body, JSON.stringify({ state_event: 'reopen' }));
+            return jsonResponse({});
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Reopenable PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        await api.launchpadProvider.reopenPullRequestForTest('gitlab:acme/widgets#70');
+        assert.ok(reopenCalled, 'expected the reopen endpoint to be called');
+      }),
+    ));
+
   test('approving a PR calls the client\'s approve endpoint', async () =>
     withLaunchpadEnabled(() =>
       withOriginRemote('https://gitlab.com/acme/widgets.git', async () => {

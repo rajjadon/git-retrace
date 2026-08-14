@@ -286,6 +286,13 @@ test('closePullRequest: POSTs to the decline endpoint', async () => {
   assert.equal(capturedInit?.method, 'POST');
 });
 
+test('reopenPullRequest: throws a clear platform-gap error — Bitbucket Cloud has no way to reopen a declined PR', async () => {
+  const client = new BitbucketClient(BASE, 'tok', (async () => {
+    throw new Error('should never call the network for this');
+  }) as unknown as typeof fetch);
+  await assert.rejects(() => client.reopenPullRequest(REPO, 32), /Bitbucket has no way to reopen a declined pull request/);
+});
+
 test('getPullRequestDiff: fetches raw diff text from /diff and stats from /diffstat', async () => {
   const client = new BitbucketClient(BASE, 'tok', (async (url: string) => {
     if (url.endsWith('/pullrequests/33/diff')) {

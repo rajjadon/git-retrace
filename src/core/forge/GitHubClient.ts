@@ -194,6 +194,14 @@ export class GitHubClient implements ForgeClient {
     });
   }
 
+  /** GitHub refuses this with a real 422 if the PR's head branch or fork no longer exists — that's a legitimate failure the caller surfaces as-is, not something to detect ahead of time. */
+  async reopenPullRequest(repo: ForgeRepoRef, number: number): Promise<void> {
+    await this.request(`/repos/${repo.identity}/pulls/${number}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ state: 'open' }),
+    });
+  }
+
   /** GitHub's `application/vnd.github.v3.diff` media type returns the whole PR's unified diff as plain text directly — no reconstruction needed, unlike GitLab. */
   async getPullRequestDiff(repo: ForgeRepoRef, number: number): Promise<PullRequestDiff> {
     const [diffRes, filesRes] = await Promise.all([

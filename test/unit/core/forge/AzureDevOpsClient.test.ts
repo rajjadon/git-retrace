@@ -333,6 +333,23 @@ test('closePullRequest: PATCHes status=abandoned to the pull request endpoint', 
   assert.equal(capturedInit?.body, JSON.stringify({ status: 'abandoned' }));
 });
 
+test('reopenPullRequest: PATCHes status=active to the pull request endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.reopenPullRequest(REPO, 42);
+  assert.equal(
+    capturedUrl,
+    `https://dev.azure.com/acme/Widgets/_apis/git/repositories/widgets-api/pullrequests/42?api-version=7.1`,
+  );
+  assert.equal(capturedInit?.method, 'PATCH');
+  assert.equal(capturedInit?.body, JSON.stringify({ status: 'active' }));
+});
+
 test('getPullRequestDiff: no diff text is available — returns changed files (leading slash stripped) with 0/0 stats, not fabricated numbers', async () => {
   const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
     if (url.includes('/iterations?api-version')) {

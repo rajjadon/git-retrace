@@ -166,6 +166,11 @@ export class BitbucketClient implements ForgeClient {
     await this.request(`/repositories/${repo.identity}/pullrequests/${number}/decline`, { method: 'POST' });
   }
 
+  /** Bitbucket Cloud has no way to reopen a declined PR at all — not through this API, not even through its own web UI (a long-standing, still-open feature request on Bitbucket's own tracker) — so this throws a clear, actionable message rather than silently doing nothing or guessing at an endpoint that doesn't exist. */
+  async reopenPullRequest(_repo: ForgeRepoRef, _number: number): Promise<void> {
+    throw new Error('Bitbucket has no way to reopen a declined pull request — open a new pull request instead');
+  }
+
   /** Bitbucket's `/diff` endpoint returns the whole PR's unified diff as plain text directly, already carrying real `diff --git a/x b/y` headers — no reconstruction needed, unlike GitLab. `/diffstat` supplies the per-file insertion/deletion counts the diff text itself doesn't summarize. */
   async getPullRequestDiff(repo: ForgeRepoRef, number: number): Promise<PullRequestDiff> {
     const [diffRes, statRes] = await Promise.all([

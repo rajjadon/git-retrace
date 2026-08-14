@@ -112,6 +112,24 @@ test('renderLaunchpadHtml: merged/closed cards offer neither snooze nor close â€
   assert.ok(!html.includes('class="pr-card-close'));
 });
 
+test('renderLaunchpadHtml: a closed (not merged) card offers Reopen', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr({ closedAt: '2024-02-02T10:00:00Z', merged: false }), bucket: 'closed' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /class="pr-card-reopen[^"]*" type="button" data-key="github:acme\/widgets#1" data-title="Add feature"/);
+});
+
+test('renderLaunchpadHtml: a merged card offers no Reopen â€” no host lets a merge be undone this way', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr({ closedAt: '2024-02-02T10:00:00Z', merged: true }), bucket: 'merged' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.ok(!html.includes('class="pr-card-reopen'));
+});
+
+test('renderLaunchpadHtml: the Reopen button posts reopenPr with the PR\'s stable key and title', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr({ closedAt: '2024-02-02T10:00:00Z', merged: false }), bucket: 'closed' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /type: 'reopenPr', key: btn\.dataset\.key, title: btn\.dataset\.title/);
+});
+
 test('renderLaunchpadHtml: the "View diff" button posts showPullRequestDetails with the PR\'s stable key', () => {
   const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'waiting' }];
   const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);

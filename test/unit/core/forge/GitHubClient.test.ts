@@ -331,6 +331,20 @@ test('closePullRequest: a rejected request throws with the real HTTP status', as
   await assert.rejects(() => client.closePullRequest(REPO, 13), /401 Unauthorized from api\.github\.com/);
 });
 
+test('reopenPullRequest: PATCHes state=open to the PR endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitHubClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.reopenPullRequest(REPO, 12);
+  assert.equal(capturedUrl, 'https://api.github.com/repos/acme/widgets/pulls/12');
+  assert.equal(capturedInit?.method, 'PATCH');
+  assert.equal(capturedInit?.body, JSON.stringify({ state: 'open' }));
+});
+
 test('getPullRequestDiff: fetches raw diff text via the diff media type, and stats from /files', async () => {
   let capturedAccept: string | undefined;
   const client = new GitHubClient(

@@ -180,7 +180,9 @@ export class LaunchpadViewProvider implements vscode.Disposable {
         const openCategorized = categorizePullRequests(prs, login, (pr) => this.isSnoozed(pr));
         const closedCategorized = categorizeClosedPullRequests(closedPrs, login);
         categorized.push(...openCategorized, ...closedCategorized);
-        for (const { pr } of openCategorized) {
+        // Merged/closed PRs need to be resolvable too — View diff (rendered on every card,
+        // terminal or not) and the new Reopen action both look a card's key up here.
+        for (const { pr } of [...openCategorized, ...closedCategorized]) {
           this.prsByKey.set(pullRequestKey(pr), pr);
         }
       } catch (err) {
@@ -295,6 +297,10 @@ export class LaunchpadViewProvider implements vscode.Disposable {
       await this.closePullRequest(key, typeof title === 'string' ? title : key);
       return;
     }
+    if (type === 'reopenPr' && typeof key === 'string') {
+      await this.reopenPullRequest(key, typeof title === 'string' ? title : key);
+      return;
+    }
     if (type === 'submitReview' && typeof key === 'string' && (decision === 'approve' || decision === 'requestChanges')) {
       await this.submitReview(key, typeof title === 'string' ? title : key, decision);
       return;
@@ -382,6 +388,43 @@ export class LaunchpadViewProvider implements vscode.Disposable {
       return;
     }
     await client.closePullRequest(pr.repo, pr.number);
+    await this.refresh(false);
+  }
+
+  private async reopenPullRequest(key: string, title: string): Promise<void> {
+    const pr = this.prsByKey.get(key);
+    if (!pr) {
+      return;
+    }
+    const confirmed = await vscode.window.showWarningMessage(`Reopen "${title}" on ${pr.repo.label}?`, { modal: true }, 'Reopen PR');
+    if (confirmed !== 'Reopen PR') {
+      return;
+    }
+    const client = this.clientsByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    if (!client) {
+      return;
+    }
+    try {
+      await client.reopenPullRequest(pr.repo, pr.number);
+      await this.refresh(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`Launchpad failed to reopen PR ${key}`, err);
+      void vscode.window.showErrorMessage(`GitLore: couldn't reopen the PR — ${message}`);
+    }
+  }
+
+  /** Test-only introspection seam — a webview button click (and the real confirmation modal it triggers) can't be driven from an integration test, so this calls the reopen flow directly, skipping only the modal. */
+  async reopenPullRequestForTest(key: string): Promise<void> {
+    const pr = this.prsByKey.get(key);
+    if (!pr) {
+      return;
+    }
+    const client = this.clientsByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    if (!client) {
+      return;
+    }
+    await client.reopenPullRequest(pr.repo, pr.number);
     await this.refresh(false);
   }
 

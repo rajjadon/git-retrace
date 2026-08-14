@@ -165,6 +165,14 @@ export class GitLabClient implements ForgeClient {
     });
   }
 
+  async reopenPullRequest(repo: ForgeRepoRef, number: number): Promise<void> {
+    const projectPath = encodeURIComponent(repo.identity);
+    await this.request(`/projects/${projectPath}/merge_requests/${number}`, {
+      method: 'PUT',
+      body: JSON.stringify({ state_event: 'reopen' }),
+    });
+  }
+
   /**
    * GitLab's `/diffs` endpoint returns one hunk-body fragment per file — no `diff --git a/x b/y`
    * header the way GitHub's raw-diff media type or a real `git diff` has, and no insertion/deletion

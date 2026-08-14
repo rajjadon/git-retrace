@@ -10,6 +10,7 @@ import {
   CLOSE_ICON,
   OPEN_CHANGES_ICON,
   REFRESH_ICON,
+  REOPEN_ICON,
   REQUEST_CHANGES_ICON,
   SNOOZE_ICON,
 } from '../icons';
@@ -66,8 +67,12 @@ function renderCard(pr: PullRequestSummary, now: Date, bucket: LaunchpadBucket):
   // Approve/request-changes only make sense on an open card too — a host rejects a self-approval
   // attempt with its own clear error (surfaced the same way a failed close already is), so this
   // doesn't need its own "is this my own PR" check on top of that.
+  // Reopen only makes sense on "closed", never "merged" — no host we support lets a merge be
+  // undone through this action.
   const stateActions = isTerminal
-    ? ''
+    ? bucket === 'closed'
+      ? `<button class="pr-card-reopen icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Reopen PR" aria-label="Reopen ${escapeHtml(pr.title)}">${REOPEN_ICON}</button>`
+      : ''
     : `<button class="pr-card-snooze icon-btn" type="button" data-key="${escapeHtml(key)}" data-tooltip="${snoozeTitle} PR" aria-label="${snoozeTitle} ${escapeHtml(pr.title)}">${SNOOZE_ICON}</button>
 <button class="pr-card-approve icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Approve PR" aria-label="Approve ${escapeHtml(pr.title)}">${APPROVE_ICON}</button>
 <button class="pr-card-request-changes icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Request changes on PR" aria-label="Request changes on ${escapeHtml(pr.title)}">${REQUEST_CHANGES_ICON}</button>
@@ -180,6 +185,14 @@ for (const btn of document.querySelectorAll('.pr-card-close')) {
     // Confirmation happens on the extension side (a real modal, not this webview's own UI) —
     // this only ever sends the request to close.
     vscode.postMessage({ type: 'closePr', key: btn.dataset.key, title: btn.dataset.title });
+  });
+}
+
+for (const btn of document.querySelectorAll('.pr-card-reopen')) {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    vscode.postMessage({ type: 'reopenPr', key: btn.dataset.key, title: btn.dataset.title });
   });
 }
 
