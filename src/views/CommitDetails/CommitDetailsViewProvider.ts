@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { GitService } from '../../core/git/GitService';
 import { renderCommitDetailsHtml, type RemoteTarget } from './render';
+import { resolveRepoContextPath } from '../CommitGraph/CommitGraphViewProvider';
 import { resolveIssueLinking } from '../../providers/issueLinking';
 import { openFileDiff } from '../../providers/GitContentProvider';
 import { buildCommitUrl, remoteHostLabel } from '../../utils/remoteLinks';
@@ -65,18 +66,34 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
       void this.handleMessage(message);
     });
     // The view resolves the moment its tab is revealed, which is usually before any commit has
-    // been picked. Say what to do instead of showing an empty rectangle.
-    if (!this.currentCommit) {
+    // been picked explicitly — shows the repo's most recent commit instead of an empty rectangle,
+    // the same "useful without running a command first" convention Commit Graph already follows.
+    // Falls back to the placeholder only when there's no file/workspace to resolve a repo from.
+    // Skipped entirely if `show()` already claimed a target (`currentFilePath`, set before
+    // `.focus()` for exactly this reason) — that explicit request must win, not race this default.
+    if (this.currentCommit || this.currentFilePath) {
+      return;
+    }
+    const filePath = resolveRepoContextPath();
+    if (!filePath) {
       webviewView.webview.html = renderPlaceholderHtml('Select a commit in the Commit Graph to see its details.', {
         nonce: createNonce(),
         cspSource: webviewView.webview.cspSource,
         styleUris: [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.commitDetails)],
       });
+      return;
     }
+    void this.load(filePath, 'HEAD');
   }
 
-  /** Called by the "Show Commit Details" command — reveals the panel tab and loads the given commit. */
+  /**
+   * Called by the "Show Commit Details" command — reveals the panel tab and loads the given
+   * commit. Claims `currentFilePath` *before* `.focus()`, not after: focusing the panel for the
+   * first time in a session synchronously triggers `resolveWebviewView`, which would otherwise see
+   * no commit requested yet and auto-load HEAD, racing this call's own explicit load.
+   */
   async show(filePath: string, sha: string): Promise<void> {
+    this.currentFilePath = filePath;
     await vscode.commands.executeCommand(`${VIEWS.commitDetails}.focus`);
     await waitForWebviewView(() => this.view);
     await this.load(filePath, sha);
@@ -121,6 +138,9 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
       }
       this.currentCommit = commit;
       this.currentDiff = diff;
+      // The initial title above used the caller's own sha argument, which is 'HEAD' (not a real
+      // short sha) for the auto-loaded-on-reveal case — replace it now that the commit's resolved.
+      this.view.title = `Commit ${commit.shortSha}`;
 
       // Only offer "Open on <host>" when we know that host's commit-URL shape — a button that
       // reliably 404s is worse than no button.

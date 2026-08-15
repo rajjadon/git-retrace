@@ -6,6 +6,11 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+### Changed
+
+- Commit Details now shows the repo's most recent commit as soon as the tab is revealed, instead of an empty "select a commit" placeholder, matching Commit Graph's existing behavior.
+- Branch Comparison no longer guesses a default comparison to show as soon as its tab is revealed — it now stays on its placeholder until you run "Compare Branches" yourself. Pull Request Details and Visual File History already worked this way.
+
 ### Fixed
 
 - Every panel's loading and error states (Commit Graph, Commit Details, Branch Comparison, Visual File History, Launchpad, Pull Request Details) now render themed to match VS Code's colors instead of a brief flash of unstyled, unthemed text on every panel open and refresh. Loading now shows a shimmering skeleton instead of "Loading X…" text (still announced to screen readers via `aria-label`), and load failures are announced as an alert. The same shimmer replaces Commit Details' "Generating…" text while an AI commit summary is in flight, and Pull Request Details' "Posting…" text while a comment is being posted.

@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import * as vscode from 'vscode';
 import { buildBranchFixtureRepo } from '../fixtures/build-fixture-repo';
 import type { GitLoreTestApi } from '../../src/extension';
-import { COMMANDS } from '../../src/constants';
+import { COMMANDS, VIEWS } from '../../src/constants';
 import { EXTENSION_ID } from './extensionId';
 
 
@@ -37,13 +37,18 @@ suite('Branch comparison webview', () => {
     return api.getBranchComparisonHtml() ?? '';
   }
 
-  test('an explicit show(base, compare) always wins over the panel\'s own default-ref guess, even on its first-ever reveal', async () => {
-    // Regression test for a real race: focusing the panel for the first time in a session
-    // synchronously triggers resolveWebviewView -> loadDefault(), an independent, unawaited
-    // fetch-and-render chain racing this command's own explicit one. `pickDefaultRefs` would
-    // naturally pick the *current* branch ('main', since the fixture checks it out) as `compare`
-    // — this test deliberately requests the opposite pairing (`main` as base) so a lost race is
-    // visibly wrong, not accidentally the same answer.
+  // Must run before any other test in this suite reveals the Branch Comparison view — VS Code only
+  // calls resolveWebviewView() once per view's lifetime, so this is the one chance to observe its
+  // very first reveal. No earlier-alphabetical suite (only blame.test.ts sorts before this file)
+  // touches Branch Comparison, so this ordering is safe.
+  test('stays closed (shows a placeholder) until Compare Branches is explicitly run, instead of auto-loading a default comparison', async () => {
+    await vscode.commands.executeCommand(`${VIEWS.branchComparison}.focus`);
+    await waitFor(() => (api.getBranchComparisonHtml() ?? '').includes('Compare two branches'));
+    const html = api.getBranchComparisonHtml() ?? '';
+    assert.match(html, /class="empty">Compare two branches to see their diff here\.<\/p>/);
+  });
+
+  test('an explicit show(base, compare) resolves to exactly the requested pairing', async () => {
     const fixture = buildBranchFixtureRepo();
     const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
     await vscode.window.showTextDocument(doc);

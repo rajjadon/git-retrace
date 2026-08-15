@@ -2,8 +2,6 @@ import * as vscode from 'vscode';
 import { GitService } from '../../core/git/GitService';
 import { renderBranchComparisonHtml, type PrTarget } from './render';
 import { openFileDiff } from '../../providers/GitContentProvider';
-import { pickDefaultRefs } from '../../utils/branchDefaults';
-import { resolveRepoContextPath } from '../CommitGraph/CommitGraphViewProvider';
 import { renderPlaceholderHtml } from '../placeholder';
 import { waitForWebviewView } from '../waitForWebviewView';
 import { COMMANDS, MEDIA, VIEWS } from '../../constants';
@@ -53,51 +51,24 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
     webviewView.webview.onDidReceiveMessage((message: unknown) => {
       void this.handleMessage(message);
     });
-    void this.loadDefault();
-  }
-
-  /**
-   * Loads a sensible comparison as soon as the tab is revealed — the checked-out branch against its
-   * upstream — so the panel is useful without running a command first, matching how Commit Graph
-   * already behaves. The user can retarget both refs in the view's own ref bar.
-   */
-  private async loadDefault(): Promise<void> {
-    if (!this.view || this.currentBase) {
-      return;
-    }
-    const filePath = resolveRepoContextPath();
-    if (!filePath) {
-      return;
-    }
-    const [branches, currentBranch] = await Promise.all([
-      this.git.getBranches(filePath),
-      this.git.getCurrentBranch(filePath),
-    ]);
-    // An explicit `show(base, compare)` can land while those git calls are in flight; it wins, and
-    // this must not overwrite it with the default pair afterwards.
-    if (this.currentBase) {
-      return;
-    }
-    const refs = pickDefaultRefs(branches, currentBranch);
-    if (!refs) {
-      this.view.webview.html = renderPlaceholderHtml('This repo has only one ref — nothing to compare yet.', {
+    // The view resolves the moment its tab is revealed, which can happen before "Compare Branches"
+    // has ever been run — say what to do instead of showing an empty rectangle. Stays closed until
+    // that command actually runs, rather than guessing a default comparison to show.
+    if (!this.currentBase) {
+      webviewView.webview.html = renderPlaceholderHtml('Compare two branches to see their diff here.', {
         nonce: createNonce(),
-        cspSource: this.view.webview.cspSource,
+        cspSource: webviewView.webview.cspSource,
         styleUris: [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.branchComparison)],
       });
-      return;
     }
-    await this.load(filePath, refs.base, refs.compare);
   }
 
   /**
    * Called by the "Compare Branches" command — reveals the panel tab and loads the given
-   * comparison. Claims `currentBase`/`currentCompare` *before* `.focus()`, not after: focusing
-   * the panel for the first time in a session synchronously triggers `resolveWebviewView`, which
-   * fires `loadDefault()` as an unawaited, independent chain. `loadDefault()`'s only defense
-   * against that race is checking `currentBase` — so it has to already be set by the time
-   * `loadDefault()`'s own (cheaper, 2-call) git fetch resolves, or the two calls end up racing to
-   * decide what the user sees, with no guarantee this explicit call wins.
+   * comparison. Claims `currentBase`/`currentCompare` *before* `.focus()`, not after: focusing the
+   * panel for the first time in a session synchronously triggers `resolveWebviewView`, which would
+   * otherwise see no comparison claimed yet and flash the placeholder for a moment before `load()`
+   * replaces it.
    */
   async show(filePath: string, base: string, compare: string): Promise<void> {
     this.currentBase = base;
