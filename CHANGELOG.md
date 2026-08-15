@@ -4,7 +4,7 @@ All notable changes to GitLore are documented here. Format follows [Keep a Chang
 
 The VS Code Marketplace shows this file on GitLore's extension page, so entries describe what changed for someone *using* GitLore. Why a change was made the way it was belongs in the commit message and in code comments, next to the code it explains.
 
-## [Unreleased]
+## [1.2.0] - 2026-08-15
 
 ### Added
 
