@@ -112,6 +112,14 @@ function reviewersInfo(reviewers: AzureDevOpsReviewer[]): { requestedReviewers: 
   return { requestedReviewers: [], reviewDecision: 'none' };
 }
 
+/** A vote of 0 ("no vote") or -5 ("waiting for author" — the reviewer punted, not a verdict) isn't a real review yet; anything else (10, 5, or -10) is — this is about whether *this specific person* has acted, independent of the PR's overall `reviewDecision`. */
+function computeReviewedByMe(reviewers: AzureDevOpsReviewer[], myLogin: string | undefined): boolean {
+  if (!myLogin) {
+    return false;
+  }
+  return reviewers.some((r) => loginOf(r) === myLogin && r.vote !== 0 && r.vote !== -5);
+}
+
 /**
  * The only place that talks to Azure DevOps' REST API. Unlike the other three hosts, a repo here
  * has no two-part owner/repo identity — `repo.identity` is "organization/project/repository" (see
@@ -143,6 +151,8 @@ export type AzureDevOpsCredentialScheme = 'pat' | 'oauth';
 export class AzureDevOpsClient implements ForgeClient {
   /** Set by `getAuthenticatedLogin` (always called once before the closed-PR list, per `LaunchpadViewProvider`) — the GUID `searchCriteria.creatorId` needs, which the shared `ForgeClient` interface has no other way to hand `listRecentlyClosedPullRequests`. */
   private authenticatedUserId: string | undefined;
+  /** Set alongside `authenticatedUserId` — used by `enrich` to compute `reviewedByMe` against each PR's own `reviewers` entries, which are keyed by `uniqueName`/`displayName`, not the profile GUID. */
+  private authenticatedLogin: string | undefined;
 
   constructor(
     private readonly identity: string,
@@ -159,6 +169,7 @@ export class AzureDevOpsClient implements ForgeClient {
     const res = await this.request(url);
     const data = (await res.json()) as AzureDevOpsProfile;
     this.authenticatedUserId = data.id;
+    this.authenticatedLogin = data.emailAddress ?? data.displayName ?? undefined;
     return data.emailAddress ?? data.displayName ?? null;
   }
 
@@ -219,6 +230,7 @@ export class AzureDevOpsClient implements ForgeClient {
       checkStatus: 'none',
       reviewDecision: 'none',
       hasConflicts: false,
+      reviewedByMe: false,
       closedAt: pr.closedDate ?? pr.creationDate,
       merged,
     }));
@@ -403,6 +415,7 @@ export class AzureDevOpsClient implements ForgeClient {
       requestedReviewers,
       checkStatus: computeCheckStatus(statuses),
       reviewDecision,
+      reviewedByMe: computeReviewedByMe(pr.reviewers ?? [], this.authenticatedLogin),
       hasConflicts: pr.mergeStatus === 'conflicts',
     };
   }

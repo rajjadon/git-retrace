@@ -171,6 +171,40 @@ test('listOpenPullRequests: overall approved with everyone having personally app
   assert.equal(result[0]?.reviewDecision, 'approved');
 });
 
+test('listOpenPullRequests: reviewedByMe is true when the authenticated user is in approved_by', async () => {
+  const client = new GitLabClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/user': { username: 'raj' },
+      'merge_requests?state=opened&per_page=100': [
+        { iid: 2, title: 'PR', web_url: 'u', author: { username: 'someone-else' }, created_at: 'c', updated_at: 'u', reviewers: [{ username: 'raj' }] },
+      ],
+      '/approvals': { approved: false, approved_by: [{ user: { username: 'raj' } }] },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, true);
+});
+
+test('listOpenPullRequests: reviewedByMe is false when the authenticated user has not approved — GitLab has no other per-reviewer verdict to check', async () => {
+  const client = new GitLabClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/user': { username: 'raj' },
+      'merge_requests?state=opened&per_page=100': [
+        { iid: 3, title: 'PR', web_url: 'u', author: { username: 'someone-else' }, created_at: 'c', updated_at: 'u', reviewers: [{ username: 'raj' }] },
+      ],
+      '/approvals': { approved: false, approved_by: [] },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, false);
+});
+
 test('listOpenPullRequests: pipeline status maps to checkStatus (success/failed/running)', async () => {
   async function pipelineCheck(status: string, expected: string): Promise<void> {
     const client = new GitLabClient(
@@ -233,6 +267,9 @@ test('listRecentlyClosedPullRequests: combines merged and closed lists, tagging 
   const abandoned = result.find((r) => r.number === 21);
   assert.equal(shipped?.merged, true);
   assert.equal(abandoned?.merged, false);
+  // reviewedByMe is never meaningful once a PR is done — nothing reads it there.
+  assert.equal(shipped?.reviewedByMe, false);
+  assert.equal(abandoned?.reviewedByMe, false);
 });
 
 test('listRecentlyClosedPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {

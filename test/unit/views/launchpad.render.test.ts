@@ -22,16 +22,27 @@ function pr(overrides: Partial<PullRequestSummary> = {}): PullRequestSummary {
     checkStatus: 'passing',
     reviewDecision: 'approved',
     hasConflicts: false,
+    reviewedByMe: false,
     ...overrides,
   };
 }
 
-test('renderLaunchpadHtml: renders all eight columns in the roadmap-specified order, with counts', () => {
+test('renderLaunchpadHtml: renders all nine columns in the roadmap-specified order, with counts', () => {
   // At least one PR, so the board actually renders instead of the "nothing to show" empty state.
   const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'waiting' }];
   const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
   const titles = [...html.matchAll(/class="column-title">([^<]+)</g)].map((m) => m[1]);
-  assert.deepEqual(titles, ['Needs Review', 'Ready to Merge', 'Waiting', 'Blocked', 'Drafts', 'Snoozed', 'Merged', 'Closed']);
+  assert.deepEqual(titles, ['Needs Review', 'Reviewed', 'Ready to Merge', 'Waiting', 'Blocked', 'Drafts', 'Snoozed', 'Merged', 'Closed']);
+});
+
+test('renderLaunchpadHtml: a "Reviewed" card gets the same actions as a Waiting card (Snooze/Approve/Request changes/Close), no Merge', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'reviewed' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /class="pr-card-snooze/);
+  assert.match(html, /class="pr-card-approve/);
+  assert.match(html, /class="pr-card-request-changes/);
+  assert.match(html, /class="pr-card-close/);
+  assert.ok(!html.includes('class="pr-card-merge'));
 });
 
 test('renderLaunchpadHtml: places a PR card in its bucket\'s column with a count badge', () => {

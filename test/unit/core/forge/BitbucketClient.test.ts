@@ -156,6 +156,90 @@ test('listOpenPullRequests: every reviewer approved -> "approved", nobody left i
   assert.deepEqual(result[0]?.requestedReviewers, []);
 });
 
+test('listOpenPullRequests: reviewedByMe is true when the authenticated user approved as a REVIEWER', async () => {
+  const client = new BitbucketClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/user': { username: 'raj' },
+      'pullrequests?state=OPEN': {
+        values: [
+          {
+            id: 5,
+            title: 'PR',
+            links: { html: { href: 'u' } },
+            author: { username: 'someone-else' },
+            created_on: 'c',
+            updated_on: 'u',
+            participants: [{ user: { username: 'raj' }, role: 'REVIEWER', approved: true, state: 'approved' }],
+            source: { commit: { hash: 'sha5' } },
+          },
+        ],
+      },
+      '/statuses': { values: [] },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, true);
+});
+
+test('listOpenPullRequests: reviewedByMe is true when the authenticated user requested changes as a REVIEWER', async () => {
+  const client = new BitbucketClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/user': { username: 'raj' },
+      'pullrequests?state=OPEN': {
+        values: [
+          {
+            id: 6,
+            title: 'PR',
+            links: { html: { href: 'u' } },
+            author: { username: 'someone-else' },
+            created_on: 'c',
+            updated_on: 'u',
+            participants: [{ user: { username: 'raj' }, role: 'REVIEWER', approved: false, state: 'changes_requested' }],
+            source: { commit: { hash: 'sha6' } },
+          },
+        ],
+      },
+      '/statuses': { values: [] },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, true);
+});
+
+test('listOpenPullRequests: reviewedByMe is false for a REVIEWER who has not approved or requested changes yet', async () => {
+  const client = new BitbucketClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/user': { username: 'raj' },
+      'pullrequests?state=OPEN': {
+        values: [
+          {
+            id: 7,
+            title: 'PR',
+            links: { html: { href: 'u' } },
+            author: { username: 'someone-else' },
+            created_on: 'c',
+            updated_on: 'u',
+            participants: [{ user: { username: 'raj' }, role: 'REVIEWER', approved: false, state: null }],
+            source: { commit: { hash: 'sha7' } },
+          },
+        ],
+      },
+      '/statuses': { values: [] },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, false);
+});
+
 test('listOpenPullRequests: a PARTICIPANT (not a REVIEWER) never counts toward review decision', async () => {
   const client = new BitbucketClient(
     BASE,
@@ -233,6 +317,9 @@ test('listRecentlyClosedPullRequests: combines MERGED and DECLINED, tagging each
   assert.equal(result.length, 2);
   assert.equal(result.find((r) => r.number === 30)?.merged, true);
   assert.equal(result.find((r) => r.number === 31)?.merged, false);
+  // reviewedByMe is never meaningful once a PR is done — nothing reads it there.
+  assert.equal(result.find((r) => r.number === 30)?.reviewedByMe, false);
+  assert.equal(result.find((r) => r.number === 31)?.reviewedByMe, false);
 });
 
 test('listRecentlyClosedPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {

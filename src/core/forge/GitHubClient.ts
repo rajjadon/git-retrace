@@ -119,6 +119,11 @@ function computeReviewDecision(reviews: GitHubReview[], requestedReviewers: stri
   return 'none';
 }
 
+/** Any review state (approve, request-changes, or a plain comment-only review) counts — this is about whether *this specific person* has acted, independent of the PR's overall `reviewDecision`. */
+function computeReviewedByMe(reviews: GitHubReview[], myLogin: string | undefined): boolean {
+  return !!myLogin && latestReviewPerUser(reviews).some((r) => r.user?.login === myLogin);
+}
+
 const FAILING_CONCLUSIONS = new Set(['failure', 'timed_out', 'cancelled', 'action_required']);
 
 function computeCheckStatus(checkRuns: GitHubCheckRun[]): CheckStatus {
@@ -141,6 +146,9 @@ function computeCheckStatus(checkRuns: GitHubCheckRun[]): CheckStatus {
  * this client unchanged, just pointed at its own base URL via `gitLore.launchpad.customHosts`.
  */
 export class GitHubClient implements ForgeClient {
+  /** Set by `getAuthenticatedLogin` (always called once before the closed-PR list, per `LaunchpadViewProvider`) — used by `enrich` to compute `reviewedByMe` against each PR's own review list. */
+  private authenticatedLogin: string | undefined;
+
   constructor(
     private readonly apiBaseUrl: string,
     private readonly token: string,
@@ -150,6 +158,7 @@ export class GitHubClient implements ForgeClient {
   async getAuthenticatedLogin(): Promise<string | null> {
     const res = await this.request('/user');
     const data = (await res.json()) as GitHubUser;
+    this.authenticatedLogin = data.login;
     return data.login ?? null;
   }
 
@@ -182,6 +191,7 @@ export class GitHubClient implements ForgeClient {
       checkStatus: 'none',
       reviewDecision: 'none',
       hasConflicts: false,
+      reviewedByMe: false,
       closedAt: pull.closed_at ?? pull.updated_at,
       merged: pull.merged_at !== null,
     }));
@@ -304,6 +314,7 @@ export class GitHubClient implements ForgeClient {
       requestedReviewers,
       checkStatus: computeCheckStatus(checkRuns),
       reviewDecision: computeReviewDecision(reviews, requestedReviewers),
+      reviewedByMe: computeReviewedByMe(reviews, this.authenticatedLogin),
       hasConflicts: mergeableState === 'dirty',
     };
   }

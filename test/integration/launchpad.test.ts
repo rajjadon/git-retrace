@@ -650,6 +650,69 @@ suite('Launchpad', () => {
       }),
     ));
 
+  test('reviewing a PR you do not own keeps it visible in "Reviewed" instead of vanishing from the board (the bug this bucket exists to fix)', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/reviewed-widgets.git', async () => {
+        let approvalsCallCount = 0;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 90,
+                title: 'Reviewable-then-reviewed PR',
+                web_url: 'https://gitlab.com/acme/reviewed-widgets/-/merge_requests/90',
+                author: { username: 'other-dev' },
+                reviewers: [{ username: 'raj' }],
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            approvalsCallCount++;
+            // First load: not yet approved by anyone. After `submitReviewForTest` below: approved
+            // by 'raj' — same MR object, only the approvals response changes, matching how GitLab's
+            // own API actually reflects a submitted review.
+            return jsonResponse(
+              approvalsCallCount === 1
+                ? { approved: false, approved_by: [] }
+                : { approved: true, approved_by: [{ user: { username: 'raj' } }] },
+            );
+          }
+          if (url.endsWith('/merge_requests/90/approve') && init?.method === 'POST') {
+            return jsonResponse({});
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Reviewable-then-reviewed PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        const before = api.getLaunchpadHtml() ?? '';
+        assert.match(columnHtml(before, 'needsReview'), /Reviewable-then-reviewed PR/);
+
+        await api.launchpadProvider.submitReviewForTest('gitlab:acme/reviewed-widgets#90', 'approve');
+        await waitFor(() => columnHtml(api.getLaunchpadHtml() ?? '', 'reviewed').includes('Reviewable-then-reviewed PR'));
+
+        const after = api.getLaunchpadHtml() ?? '';
+        assert.match(columnHtml(after, 'reviewed'), /Reviewable-then-reviewed PR/);
+        assert.ok(!columnHtml(after, 'needsReview').includes('Reviewable-then-reviewed PR'));
+      }),
+    ));
+
   test('approving a PR calls the client\'s approve endpoint', async () =>
     withLaunchpadEnabled(() =>
       withOriginRemote('https://gitlab.com/acme/widgets.git', async () => {

@@ -64,6 +64,14 @@ export interface PullRequestSummary {
   checkStatus: CheckStatus;
   reviewDecision: ReviewDecision;
   hasConflicts: boolean;
+  /**
+   * Whether the current user has already submitted a review verdict on this PR — independent of
+   * `reviewDecision` (which reflects the PR's *overall* state, not any one reviewer's) and
+   * independent of `requestedReviewers` (which only tells you who's still owed one). Always
+   * `false` for a PR you authored, and always `false` on a closed/merged one (neither
+   * `listRecentlyClosedPullRequests` call enriches this — nothing reads it there).
+   */
+  reviewedByMe: boolean;
   /** Only set on a PR returned by `listRecentlyClosedPullRequests` — when it was closed (merged or not). Undefined for an open PR. */
   closedAt?: string;
   /** Only meaningful alongside `closedAt`: true if the PR was merged, false if it was closed without merging. */
@@ -102,6 +110,7 @@ export interface ConversationThread {
 
 export const LAUNCHPAD_BUCKETS = [
   'needsReview',
+  'reviewed',
   'readyToMerge',
   'waiting',
   'blocked',

@@ -259,6 +259,67 @@ test('listOpenPullRequests: a network failure on an enrichment call degrades tha
   assert.equal(result[0]?.checkStatus, 'none');
 });
 
+test('listOpenPullRequests: reviewedByMe is true when the authenticated user has a review on this PR, regardless of its state', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/user': { login: 'raj' },
+      '/pulls?state=open&per_page=100': [
+        { number: 30, title: 'PR', html_url: 'u', user: { login: 'someone-else' }, created_at: 'c', updated_at: 'u', head: { sha: 'sha30' } },
+      ],
+      '/reviews?per_page=100': [{ user: { login: 'raj' }, state: 'COMMENTED' }],
+      '/check-runs?per_page=100': { check_runs: [] },
+      '/pulls/30': { mergeable_state: 'clean' },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, true);
+});
+
+test('listOpenPullRequests: reviewedByMe is false when the authenticated user has not reviewed this PR yet', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/user': { login: 'raj' },
+      '/pulls?state=open&per_page=100': [
+        { number: 31, title: 'PR', html_url: 'u', user: { login: 'someone-else' }, created_at: 'c', updated_at: 'u', head: { sha: 'sha31' } },
+      ],
+      '/reviews?per_page=100': [{ user: { login: 'amy' }, state: 'APPROVED' }],
+      '/check-runs?per_page=100': { check_runs: [] },
+      '/pulls/31': { mergeable_state: 'clean' },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, false);
+});
+
+test('listRecentlyClosedPullRequests: reviewedByMe is always false — nothing reads it on a closed/merged PR', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/pulls?state=closed&sort=updated&direction=desc&per_page=100': [
+        {
+          number: 32,
+          title: 'Shipped',
+          html_url: 'u',
+          user: { login: 'raj' },
+          created_at: 'c',
+          updated_at: 'u',
+          closed_at: 'c2',
+          merged_at: 'c2',
+        },
+      ],
+    }),
+  );
+  const result = await client.listRecentlyClosedPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, false);
+});
+
 test('listRecentlyClosedPullRequests: merged_at present -> merged true, and closedAt uses closed_at', async () => {
   const client = new GitHubClient(
     BASE,

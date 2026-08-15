@@ -9,6 +9,7 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 ### Added
 
 - **Launchpad: Merge PR** — a Merge action on every "Ready to Merge" card, across all four supported hosts. Prompts for a merge strategy (Merge / Squash and merge / Rebase and merge, filtered to what the PR's host actually supports) and lets you also delete the source branch, then confirms before merging. GitLab and Bitbucket have no true "rebase and merge" of their own, so that option simply doesn't appear for them.
+- **Launchpad: a "Reviewed" column** — fixes a real gap: once you approved or requested changes on a PR you don't own, it used to vanish from the board entirely the moment the host stopped counting you as an owed reviewer, instead of showing up anywhere. It now lands in a new **Reviewed** column (right after Needs Review) and stays there — regardless of what happens to the PR afterward (CI turns red, a conflict appears, another reviewer requests changes) — unless the host puts you back in the requested-reviewers list, which still takes you back to Needs Review.
 
 ### Changed
 

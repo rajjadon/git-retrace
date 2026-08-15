@@ -91,6 +91,16 @@ function reviewersInfo(pr: BitbucketPullRequest): { requestedReviewers: string[]
   return { requestedReviewers: [], reviewDecision: 'none' };
 }
 
+/** A reviewer with `approved: true` or `state: 'changes_requested'` has given a real verdict — this is about whether *this specific person* has acted, independent of the PR's overall `reviewDecision`. */
+function computeReviewedByMe(pr: BitbucketPullRequest, myLogin: string | undefined): boolean {
+  if (!myLogin) {
+    return false;
+  }
+  return (pr.participants ?? []).some(
+    (p) => p.role === 'REVIEWER' && loginOf(p.user) === myLogin && (p.approved || p.state === 'changes_requested'),
+  );
+}
+
 /**
  * The only place that talks to Bitbucket Cloud's REST API 2.0. Uses Bitbucket's newer Access
  * Token model (Bearer auth), not the legacy App Password (HTTP Basic, username+password pair) —
@@ -103,6 +113,8 @@ function reviewersInfo(pr: BitbucketPullRequest): { requestedReviewers: string[]
 export class BitbucketClient implements ForgeClient {
   /** Set by `getAuthenticatedLogin` (always called once before the closed-PR list, per `LaunchpadViewProvider`) — `username`/`nickname` can be hidden by privacy settings, but `uuid` is always present, so it's what scopes `fetchClosedList`'s author filter. */
   private authenticatedUserUuid: string | undefined;
+  /** Set alongside `authenticatedUserUuid` — used by `enrich` to compute `reviewedByMe` against each PR's own `participants` entries, which are keyed by login/nickname, not uuid. */
+  private authenticatedLogin: string | undefined;
 
   constructor(
     private readonly apiBaseUrl: string,
@@ -115,6 +127,7 @@ export class BitbucketClient implements ForgeClient {
     const data = (await res.json()) as BitbucketUser;
     this.authenticatedUserUuid = data.uuid;
     const login = loginOf(data);
+    this.authenticatedLogin = login || undefined;
     return login || null;
   }
 
@@ -157,6 +170,7 @@ export class BitbucketClient implements ForgeClient {
       checkStatus: 'none',
       reviewDecision: 'none',
       hasConflicts: false,
+      reviewedByMe: false,
       closedAt: pr.updated_on,
       merged,
     }));
@@ -254,6 +268,7 @@ export class BitbucketClient implements ForgeClient {
       requestedReviewers,
       checkStatus: computeCheckStatus(statuses),
       reviewDecision,
+      reviewedByMe: computeReviewedByMe(pr, this.authenticatedLogin),
       hasConflicts: false,
     };
   }

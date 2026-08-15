@@ -203,6 +203,81 @@ test('listOpenPullRequests: every reviewer approved (vote 10) -> "approved"', as
   assert.deepEqual(result[0]?.requestedReviewers, []);
 });
 
+test('listOpenPullRequests: reviewedByMe is true when the authenticated user has a real vote (not 0, not -5)', async () => {
+  const client = new AzureDevOpsClient(
+    IDENTITY,
+    'pat',
+    'pat',
+    fakeFetch({
+      'profile/profiles/me?api-version=7.1': { emailAddress: 'raj@acme.com' },
+      'searchCriteria.status=active&api-version=7.1': {
+        value: [
+          {
+            pullRequestId: 10,
+            title: 'PR',
+            createdBy: { uniqueName: 'someone-else@acme.com' },
+            creationDate: 'c',
+            reviewers: [{ uniqueName: 'raj@acme.com', vote: 10 }],
+          },
+        ],
+      },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, true);
+});
+
+test('listOpenPullRequests: reviewedByMe is false for a vote of -5 ("waiting for author") — the reviewer punted, not a real verdict', async () => {
+  const client = new AzureDevOpsClient(
+    IDENTITY,
+    'pat',
+    'pat',
+    fakeFetch({
+      'profile/profiles/me?api-version=7.1': { emailAddress: 'raj@acme.com' },
+      'searchCriteria.status=active&api-version=7.1': {
+        value: [
+          {
+            pullRequestId: 11,
+            title: 'PR',
+            createdBy: { uniqueName: 'someone-else@acme.com' },
+            creationDate: 'c',
+            reviewers: [{ uniqueName: 'raj@acme.com', vote: -5 }],
+          },
+        ],
+      },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, false);
+});
+
+test('listOpenPullRequests: reviewedByMe is false when the authenticated user has not voted at all (vote 0)', async () => {
+  const client = new AzureDevOpsClient(
+    IDENTITY,
+    'pat',
+    'pat',
+    fakeFetch({
+      'profile/profiles/me?api-version=7.1': { emailAddress: 'raj@acme.com' },
+      'searchCriteria.status=active&api-version=7.1': {
+        value: [
+          {
+            pullRequestId: 12,
+            title: 'PR',
+            createdBy: { uniqueName: 'someone-else@acme.com' },
+            creationDate: 'c',
+            reviewers: [{ uniqueName: 'raj@acme.com', vote: 0 }],
+          },
+        ],
+      },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, false);
+});
+
 test('listOpenPullRequests: mergeStatus "conflicts" -> hasConflicts true', async () => {
   const client = new AzureDevOpsClient(
     IDENTITY,
@@ -279,6 +354,9 @@ test('listRecentlyClosedPullRequests: combines completed and abandoned, tagging 
   assert.equal(result.length, 2);
   assert.equal(result.find((r) => r.number === 40)?.merged, true);
   assert.equal(result.find((r) => r.number === 41)?.merged, false);
+  // reviewedByMe is never meaningful once a PR is done — nothing reads it there.
+  assert.equal(result.find((r) => r.number === 40)?.reviewedByMe, false);
+  assert.equal(result.find((r) => r.number === 41)?.reviewedByMe, false);
 });
 
 test('listRecentlyClosedPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {

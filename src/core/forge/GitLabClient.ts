@@ -152,6 +152,7 @@ export class GitLabClient implements ForgeClient {
       checkStatus: 'none',
       reviewDecision: 'none',
       hasConflicts: false,
+      reviewedByMe: false,
       closedAt: mr.updated_at,
       merged,
     }));
@@ -275,6 +276,10 @@ export class GitLabClient implements ForgeClient {
       requestedReviewers: stillOwed,
       checkStatus: computeCheckStatus(mr.head_pipeline),
       reviewDecision: computeReviewDecision(mr, approvals.approved, stillOwed),
+      // GitLab has no formal "request changes" state (see `submitReview`'s own comment on this) —
+      // an approval is the only per-reviewer verdict its API exposes, so this shares the exact same
+      // `approvedByUsernames` set `stillOwed` above already relies on, rather than a separate call.
+      reviewedByMe: approvedByUsernames.has(this.authenticatedUsername ?? ''),
       hasConflicts: mr.has_conflicts ?? false,
     };
   }

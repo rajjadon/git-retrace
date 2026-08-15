@@ -44,6 +44,7 @@ export interface LaunchpadData {
 
 const BUCKET_LABELS: Record<LaunchpadBucket, string> = {
   needsReview: 'Needs Review',
+  reviewed: 'Reviewed',
   readyToMerge: 'Ready to Merge',
   waiting: 'Waiting',
   blocked: 'Blocked',
