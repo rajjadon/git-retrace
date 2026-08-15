@@ -6,6 +6,22 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+### Added
+
+- **Launchpad: Merge PR** — a Merge action on every "Ready to Merge" card, across all four supported hosts. Prompts for a merge strategy (Merge / Squash and merge / Rebase and merge, filtered to what the PR's host actually supports) and lets you also delete the source branch, then confirms before merging. GitLab and Bitbucket have no true "rebase and merge" of their own, so that option simply doesn't appear for them.
+- **Launchpad: a "Reviewed" column** — fixes a real gap: once you approved or requested changes on a PR you don't own, it used to vanish from the board entirely the moment the host stopped counting you as an owed reviewer, instead of showing up anywhere. It now lands in a new **Reviewed** column (right after Needs Review) and stays there — regardless of what happens to the PR afterward (CI turns red, a conflict appears, another reviewer requests changes) — unless the host puts you back in the requested-reviewers list, which still takes you back to Needs Review.
+- **Branch Comparison: Create PR now actually creates the pull request** — the button used to just open your host's compare page in a browser for you to finish there; it now prompts for a title (and, on hosts that support it, whether to create it as a draft) and creates the PR directly via the host's API, across all four supported hosts — including Azure DevOps, which the old browser-only version couldn't recognize at all. Requires `gitLore.launchpad.enabled`, the same toggle every other remote-host call in GitLore shares — the button still shows either way, but explains that if clicked while it's off.
+
+### Changed
+
+- Commit Details now shows the repo's most recent commit as soon as the tab is revealed, instead of an empty "select a commit" placeholder, matching Commit Graph's existing behavior.
+- Branch Comparison no longer guesses a default comparison to show as soon as its tab is revealed — it now stays on its placeholder until you run "Compare Branches" yourself. Pull Request Details and Visual File History already worked this way.
+
+### Fixed
+
+- Every panel's loading and error states (Commit Graph, Commit Details, Branch Comparison, Visual File History, Launchpad, Pull Request Details) now render themed to match VS Code's colors instead of a brief flash of unstyled, unthemed text on every panel open and refresh. Loading now shows a shimmering skeleton instead of "Loading X…" text (still announced to screen readers via `aria-label`), and load failures are announced as an alert. The same shimmer replaces Commit Details' "Generating…" text while an AI commit summary is in flight, and Pull Request Details' "Posting…" text while a comment is being posted.
+- The Commit Details and Pull Request Details loading skeletons could get stuck visible even after the real content (an AI summary, a posted comment) had already loaded, since the skeleton's own CSS never actually hid when toggled off.
+
 ## [1.1.0] - 2026-08-14
 
 ### Changed

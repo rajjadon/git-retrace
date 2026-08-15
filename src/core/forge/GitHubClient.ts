@@ -1,6 +1,16 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import type {
+  CheckStatus,
+  ConversationThread,
+  CreatePullRequestOptions,
+  ForgeRepoRef,
+  MergeOptions,
+  PullRequestDiff,
+  PullRequestSummary,
+  ReviewDecision,
+  ReviewSubmission,
+} from './types';
 import { describeErrorBody } from './httpError';
 
 /** Fetches up to 100 review threads and each one's first comment — enough to identify and resolve a conversation without paginating replies nobody asked to see. */
@@ -119,6 +129,11 @@ function computeReviewDecision(reviews: GitHubReview[], requestedReviewers: stri
   return 'none';
 }
 
+/** Any review state (approve, request-changes, or a plain comment-only review) counts — this is about whether *this specific person* has acted, independent of the PR's overall `reviewDecision`. */
+function computeReviewedByMe(reviews: GitHubReview[], myLogin: string | undefined): boolean {
+  return !!myLogin && latestReviewPerUser(reviews).some((r) => r.user?.login === myLogin);
+}
+
 const FAILING_CONCLUSIONS = new Set(['failure', 'timed_out', 'cancelled', 'action_required']);
 
 function computeCheckStatus(checkRuns: GitHubCheckRun[]): CheckStatus {
@@ -141,6 +156,9 @@ function computeCheckStatus(checkRuns: GitHubCheckRun[]): CheckStatus {
  * this client unchanged, just pointed at its own base URL via `gitLore.launchpad.customHosts`.
  */
 export class GitHubClient implements ForgeClient {
+  /** Set by `getAuthenticatedLogin` (always called once before the closed-PR list, per `LaunchpadViewProvider`) — used by `enrich` to compute `reviewedByMe` against each PR's own review list. */
+  private authenticatedLogin: string | undefined;
+
   constructor(
     private readonly apiBaseUrl: string,
     private readonly token: string,
@@ -150,6 +168,7 @@ export class GitHubClient implements ForgeClient {
   async getAuthenticatedLogin(): Promise<string | null> {
     const res = await this.request('/user');
     const data = (await res.json()) as GitHubUser;
+    this.authenticatedLogin = data.login;
     return data.login ?? null;
   }
 
@@ -182,6 +201,7 @@ export class GitHubClient implements ForgeClient {
       checkStatus: 'none',
       reviewDecision: 'none',
       hasConflicts: false,
+      reviewedByMe: false,
       closedAt: pull.closed_at ?? pull.updated_at,
       merged: pull.merged_at !== null,
     }));
@@ -261,6 +281,54 @@ export class GitHubClient implements ForgeClient {
     await this.graphql(RESOLVE_REVIEW_THREAD_MUTATION, { threadId });
   }
 
+  /** `merge_method` maps directly to GitHub's own three strategies. Deleting the source branch is a separate call — GitHub's merge endpoint has no option for it — so it only fetches the head ref (one extra GET) when actually requested. */
+  async mergePullRequest(repo: ForgeRepoRef, number: number, options: MergeOptions): Promise<void> {
+    await this.request(`/repos/${repo.identity}/pulls/${number}/merge`, {
+      method: 'PUT',
+      body: JSON.stringify({ merge_method: options.strategy }),
+    });
+    if (options.deleteSourceBranch) {
+      const branch = await this.fetchHeadBranch(repo, number);
+      if (branch) {
+        await this.request(`/repos/${repo.identity}/git/refs/heads/${encodeURIComponent(branch)}`, { method: 'DELETE' });
+      }
+    }
+  }
+
+  /** `head`/`base` map directly to GitHub's own field names; `draft` is a real boolean field on this endpoint. No enrichment call afterward — a PR seconds old has no reviews/checks yet. */
+  async createPullRequest(repo: ForgeRepoRef, options: CreatePullRequestOptions): Promise<PullRequestSummary> {
+    const res = await this.request(`/repos/${repo.identity}/pulls`, {
+      method: 'POST',
+      body: JSON.stringify({ title: options.title, head: options.compare, base: options.base, draft: options.draft }),
+    });
+    const data = (await res.json()) as GitHubPull;
+    return {
+      repo,
+      number: data.number,
+      title: data.title,
+      url: data.html_url,
+      authorLogin: data.user?.login ?? '',
+      isDraft: data.draft ?? options.draft,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+      requestedReviewers: [],
+      checkStatus: 'none',
+      reviewDecision: 'none',
+      hasConflicts: false,
+      reviewedByMe: false,
+    };
+  }
+
+  /** Best-effort: if this fails, the merge itself already succeeded, so the caller just keeps the source branch around rather than failing an otherwise-successful merge over branch cleanup. */
+  private async fetchHeadBranch(repo: ForgeRepoRef, number: number): Promise<string | undefined> {
+    const res = await this.requestOrNull(`/repos/${repo.identity}/pulls/${number}`);
+    if (!res) {
+      return undefined;
+    }
+    const data = (await res.json()) as { head?: { ref?: string } };
+    return data.head?.ref;
+  }
+
   private async enrich(repo: ForgeRepoRef, pull: GitHubPull): Promise<PullRequestSummary> {
     const [reviews, checkRuns, mergeableState] = await Promise.all([
       this.fetchReviews(repo, pull.number),
@@ -280,6 +348,7 @@ export class GitHubClient implements ForgeClient {
       requestedReviewers,
       checkStatus: computeCheckStatus(checkRuns),
       reviewDecision: computeReviewDecision(reviews, requestedReviewers),
+      reviewedByMe: computeReviewedByMe(reviews, this.authenticatedLogin),
       hasConflicts: mergeableState === 'dirty',
     };
   }

@@ -1,6 +1,16 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import type {
+  CheckStatus,
+  ConversationThread,
+  CreatePullRequestOptions,
+  ForgeRepoRef,
+  MergeOptions,
+  PullRequestDiff,
+  PullRequestSummary,
+  ReviewDecision,
+  ReviewSubmission,
+} from './types';
 import { describeErrorBody } from './httpError';
 
 interface BitbucketUser {
@@ -91,6 +101,16 @@ function reviewersInfo(pr: BitbucketPullRequest): { requestedReviewers: string[]
   return { requestedReviewers: [], reviewDecision: 'none' };
 }
 
+/** A reviewer with `approved: true` or `state: 'changes_requested'` has given a real verdict — this is about whether *this specific person* has acted, independent of the PR's overall `reviewDecision`. */
+function computeReviewedByMe(pr: BitbucketPullRequest, myLogin: string | undefined): boolean {
+  if (!myLogin) {
+    return false;
+  }
+  return (pr.participants ?? []).some(
+    (p) => p.role === 'REVIEWER' && loginOf(p.user) === myLogin && (p.approved || p.state === 'changes_requested'),
+  );
+}
+
 /**
  * The only place that talks to Bitbucket Cloud's REST API 2.0. Uses Bitbucket's newer Access
  * Token model (Bearer auth), not the legacy App Password (HTTP Basic, username+password pair) —
@@ -103,6 +123,8 @@ function reviewersInfo(pr: BitbucketPullRequest): { requestedReviewers: string[]
 export class BitbucketClient implements ForgeClient {
   /** Set by `getAuthenticatedLogin` (always called once before the closed-PR list, per `LaunchpadViewProvider`) — `username`/`nickname` can be hidden by privacy settings, but `uuid` is always present, so it's what scopes `fetchClosedList`'s author filter. */
   private authenticatedUserUuid: string | undefined;
+  /** Set alongside `authenticatedUserUuid` — used by `enrich` to compute `reviewedByMe` against each PR's own `participants` entries, which are keyed by login/nickname, not uuid. */
+  private authenticatedLogin: string | undefined;
 
   constructor(
     private readonly apiBaseUrl: string,
@@ -115,6 +137,7 @@ export class BitbucketClient implements ForgeClient {
     const data = (await res.json()) as BitbucketUser;
     this.authenticatedUserUuid = data.uuid;
     const login = loginOf(data);
+    this.authenticatedLogin = login || undefined;
     return login || null;
   }
 
@@ -157,6 +180,7 @@ export class BitbucketClient implements ForgeClient {
       checkStatus: 'none',
       reviewDecision: 'none',
       hasConflicts: false,
+      reviewedByMe: false,
       closedAt: pr.updated_on,
       merged,
     }));
@@ -223,6 +247,53 @@ export class BitbucketClient implements ForgeClient {
     await this.request(`/repositories/${repo.identity}/pullrequests/${number}/comments/${threadId}/resolve`, { method: 'POST' });
   }
 
+  /** Bitbucket's third merge strategy, `fast_forward`, only succeeds when the branch already fast-forwards cleanly — not the same guarantee as GitHub/Azure DevOps' true rebase-and-replay, so `'rebase'` isn't offered here (see `MERGE_STRATEGIES_BY_HOST`) and throws a clear message if requested anyway. */
+  async mergePullRequest(repo: ForgeRepoRef, number: number, options: MergeOptions): Promise<void> {
+    if (options.strategy === 'rebase') {
+      throw new Error(
+        'Bitbucket has no true rebase-and-merge — its closest option, fast-forward, only works when the branch already fast-forwards cleanly. Use "Merge" or "Squash and merge" instead',
+      );
+    }
+    await this.request(`/repositories/${repo.identity}/pullrequests/${number}/merge`, {
+      method: 'POST',
+      body: JSON.stringify({
+        merge_strategy: options.strategy === 'squash' ? 'squash' : 'merge_commit',
+        close_source_branch: options.deleteSourceBranch,
+      }),
+    });
+  }
+
+  /** Bitbucket Cloud has no draft-PR concept at all — not through its API, not through its own web UI — so a draft request throws a clear platform-gap error rather than silently creating a regular PR (see `DRAFT_SUPPORTED_HOSTS`, which the caller uses to keep "Draft" off the create-PR flow for this host in the first place). No enrichment call afterward — a PR seconds old has no reviewers/build status yet. */
+  async createPullRequest(repo: ForgeRepoRef, options: CreatePullRequestOptions): Promise<PullRequestSummary> {
+    if (options.draft) {
+      throw new Error('Bitbucket Cloud has no draft pull requests — create it as a regular PR instead');
+    }
+    const res = await this.request(`/repositories/${repo.identity}/pullrequests`, {
+      method: 'POST',
+      body: JSON.stringify({
+        title: options.title,
+        source: { branch: { name: options.compare } },
+        destination: { branch: { name: options.base } },
+      }),
+    });
+    const data = (await res.json()) as BitbucketPullRequest;
+    return {
+      repo,
+      number: data.id,
+      title: data.title,
+      url: data.links.html.href,
+      authorLogin: loginOf(data.author),
+      isDraft: false,
+      createdAt: data.created_on,
+      updatedAt: data.updated_on,
+      requestedReviewers: [],
+      checkStatus: 'none',
+      reviewDecision: 'none',
+      hasConflicts: false,
+      reviewedByMe: false,
+    };
+  }
+
   private async enrich(repo: ForgeRepoRef, pr: BitbucketPullRequest): Promise<PullRequestSummary> {
     const statuses = await this.fetchBuildStatuses(repo, pr.source.commit.hash);
     const { requestedReviewers, reviewDecision } = reviewersInfo(pr);
@@ -238,6 +309,7 @@ export class BitbucketClient implements ForgeClient {
       requestedReviewers,
       checkStatus: computeCheckStatus(statuses),
       reviewDecision,
+      reviewedByMe: computeReviewedByMe(pr, this.authenticatedLogin),
       hasConflicts: false,
     };
   }

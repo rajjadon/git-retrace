@@ -2,7 +2,18 @@ import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
 import { splitAzureDevOpsIdentity } from './azureDevOpsIdentity';
 import { describeErrorBody } from './httpError';
-import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import type {
+  CheckStatus,
+  ConversationThread,
+  CreatePullRequestOptions,
+  ForgeRepoRef,
+  MergeOptions,
+  MergeStrategy,
+  PullRequestDiff,
+  PullRequestSummary,
+  ReviewDecision,
+  ReviewSubmission,
+} from './types';
 
 interface AzureDevOpsIdentityRef {
   uniqueName?: string;
@@ -73,6 +84,13 @@ interface AzureDevOpsThread {
 
 const UNRESOLVED_STATUSES = new Set<AzureDevOpsThreadStatus | undefined>(['active', 'pending', 'unknown', undefined]);
 
+/** Azure DevOps' own completion-option strategy names, one per `MergeStrategy` — `'merge'` maps to `noFastForward` (a real merge commit, its closest match to GitHub's plain "Merge"), and `'rebase'` maps to `rebase` (not `rebaseMerge`, which still leaves a merge commit — GitHub's "Rebase and merge" has none). */
+const AZURE_MERGE_STRATEGY: Record<MergeStrategy, string> = {
+  merge: 'noFastForward',
+  squash: 'squash',
+  rebase: 'rebase',
+};
+
 function loginOf(ref: AzureDevOpsIdentityRef): string {
   return ref.uniqueName ?? ref.displayName ?? '';
 }
@@ -103,6 +121,14 @@ function reviewersInfo(reviewers: AzureDevOpsReviewer[]): { requestedReviewers: 
     return { requestedReviewers: [], reviewDecision: 'approved' };
   }
   return { requestedReviewers: [], reviewDecision: 'none' };
+}
+
+/** A vote of 0 ("no vote") or -5 ("waiting for author" — the reviewer punted, not a verdict) isn't a real review yet; anything else (10, 5, or -10) is — this is about whether *this specific person* has acted, independent of the PR's overall `reviewDecision`. */
+function computeReviewedByMe(reviewers: AzureDevOpsReviewer[], myLogin: string | undefined): boolean {
+  if (!myLogin) {
+    return false;
+  }
+  return reviewers.some((r) => loginOf(r) === myLogin && r.vote !== 0 && r.vote !== -5);
 }
 
 /**
@@ -136,6 +162,8 @@ export type AzureDevOpsCredentialScheme = 'pat' | 'oauth';
 export class AzureDevOpsClient implements ForgeClient {
   /** Set by `getAuthenticatedLogin` (always called once before the closed-PR list, per `LaunchpadViewProvider`) — the GUID `searchCriteria.creatorId` needs, which the shared `ForgeClient` interface has no other way to hand `listRecentlyClosedPullRequests`. */
   private authenticatedUserId: string | undefined;
+  /** Set alongside `authenticatedUserId` — used by `enrich` to compute `reviewedByMe` against each PR's own `reviewers` entries, which are keyed by `uniqueName`/`displayName`, not the profile GUID. */
+  private authenticatedLogin: string | undefined;
 
   constructor(
     private readonly identity: string,
@@ -152,6 +180,7 @@ export class AzureDevOpsClient implements ForgeClient {
     const res = await this.request(url);
     const data = (await res.json()) as AzureDevOpsProfile;
     this.authenticatedUserId = data.id;
+    this.authenticatedLogin = data.emailAddress ?? data.displayName ?? undefined;
     return data.emailAddress ?? data.displayName ?? null;
   }
 
@@ -212,6 +241,7 @@ export class AzureDevOpsClient implements ForgeClient {
       checkStatus: 'none',
       reviewDecision: 'none',
       hasConflicts: false,
+      reviewedByMe: false,
       closedAt: pr.closedDate ?? pr.creationDate,
       merged,
     }));
@@ -346,6 +376,70 @@ export class AzureDevOpsClient implements ForgeClient {
     });
   }
 
+  /**
+   * Azure DevOps requires the PR's current head commit in the completion request
+   * (`lastMergeSourceCommit.commitId`) — not carried through `PullRequestSummary`, so this re-fetches
+   * it fresh immediately before completing, the same "don't trust board-refresh-time data for a
+   * mutating call" precedent as `getPullRequestDiff`.
+   */
+  async mergePullRequest(repo: ForgeRepoRef, number: number, options: MergeOptions): Promise<void> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      throw new Error('could not resolve this repo\'s Azure DevOps organization/project/repository identity');
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    const prRes = await this.request(`${base}/pullrequests/${number}?api-version=7.1`);
+    const pr = (await prRes.json()) as AzureDevOpsPullRequest;
+    if (!pr.lastMergeSourceCommit?.commitId) {
+      throw new Error("Azure DevOps hasn't finished computing this pull request's mergeability yet — try again in a moment");
+    }
+    await this.request(`${base}/pullrequests/${number}?api-version=7.1`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        status: 'completed',
+        lastMergeSourceCommit: { commitId: pr.lastMergeSourceCommit.commitId },
+        completionOptions: {
+          mergeStrategy: AZURE_MERGE_STRATEGY[options.strategy],
+          deleteSourceBranch: options.deleteSourceBranch,
+        },
+      }),
+    });
+  }
+
+  /** `isDraft` is a real boolean field on this endpoint, and ref names need the `refs/heads/` prefix Azure DevOps expects everywhere — `options.base`/`options.compare` are plain branch names, same as every other host's `createPullRequest`. No enrichment call afterward — a PR seconds old has no reviewers/checks yet. */
+  async createPullRequest(repo: ForgeRepoRef, options: CreatePullRequestOptions): Promise<PullRequestSummary> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      throw new Error('could not resolve this repo\'s Azure DevOps organization/project/repository identity');
+    }
+    const apiBase = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    const res = await this.request(`${apiBase}/pullrequests?api-version=7.1`, {
+      method: 'POST',
+      body: JSON.stringify({
+        sourceRefName: `refs/heads/${options.compare}`,
+        targetRefName: `refs/heads/${options.base}`,
+        title: options.title,
+        isDraft: options.draft,
+      }),
+    });
+    const data = (await res.json()) as AzureDevOpsPullRequest;
+    return {
+      repo,
+      number: data.pullRequestId,
+      title: data.title,
+      url: `https://dev.azure.com/${id.organization}/${id.project}/_git/${id.repository}/pullrequest/${data.pullRequestId}`,
+      authorLogin: loginOf(data.createdBy),
+      isDraft: data.isDraft ?? options.draft,
+      createdAt: data.creationDate,
+      updatedAt: data.creationDate,
+      requestedReviewers: [],
+      checkStatus: 'none',
+      reviewDecision: 'none',
+      hasConflicts: false,
+      reviewedByMe: false,
+    };
+  }
+
   private async enrich(
     repo: ForgeRepoRef,
     id: { organization: string; project: string; repository: string },
@@ -366,6 +460,7 @@ export class AzureDevOpsClient implements ForgeClient {
       requestedReviewers,
       checkStatus: computeCheckStatus(statuses),
       reviewDecision,
+      reviewedByMe: computeReviewedByMe(pr.reviewers ?? [], this.authenticatedLogin),
       hasConflicts: pr.mergeStatus === 'conflicts',
     };
   }

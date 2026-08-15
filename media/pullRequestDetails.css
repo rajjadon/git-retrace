@@ -166,6 +166,12 @@ h1 {
   font-size: 0.9em;
 }
 
+/* The shared .skeleton's margin is sized for sitting alone in a panel body — here it's one row
+   inline with the Comment button, in the same flex row .comment-status occupies. */
+.comment-form-actions .skeleton {
+  margin: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

@@ -28,3 +28,32 @@ test('renderPlaceholderHtml: escapes its message', () => {
   assert.ok(!html.includes('<script>alert(1)</script>'));
   assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
 });
+
+test('renderPlaceholderHtml: default and "empty" variant carry no live region', () => {
+  const withDefault = renderPlaceholderHtml('Nothing yet.', opts);
+  const withEmpty = renderPlaceholderHtml('Nothing yet.', { ...opts, variant: 'empty' });
+  for (const html of [withDefault, withEmpty]) {
+    assert.ok(!html.includes('aria-live'));
+    assert.ok(!html.includes('aria-busy'));
+    assert.ok(!html.includes('role='));
+  }
+});
+
+test('renderPlaceholderHtml: "loading" variant shows a shimmering skeleton, carrying the message as an aria-label instead of visible text', () => {
+  const html = renderPlaceholderHtml('Loading commit…', { ...opts, variant: 'loading' });
+  assert.match(html, /class="skeleton" role="status" aria-live="polite" aria-busy="true" aria-label="Loading commit…"/);
+  assert.ok(html.includes('class="skeleton-row"'));
+  assert.ok(!html.includes('>Loading commit…<'));
+});
+
+test('renderPlaceholderHtml: "loading" variant escapes its message in the aria-label attribute', () => {
+  const html = renderPlaceholderHtml('Loading "quoted" <script>', { ...opts, variant: 'loading' });
+  assert.ok(!html.includes('aria-label="Loading "quoted"'));
+  assert.match(html, /aria-label="Loading &quot;quoted&quot; &lt;script&gt;"/);
+});
+
+test('renderPlaceholderHtml: "error" variant announces as an alert', () => {
+  const html = renderPlaceholderHtml('GitLore: failed to load commit — boom', { ...opts, variant: 'error' });
+  assert.match(html, /role="alert"/);
+  assert.ok(!html.includes('aria-busy'));
+});

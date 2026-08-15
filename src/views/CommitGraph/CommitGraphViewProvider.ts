@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { GitService } from '../../core/git/GitService';
 import { layoutGraph } from '../../core/graph/layout';
 import { renderGraphHtml } from './render';
-import { escapeHtml } from '../escapeHtml';
+import { renderPlaceholderHtml } from '../placeholder';
 import { waitForWebviewView } from '../waitForWebviewView';
 import { COMMANDS, CONFIG, MEDIA, SYNC_TERMINAL_NAME, VIEWS } from '../../constants';
 import type { BlameSource } from '../../providers/BlameSource';
@@ -16,10 +16,6 @@ function createNonce(): string {
     nonce += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
   }
   return nonce;
-}
-
-function shellHtml(bodyHtml: string): string {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta http-equiv="Content-Security-Policy" content="default-src 'none';" /></head><body>${bodyHtml}</body></html>`;
 }
 
 /**
@@ -120,7 +116,13 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
     const generation = ++this.loadGeneration;
     this.currentFilePath = filePath;
     this.currentMaxCount = maxCount;
-    this.view.webview.html = shellHtml('<p>Loading commit graph…</p>');
+    const styleUris = [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.commitGraph)];
+    this.view.webview.html = renderPlaceholderHtml('Loading commit graph…', {
+      nonce: createNonce(),
+      cspSource: this.view.webview.cspSource,
+      styleUris,
+      variant: 'loading',
+    });
 
     try {
       const repoRoot = await this.git.getRepoRoot(filePath);
@@ -155,7 +157,7 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
         {
           nonce: createNonce(),
           cspSource: this.view.webview.cspSource,
-          styleUris: [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.commitGraph)],
+          styleUris,
         },
       );
     } catch (err) {
@@ -163,7 +165,12 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
         return;
       }
       const message = err instanceof Error ? err.message : String(err);
-      this.view.webview.html = shellHtml(`<p>GitLore: failed to load the commit graph — ${escapeHtml(message)}</p>`);
+      this.view.webview.html = renderPlaceholderHtml(`GitLore: failed to load the commit graph — ${message}`, {
+        nonce: createNonce(),
+        cspSource: this.view.webview.cspSource,
+        styleUris,
+        variant: 'error',
+      });
     }
   }
 

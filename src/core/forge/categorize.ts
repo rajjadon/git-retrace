@@ -9,6 +9,14 @@ function bucketFor(pr: PullRequestSummary, myLogin: string, snoozed: boolean): L
   if (pr.isDraft) {
     return 'drafts';
   }
+  // Once you've reviewed a PR you don't own, your job here is done — this wins over
+  // blocked/ready-to-merge/waiting regardless of what happens to the PR afterward (CI turns red, a
+  // conflict appears, another reviewer requests changes), UNLESS the host has put you back in
+  // requestedReviewers — a fresh re-request after your earlier review is a more urgent, more
+  // actionable signal than "already reviewed", so that still routes through the checks below.
+  if (pr.authorLogin !== myLogin && pr.reviewedByMe && !pr.requestedReviewers.includes(myLogin)) {
+    return 'reviewed';
+  }
   if (pr.checkStatus === 'failing' || pr.reviewDecision === 'changesRequested' || pr.hasConflicts) {
     return 'blocked';
   }
@@ -24,9 +32,12 @@ function bucketFor(pr: PullRequestSummary, myLogin: string, snoozed: boolean): L
 }
 
 /**
- * Buckets open PRs into the board's six columns. Only surfaces PRs the user actually has a stake
- * in — authored by them, or with a review requested from them — dropping the rest: a triage board
- * for "what needs my attention" shouldn't also show every other PR in a busy shared repo.
+ * Buckets open PRs into the board's columns. Only surfaces PRs the user actually has a stake in —
+ * authored by them, still owed a review from them, or already reviewed by them — dropping the
+ * rest: a triage board for "what needs my attention" shouldn't also show every other PR in a busy
+ * shared repo. `|| pr.reviewedByMe` matters: without it, a PR you reviewed but don't own vanishes
+ * from the board the moment the host removes you from `requestedReviewers`, instead of moving to
+ * "Reviewed" the way it should.
  *
  * Pure — no I/O, no host-specific knowledge. Each `ForgeClient` normalizes its host's API shape
  * into `PullRequestSummary` first; this only ever sees the common shape.
@@ -37,7 +48,9 @@ export function categorizePullRequests(
   isSnoozed: (pr: PullRequestSummary) => boolean,
 ): CategorizedPullRequest[] {
   return pullRequests
-    .filter((pr) => pr.authorLogin === currentUserLogin || pr.requestedReviewers.includes(currentUserLogin))
+    .filter(
+      (pr) => pr.authorLogin === currentUserLogin || pr.requestedReviewers.includes(currentUserLogin) || pr.reviewedByMe,
+    )
     .map((pr) => ({ pr, bucket: bucketFor(pr, currentUserLogin, isSnoozed(pr)) }));
 }
 

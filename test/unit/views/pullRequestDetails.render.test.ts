@@ -18,6 +18,7 @@ function pr(overrides: Partial<PullRequestSummary> = {}): PullRequestSummary {
     checkStatus: 'passing',
     reviewDecision: 'approved',
     hasConflicts: false,
+    reviewedByMe: false,
     ...overrides,
   };
 }
@@ -69,6 +70,23 @@ test('renderPullRequestDetailsHtml: the comment button posts addComment with the
   assert.match(html, /id="comment-body"/);
   assert.match(html, /id="post-comment"/);
   assert.match(html, /vscode\.postMessage\(\{ type: 'addComment', body \}\);/);
+});
+
+test('renderPullRequestDetailsHtml: posting a comment shows a shimmering skeleton, carrying the message as an aria-label instead of visible "Posting…" text', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads: [] }, opts);
+  assert.match(html, /class="skeleton" id="comment-status-skeleton" role="status" aria-live="polite" aria-busy="true" aria-label="Posting…" hidden/);
+  assert.match(html, /class="skeleton-row"/);
+  assert.match(
+    html,
+    /postCommentBtn\.disabled = true;\s*commentStatus\.hidden = true;\s*commentStatusSkeleton\.hidden = false;/,
+  );
+  assert.ok(!html.includes('>Posting…<'));
+});
+
+test('renderPullRequestDetailsHtml: a posted or failed comment hides the skeleton', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads: [] }, opts);
+  assert.match(html, /msg\.type === 'commentPosted'\) \{[^}]*commentStatusSkeleton\.hidden = true;/s);
+  assert.match(html, /msg\.type === 'commentFailed'\) \{[^}]*commentStatusSkeleton\.hidden = true;/s);
 });
 
 test('renderPullRequestDetailsHtml: escapes HTML special characters in PR-sourced fields', () => {

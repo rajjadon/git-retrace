@@ -22,16 +22,27 @@ function pr(overrides: Partial<PullRequestSummary> = {}): PullRequestSummary {
     checkStatus: 'passing',
     reviewDecision: 'approved',
     hasConflicts: false,
+    reviewedByMe: false,
     ...overrides,
   };
 }
 
-test('renderLaunchpadHtml: renders all eight columns in the roadmap-specified order, with counts', () => {
+test('renderLaunchpadHtml: renders all nine columns in the roadmap-specified order, with counts', () => {
   // At least one PR, so the board actually renders instead of the "nothing to show" empty state.
   const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'waiting' }];
   const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
   const titles = [...html.matchAll(/class="column-title">([^<]+)</g)].map((m) => m[1]);
-  assert.deepEqual(titles, ['Needs Review', 'Ready to Merge', 'Waiting', 'Blocked', 'Drafts', 'Snoozed', 'Merged', 'Closed']);
+  assert.deepEqual(titles, ['Needs Review', 'Reviewed', 'Ready to Merge', 'Waiting', 'Blocked', 'Drafts', 'Snoozed', 'Merged', 'Closed']);
+});
+
+test('renderLaunchpadHtml: a "Reviewed" card gets the same actions as a Waiting card (Snooze/Approve/Request changes/Close), no Merge', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'reviewed' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /class="pr-card-snooze/);
+  assert.match(html, /class="pr-card-approve/);
+  assert.match(html, /class="pr-card-request-changes/);
+  assert.match(html, /class="pr-card-close/);
+  assert.ok(!html.includes('class="pr-card-merge'));
 });
 
 test('renderLaunchpadHtml: places a PR card in its bucket\'s column with a count badge', () => {
@@ -128,6 +139,33 @@ test('renderLaunchpadHtml: the Reopen button posts reopenPr with the PR\'s stabl
   const categorized: CategorizedPullRequest[] = [{ pr: pr({ closedAt: '2024-02-02T10:00:00Z', merged: false }), bucket: 'closed' }];
   const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
   assert.match(html, /type: 'reopenPr', key: btn\.dataset\.key, title: btn\.dataset\.title/);
+});
+
+test('renderLaunchpadHtml: a "Ready to Merge" card offers Merge', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'readyToMerge' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /class="pr-card-merge[^"]*" type="button" data-key="github:acme\/widgets#1" data-title="Add feature"/);
+});
+
+test('renderLaunchpadHtml: a card in any other open bucket offers no Merge — only "Ready to Merge" matches the board\'s own mergeability check', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'waiting' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.ok(!html.includes('class="pr-card-merge'));
+});
+
+test('renderLaunchpadHtml: merged/closed cards offer no Merge — nothing left to merge on a PR that is already done', () => {
+  const categorized: CategorizedPullRequest[] = [
+    { pr: pr({ number: 1, closedAt: '2024-02-02T10:00:00Z', merged: true }), bucket: 'merged' },
+    { pr: pr({ number: 2, closedAt: '2024-02-02T10:00:00Z', merged: false }), bucket: 'closed' },
+  ];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.ok(!html.includes('class="pr-card-merge'));
+});
+
+test('renderLaunchpadHtml: the Merge button posts mergePr with the PR\'s stable key and title', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'readyToMerge' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /type: 'mergePr', key: btn\.dataset\.key, title: btn\.dataset\.title/);
 });
 
 test('renderLaunchpadHtml: the "View diff" button posts showPullRequestDetails with the PR\'s stable key', () => {

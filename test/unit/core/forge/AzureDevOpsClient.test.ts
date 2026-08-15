@@ -203,6 +203,81 @@ test('listOpenPullRequests: every reviewer approved (vote 10) -> "approved"', as
   assert.deepEqual(result[0]?.requestedReviewers, []);
 });
 
+test('listOpenPullRequests: reviewedByMe is true when the authenticated user has a real vote (not 0, not -5)', async () => {
+  const client = new AzureDevOpsClient(
+    IDENTITY,
+    'pat',
+    'pat',
+    fakeFetch({
+      'profile/profiles/me?api-version=7.1': { emailAddress: 'raj@acme.com' },
+      'searchCriteria.status=active&api-version=7.1': {
+        value: [
+          {
+            pullRequestId: 10,
+            title: 'PR',
+            createdBy: { uniqueName: 'someone-else@acme.com' },
+            creationDate: 'c',
+            reviewers: [{ uniqueName: 'raj@acme.com', vote: 10 }],
+          },
+        ],
+      },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, true);
+});
+
+test('listOpenPullRequests: reviewedByMe is false for a vote of -5 ("waiting for author") — the reviewer punted, not a real verdict', async () => {
+  const client = new AzureDevOpsClient(
+    IDENTITY,
+    'pat',
+    'pat',
+    fakeFetch({
+      'profile/profiles/me?api-version=7.1': { emailAddress: 'raj@acme.com' },
+      'searchCriteria.status=active&api-version=7.1': {
+        value: [
+          {
+            pullRequestId: 11,
+            title: 'PR',
+            createdBy: { uniqueName: 'someone-else@acme.com' },
+            creationDate: 'c',
+            reviewers: [{ uniqueName: 'raj@acme.com', vote: -5 }],
+          },
+        ],
+      },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, false);
+});
+
+test('listOpenPullRequests: reviewedByMe is false when the authenticated user has not voted at all (vote 0)', async () => {
+  const client = new AzureDevOpsClient(
+    IDENTITY,
+    'pat',
+    'pat',
+    fakeFetch({
+      'profile/profiles/me?api-version=7.1': { emailAddress: 'raj@acme.com' },
+      'searchCriteria.status=active&api-version=7.1': {
+        value: [
+          {
+            pullRequestId: 12,
+            title: 'PR',
+            createdBy: { uniqueName: 'someone-else@acme.com' },
+            creationDate: 'c',
+            reviewers: [{ uniqueName: 'raj@acme.com', vote: 0 }],
+          },
+        ],
+      },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, false);
+});
+
 test('listOpenPullRequests: mergeStatus "conflicts" -> hasConflicts true', async () => {
   const client = new AzureDevOpsClient(
     IDENTITY,
@@ -279,6 +354,9 @@ test('listRecentlyClosedPullRequests: combines completed and abandoned, tagging 
   assert.equal(result.length, 2);
   assert.equal(result.find((r) => r.number === 40)?.merged, true);
   assert.equal(result.find((r) => r.number === 41)?.merged, false);
+  // reviewedByMe is never meaningful once a PR is done — nothing reads it there.
+  assert.equal(result.find((r) => r.number === 40)?.reviewedByMe, false);
+  assert.equal(result.find((r) => r.number === 41)?.reviewedByMe, false);
 });
 
 test('listRecentlyClosedPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {
@@ -348,6 +426,73 @@ test('reopenPullRequest: PATCHes status=active to the pull request endpoint', as
   );
   assert.equal(capturedInit?.method, 'PATCH');
   assert.equal(capturedInit?.body, JSON.stringify({ status: 'active' }));
+});
+
+test('mergePullRequest: fetches the PR fresh for its head commit, then PATCHes completed with the mapped strategy', async () => {
+  const mapping: Array<['merge' | 'squash' | 'rebase', string]> = [
+    ['merge', 'noFastForward'],
+    ['squash', 'squash'],
+    ['rebase', 'rebase'],
+  ];
+  for (const [strategy, azureStrategy] of mapping) {
+    let patchBody: string | undefined;
+    const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string, init?: RequestInit) => {
+      // `AzureDevOpsClient.request` always passes a real `init` object to `fetchImpl` (it merges
+      // in headers even when the caller passed none), so the GET call's `init` is never actually
+      // `undefined` here — `init?.method` (present only on the PATCH) is what distinguishes them.
+      if (url.endsWith('/pullrequests/60?api-version=7.1') && !init?.method) {
+        return jsonResponse({ lastMergeSourceCommit: { commitId: 'abc123' } });
+      }
+      if (url.endsWith('/pullrequests/60?api-version=7.1') && init?.method === 'PATCH') {
+        patchBody = init.body as string;
+        return jsonResponse({});
+      }
+      throw new Error(`unmocked: ${url}`);
+    }) as unknown as typeof fetch);
+    await client.mergePullRequest(REPO, 60, { strategy, deleteSourceBranch: false });
+    assert.equal(
+      patchBody,
+      JSON.stringify({
+        status: 'completed',
+        lastMergeSourceCommit: { commitId: 'abc123' },
+        completionOptions: { mergeStrategy: azureStrategy, deleteSourceBranch: false },
+      }),
+    );
+  }
+});
+
+test('mergePullRequest: carries deleteSourceBranch through to completionOptions', async () => {
+  let patchBody: string | undefined;
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string, init?: RequestInit) => {
+    if (!init?.method) {
+      return jsonResponse({ lastMergeSourceCommit: { commitId: 'def456' } });
+    }
+    patchBody = init.body as string;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.mergePullRequest(REPO, 61, { strategy: 'squash', deleteSourceBranch: true });
+  assert.match(patchBody ?? '', /"deleteSourceBranch":true/);
+});
+
+test('mergePullRequest: no lastMergeSourceCommit yet (still computing) throws a clear message instead of PATCHing garbage', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async () => jsonResponse({})) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.mergePullRequest(REPO, 62, { strategy: 'merge', deleteSourceBranch: false }),
+    /hasn't finished computing this pull request's mergeability yet/,
+  );
+});
+
+test('mergePullRequest: a rejected completion PATCH throws with the real HTTP status', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (_url: string, init?: RequestInit) => {
+    if (!init?.method) {
+      return jsonResponse({ lastMergeSourceCommit: { commitId: 'abc123' } });
+    }
+    return jsonResponse({}, false);
+  }) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.mergePullRequest(REPO, 63, { strategy: 'merge', deleteSourceBranch: false }),
+    /401 Unauthorized from dev\.azure\.com/,
+  );
 });
 
 test('getPullRequestDiff: no diff text is available — returns changed files (leading slash stripped) with 0/0 stats, not fabricated numbers', async () => {
@@ -518,4 +663,38 @@ test('resolveConversationThread: PATCHes status="fixed" (the enum name, not a nu
   );
   assert.equal(capturedInit?.method, 'PATCH');
   assert.equal(capturedInit?.body, JSON.stringify({ status: 'fixed' }));
+});
+
+test('createPullRequest: POSTs sourceRefName/targetRefName/isDraft with the refs/heads/ prefix', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({
+      pullRequestId: 70,
+      title: 'Add feature',
+      createdBy: { uniqueName: 'raj@acme.com' },
+      creationDate: 'c',
+      isDraft: true,
+    });
+  }) as unknown as typeof fetch);
+  const result = await client.createPullRequest(REPO, { title: 'Add feature', base: 'main', compare: 'feature-x', draft: true });
+  assert.equal(capturedUrl, 'https://dev.azure.com/acme/Widgets/_apis/git/repositories/widgets-api/pullrequests?api-version=7.1');
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(
+    capturedInit?.body,
+    JSON.stringify({ sourceRefName: 'refs/heads/feature-x', targetRefName: 'refs/heads/main', title: 'Add feature', isDraft: true }),
+  );
+  assert.equal(result.number, 70);
+  assert.equal(result.isDraft, true);
+  assert.equal(result.url, 'https://dev.azure.com/acme/Widgets/_git/widgets-api/pullrequest/70');
+});
+
+test('createPullRequest: a rejected request throws with the real HTTP status', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.createPullRequest(REPO, { title: 'x', base: 'main', compare: 'feature', draft: false }),
+    /401 Unauthorized from dev\.azure\.com/,
+  );
 });

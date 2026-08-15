@@ -259,6 +259,67 @@ test('listOpenPullRequests: a network failure on an enrichment call degrades tha
   assert.equal(result[0]?.checkStatus, 'none');
 });
 
+test('listOpenPullRequests: reviewedByMe is true when the authenticated user has a review on this PR, regardless of its state', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/user': { login: 'raj' },
+      '/pulls?state=open&per_page=100': [
+        { number: 30, title: 'PR', html_url: 'u', user: { login: 'someone-else' }, created_at: 'c', updated_at: 'u', head: { sha: 'sha30' } },
+      ],
+      '/reviews?per_page=100': [{ user: { login: 'raj' }, state: 'COMMENTED' }],
+      '/check-runs?per_page=100': { check_runs: [] },
+      '/pulls/30': { mergeable_state: 'clean' },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, true);
+});
+
+test('listOpenPullRequests: reviewedByMe is false when the authenticated user has not reviewed this PR yet', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/user': { login: 'raj' },
+      '/pulls?state=open&per_page=100': [
+        { number: 31, title: 'PR', html_url: 'u', user: { login: 'someone-else' }, created_at: 'c', updated_at: 'u', head: { sha: 'sha31' } },
+      ],
+      '/reviews?per_page=100': [{ user: { login: 'amy' }, state: 'APPROVED' }],
+      '/check-runs?per_page=100': { check_runs: [] },
+      '/pulls/31': { mergeable_state: 'clean' },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, false);
+});
+
+test('listRecentlyClosedPullRequests: reviewedByMe is always false — nothing reads it on a closed/merged PR', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/pulls?state=closed&sort=updated&direction=desc&per_page=100': [
+        {
+          number: 32,
+          title: 'Shipped',
+          html_url: 'u',
+          user: { login: 'raj' },
+          created_at: 'c',
+          updated_at: 'u',
+          closed_at: 'c2',
+          merged_at: 'c2',
+        },
+      ],
+    }),
+  );
+  const result = await client.listRecentlyClosedPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, false);
+});
+
 test('listRecentlyClosedPullRequests: merged_at present -> merged true, and closedAt uses closed_at', async () => {
   const client = new GitHubClient(
     BASE,
@@ -506,4 +567,98 @@ test('GraphQL calls against a GitHub Enterprise Server apiBaseUrl use <host>/api
   }) as unknown as typeof fetch);
   await client.resolveConversationThread(REPO, 18, 'x');
   assert.equal(capturedUrl, 'https://ghe.example.com/api/graphql');
+});
+
+test('mergePullRequest: PUTs merge_method to the merge endpoint, one call per strategy', async () => {
+  for (const strategy of ['merge', 'squash', 'rebase'] as const) {
+    let capturedUrl: string | undefined;
+    let capturedInit: RequestInit | undefined;
+    const client = new GitHubClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedInit = init;
+      return jsonResponse({});
+    }) as unknown as typeof fetch);
+    await client.mergePullRequest(REPO, 20, { strategy, deleteSourceBranch: false });
+    assert.equal(capturedUrl, 'https://api.github.com/repos/acme/widgets/pulls/20/merge');
+    assert.equal(capturedInit?.method, 'PUT');
+    assert.equal(capturedInit?.body, JSON.stringify({ merge_method: strategy }));
+  }
+});
+
+test('mergePullRequest: deleteSourceBranch fetches the head ref and deletes it, URL-encoding a slash in the branch name', async () => {
+  const calls: string[] = [];
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    (async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? 'GET'} ${url}`);
+      if (url.endsWith('/pulls/21/merge')) {
+        return jsonResponse({});
+      }
+      if (url.endsWith('/pulls/21')) {
+        return jsonResponse({ head: { ref: 'feature/x' } });
+      }
+      if (url.endsWith('/git/refs/heads/feature%2Fx')) {
+        return jsonResponse({});
+      }
+      throw new Error(`unmocked: ${url}`);
+    }) as unknown as typeof fetch,
+  );
+  await client.mergePullRequest(REPO, 21, { strategy: 'squash', deleteSourceBranch: true });
+  assert.ok(calls.includes('DELETE https://api.github.com/repos/acme/widgets/git/refs/heads/feature%2Fx'));
+});
+
+test('mergePullRequest: deleteSourceBranch false never fetches or deletes the head ref', async () => {
+  let calls = 0;
+  const client = new GitHubClient(BASE, 'tok', (async (url: string) => {
+    calls++;
+    if (url.endsWith('/pulls/22/merge')) {
+      return jsonResponse({});
+    }
+    throw new Error(`unexpected call: ${url}`);
+  }) as unknown as typeof fetch);
+  await client.mergePullRequest(REPO, 22, { strategy: 'merge', deleteSourceBranch: false });
+  assert.equal(calls, 1);
+});
+
+test('mergePullRequest: a rejected request throws with the real HTTP status', async () => {
+  const client = new GitHubClient(BASE, 'tok', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.mergePullRequest(REPO, 23, { strategy: 'merge', deleteSourceBranch: false }),
+    /401 Unauthorized from api\.github\.com/,
+  );
+});
+
+test('createPullRequest: POSTs head/base/draft to the pulls endpoint, mapping the response into a PullRequestSummary', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitHubClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({
+      number: 50,
+      title: 'Add feature',
+      html_url: 'https://github.com/acme/widgets/pull/50',
+      user: { login: 'raj' },
+      draft: true,
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+    });
+  }) as unknown as typeof fetch);
+  const result = await client.createPullRequest(REPO, { title: 'Add feature', base: 'main', compare: 'feature-x', draft: true });
+  assert.equal(capturedUrl, 'https://api.github.com/repos/acme/widgets/pulls');
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(capturedInit?.body, JSON.stringify({ title: 'Add feature', head: 'feature-x', base: 'main', draft: true }));
+  assert.equal(result.number, 50);
+  assert.equal(result.url, 'https://github.com/acme/widgets/pull/50');
+  assert.equal(result.isDraft, true);
+  assert.equal(result.reviewedByMe, false);
+});
+
+test('createPullRequest: a rejected request throws with the real HTTP status', async () => {
+  const client = new GitHubClient(BASE, 'tok', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.createPullRequest(REPO, { title: 'x', base: 'main', compare: 'feature', draft: false }),
+    /401 Unauthorized from api\.github\.com/,
+  );
 });

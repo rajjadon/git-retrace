@@ -156,6 +156,90 @@ test('listOpenPullRequests: every reviewer approved -> "approved", nobody left i
   assert.deepEqual(result[0]?.requestedReviewers, []);
 });
 
+test('listOpenPullRequests: reviewedByMe is true when the authenticated user approved as a REVIEWER', async () => {
+  const client = new BitbucketClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/user': { username: 'raj' },
+      'pullrequests?state=OPEN': {
+        values: [
+          {
+            id: 5,
+            title: 'PR',
+            links: { html: { href: 'u' } },
+            author: { username: 'someone-else' },
+            created_on: 'c',
+            updated_on: 'u',
+            participants: [{ user: { username: 'raj' }, role: 'REVIEWER', approved: true, state: 'approved' }],
+            source: { commit: { hash: 'sha5' } },
+          },
+        ],
+      },
+      '/statuses': { values: [] },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, true);
+});
+
+test('listOpenPullRequests: reviewedByMe is true when the authenticated user requested changes as a REVIEWER', async () => {
+  const client = new BitbucketClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/user': { username: 'raj' },
+      'pullrequests?state=OPEN': {
+        values: [
+          {
+            id: 6,
+            title: 'PR',
+            links: { html: { href: 'u' } },
+            author: { username: 'someone-else' },
+            created_on: 'c',
+            updated_on: 'u',
+            participants: [{ user: { username: 'raj' }, role: 'REVIEWER', approved: false, state: 'changes_requested' }],
+            source: { commit: { hash: 'sha6' } },
+          },
+        ],
+      },
+      '/statuses': { values: [] },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, true);
+});
+
+test('listOpenPullRequests: reviewedByMe is false for a REVIEWER who has not approved or requested changes yet', async () => {
+  const client = new BitbucketClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/user': { username: 'raj' },
+      'pullrequests?state=OPEN': {
+        values: [
+          {
+            id: 7,
+            title: 'PR',
+            links: { html: { href: 'u' } },
+            author: { username: 'someone-else' },
+            created_on: 'c',
+            updated_on: 'u',
+            participants: [{ user: { username: 'raj' }, role: 'REVIEWER', approved: false, state: null }],
+            source: { commit: { hash: 'sha7' } },
+          },
+        ],
+      },
+      '/statuses': { values: [] },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, false);
+});
+
 test('listOpenPullRequests: a PARTICIPANT (not a REVIEWER) never counts toward review decision', async () => {
   const client = new BitbucketClient(
     BASE,
@@ -233,6 +317,9 @@ test('listRecentlyClosedPullRequests: combines MERGED and DECLINED, tagging each
   assert.equal(result.length, 2);
   assert.equal(result.find((r) => r.number === 30)?.merged, true);
   assert.equal(result.find((r) => r.number === 31)?.merged, false);
+  // reviewedByMe is never meaningful once a PR is done — nothing reads it there.
+  assert.equal(result.find((r) => r.number === 30)?.reviewedByMe, false);
+  assert.equal(result.find((r) => r.number === 31)?.reviewedByMe, false);
 });
 
 test('listRecentlyClosedPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {
@@ -291,6 +378,40 @@ test('reopenPullRequest: throws a clear platform-gap error — Bitbucket Cloud h
     throw new Error('should never call the network for this');
   }) as unknown as typeof fetch);
   await assert.rejects(() => client.reopenPullRequest(REPO, 32), /Bitbucket has no way to reopen a declined pull request/);
+});
+
+test('mergePullRequest: POSTs merge_strategy=merge_commit for the "merge" strategy, carrying close_source_branch through', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new BitbucketClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.mergePullRequest(REPO, 40, { strategy: 'merge', deleteSourceBranch: true });
+  assert.equal(capturedUrl, 'https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests/40/merge');
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(capturedInit?.body, JSON.stringify({ merge_strategy: 'merge_commit', close_source_branch: true }));
+});
+
+test('mergePullRequest: POSTs merge_strategy=squash for the "squash" strategy', async () => {
+  let capturedInit: RequestInit | undefined;
+  const client = new BitbucketClient(BASE, 'tok', (async (_url: string, init?: RequestInit) => {
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.mergePullRequest(REPO, 41, { strategy: 'squash', deleteSourceBranch: false });
+  assert.equal(capturedInit?.body, JSON.stringify({ merge_strategy: 'squash', close_source_branch: false }));
+});
+
+test('mergePullRequest: "rebase" throws a platform-gap error — Bitbucket has no true rebase-and-merge', async () => {
+  const client = new BitbucketClient(BASE, 'tok', (async () => {
+    throw new Error('should never call the network for this');
+  }) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.mergePullRequest(REPO, 42, { strategy: 'rebase', deleteSourceBranch: false }),
+    /Bitbucket has no true rebase-and-merge/,
+  );
 });
 
 test('getPullRequestDiff: fetches raw diff text from /diff and stats from /diffstat', async () => {
@@ -407,4 +528,40 @@ test('resolveConversationThread: POSTs to /comments/{id}/resolve', async () => {
   await client.resolveConversationThread(REPO, 38, '1');
   assert.equal(capturedUrl, 'https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests/38/comments/1/resolve');
   assert.equal(capturedInit?.method, 'POST');
+});
+
+test('createPullRequest: POSTs source/destination branch objects to the pullrequests endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new BitbucketClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({
+      id: 50,
+      title: 'Add feature',
+      links: { html: { href: 'https://bitbucket.org/acme/widgets/pull-requests/50' } },
+      author: { username: 'raj' },
+      created_on: 'c',
+      updated_on: 'u',
+    });
+  }) as unknown as typeof fetch);
+  const result = await client.createPullRequest(REPO, { title: 'Add feature', base: 'main', compare: 'feature-x', draft: false });
+  assert.equal(capturedUrl, 'https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests');
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(
+    capturedInit?.body,
+    JSON.stringify({ title: 'Add feature', source: { branch: { name: 'feature-x' } }, destination: { branch: { name: 'main' } } }),
+  );
+  assert.equal(result.number, 50);
+  assert.equal(result.isDraft, false);
+});
+
+test('createPullRequest: draft throws a platform-gap error — Bitbucket Cloud has no draft pull requests', async () => {
+  const client = new BitbucketClient(BASE, 'tok', (async () => {
+    throw new Error('should never call the network for this');
+  }) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.createPullRequest(REPO, { title: 'x', base: 'main', compare: 'feature', draft: true }),
+    /Bitbucket Cloud has no draft pull requests/,
+  );
 });

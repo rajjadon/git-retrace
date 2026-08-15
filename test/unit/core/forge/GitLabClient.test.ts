@@ -171,6 +171,40 @@ test('listOpenPullRequests: overall approved with everyone having personally app
   assert.equal(result[0]?.reviewDecision, 'approved');
 });
 
+test('listOpenPullRequests: reviewedByMe is true when the authenticated user is in approved_by', async () => {
+  const client = new GitLabClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/user': { username: 'raj' },
+      'merge_requests?state=opened&per_page=100': [
+        { iid: 2, title: 'PR', web_url: 'u', author: { username: 'someone-else' }, created_at: 'c', updated_at: 'u', reviewers: [{ username: 'raj' }] },
+      ],
+      '/approvals': { approved: false, approved_by: [{ user: { username: 'raj' } }] },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, true);
+});
+
+test('listOpenPullRequests: reviewedByMe is false when the authenticated user has not approved — GitLab has no other per-reviewer verdict to check', async () => {
+  const client = new GitLabClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/user': { username: 'raj' },
+      'merge_requests?state=opened&per_page=100': [
+        { iid: 3, title: 'PR', web_url: 'u', author: { username: 'someone-else' }, created_at: 'c', updated_at: 'u', reviewers: [{ username: 'raj' }] },
+      ],
+      '/approvals': { approved: false, approved_by: [] },
+    }),
+  );
+  await client.getAuthenticatedLogin();
+  const result = await client.listOpenPullRequests(REPO);
+  assert.equal(result[0]?.reviewedByMe, false);
+});
+
 test('listOpenPullRequests: pipeline status maps to checkStatus (success/failed/running)', async () => {
   async function pipelineCheck(status: string, expected: string): Promise<void> {
     const client = new GitLabClient(
@@ -233,6 +267,9 @@ test('listRecentlyClosedPullRequests: combines merged and closed lists, tagging 
   const abandoned = result.find((r) => r.number === 21);
   assert.equal(shipped?.merged, true);
   assert.equal(abandoned?.merged, false);
+  // reviewedByMe is never meaningful once a PR is done — nothing reads it there.
+  assert.equal(shipped?.reviewedByMe, false);
+  assert.equal(abandoned?.reviewedByMe, false);
 });
 
 test('listRecentlyClosedPullRequests: a failed list request throws with the real status, not a silent empty array', async () => {
@@ -296,6 +333,40 @@ test('reopenPullRequest: PUTs state_event=reopen to the merge request endpoint',
   assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests/22');
   assert.equal(capturedInit?.method, 'PUT');
   assert.equal(capturedInit?.body, JSON.stringify({ state_event: 'reopen' }));
+});
+
+test('mergePullRequest: PUTs squash=false for the "merge" strategy, carrying deleteSourceBranch through', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.mergePullRequest(REPO, 24, { strategy: 'merge', deleteSourceBranch: true });
+  assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests/24/merge');
+  assert.equal(capturedInit?.method, 'PUT');
+  assert.equal(capturedInit?.body, JSON.stringify({ squash: false, should_remove_source_branch: true }));
+});
+
+test('mergePullRequest: PUTs squash=true for the "squash" strategy', async () => {
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (_url: string, init?: RequestInit) => {
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.mergePullRequest(REPO, 25, { strategy: 'squash', deleteSourceBranch: false });
+  assert.equal(capturedInit?.body, JSON.stringify({ squash: true, should_remove_source_branch: false }));
+});
+
+test('mergePullRequest: "rebase" throws a platform-gap error — GitLab has no distinct rebase-and-merge request', async () => {
+  const client = new GitLabClient(BASE, 'tok', (async () => {
+    throw new Error('should never call the network for this');
+  }) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.mergePullRequest(REPO, 26, { strategy: 'rebase', deleteSourceBranch: false }),
+    /GitLab has no separate "rebase and merge" request/,
+  );
 });
 
 test('getPullRequestDiff: synthesizes a diff --git header per file so the shared renderer can split it, and counts +/- lines itself', async () => {
@@ -408,4 +479,52 @@ test('resolveConversationThread: PUTs resolved=true to the discussion endpoint',
   await client.resolveConversationThread(REPO, 27, 'd1');
   assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests/27/discussions/d1?resolved=true');
   assert.equal(capturedInit?.method, 'PUT');
+});
+
+test('createPullRequest: POSTs source_branch/target_branch/title to the merge_requests endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({
+      iid: 50,
+      title: 'Add feature',
+      web_url: 'https://gitlab.com/acme/widgets/-/merge_requests/50',
+      author: { username: 'raj' },
+      created_at: 'c',
+      updated_at: 'u',
+    });
+  }) as unknown as typeof fetch);
+  const result = await client.createPullRequest(REPO, { title: 'Add feature', base: 'main', compare: 'feature-x', draft: false });
+  assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests');
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(capturedInit?.body, JSON.stringify({ source_branch: 'feature-x', target_branch: 'main', title: 'Add feature' }));
+  assert.equal(result.number, 50);
+  assert.equal(result.url, 'https://gitlab.com/acme/widgets/-/merge_requests/50');
+});
+
+test('createPullRequest: draft prefixes the title with "Draft: " — GitLab has no boolean field for it', async () => {
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (_url: string, init?: RequestInit) => {
+    capturedInit = init;
+    return jsonResponse({
+      iid: 51,
+      title: 'Draft: Add feature',
+      web_url: 'u',
+      author: { username: 'raj' },
+      created_at: 'c',
+      updated_at: 'u',
+    });
+  }) as unknown as typeof fetch);
+  await client.createPullRequest(REPO, { title: 'Add feature', base: 'main', compare: 'feature-x', draft: true });
+  assert.equal(capturedInit?.body, JSON.stringify({ source_branch: 'feature-x', target_branch: 'main', title: 'Draft: Add feature' }));
+});
+
+test('createPullRequest: a rejected request throws with the real HTTP status', async () => {
+  const client = new GitLabClient(BASE, 'tok', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.createPullRequest(REPO, { title: 'x', base: 'main', compare: 'feature', draft: false }),
+    /401 Unauthorized from gitlab\.com/,
+  );
 });

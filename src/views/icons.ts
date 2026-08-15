@@ -125,3 +125,10 @@ export const REQUEST_CHANGES_ICON = icon('<circle cx="8" cy="8" r="5.3" /><path 
 
 /** Reopen a closed PR — a counter-clockwise restore arrow, distinct from Refresh's full circle so "reopen this" isn't mistaken for "reload the board". */
 export const REOPEN_ICON = icon('<path d="M3.5 8a4.5 4.5 0 1 0 1.4-3.27" /><path d="M2.5 2.5v3h3" />', 'action-icon', 12);
+
+/** Merge a PR — two branch nodes converging into one, the standard git-merge glyph. */
+export const MERGE_ICON = icon(
+  '<circle cx="4" cy="3.3" r="1.6" /><circle cx="12" cy="3.3" r="1.6" /><circle cx="8" cy="12.7" r="1.6" /><path d="M4 4.9v1.3a3 3 0 0 0 3 3h.3M12 4.9v1.3a3 3 0 0 1-3 3h-.3" />',
+  'action-icon',
+  12,
+);

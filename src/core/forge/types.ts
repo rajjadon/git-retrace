@@ -12,6 +12,47 @@ export type ReviewDecision = 'approved' | 'changesRequested' | 'reviewRequired' 
 /** A review decision the user is submitting — the write-side counterpart to `ReviewDecision`, which only ever describes a PR's already-settled state. */
 export type ReviewSubmission = 'approve' | 'requestChanges';
 
+/** A merge strategy for `ForgeClient.mergePullRequest` — see `MERGE_STRATEGIES_BY_HOST` for which of these each host actually supports. */
+export type MergeStrategy = 'merge' | 'squash' | 'rebase';
+
+/** Options for `ForgeClient.mergePullRequest`. */
+export interface MergeOptions {
+  strategy: MergeStrategy;
+  deleteSourceBranch: boolean;
+}
+
+/**
+ * Which merge strategies each host's API actually supports — the merge QuickPick filters against
+ * this so it never offers an option that would just error. GitLab's merge endpoint only exposes a
+ * `squash` boolean, not a separate "rebase and merge" request; Bitbucket's third strategy
+ * (`fast_forward`) only succeeds when the branch is already fast-forwardable, which isn't the same
+ * capability as GitHub/Azure DevOps' true rebase-and-replay — neither host is credited here with a
+ * `'rebase'` it can't actually do.
+ */
+export const MERGE_STRATEGIES_BY_HOST: Record<ForgeHost, MergeStrategy[]> = {
+  github: ['merge', 'squash', 'rebase'],
+  gitlab: ['merge', 'squash'],
+  bitbucket: ['merge', 'squash'],
+  azureDevOps: ['merge', 'squash', 'rebase'],
+};
+
+/** Options for `ForgeClient.createPullRequest`. `base`/`compare` are branch names, not refs — each client builds its own host-specific ref/branch shape from them. */
+export interface CreatePullRequestOptions {
+  title: string;
+  base: string;
+  compare: string;
+  draft: boolean;
+}
+
+/**
+ * Which hosts support creating a PR/MR as a draft — the create-PR flow filters its draft choice
+ * against this so it never offers what would just error. Bitbucket Cloud has no draft-PR concept
+ * at all; GitLab has no boolean field for it either (its own documented mechanism is prefixing the
+ * title with `Draft: `, handled inside `GitLabClient.createPullRequest` itself, not by excluding it
+ * here — only a host with truly no way to represent a draft belongs in this exclusion).
+ */
+export const DRAFT_SUPPORTED_HOSTS: ReadonlySet<ForgeHost> = new Set<ForgeHost>(['github', 'gitlab', 'azureDevOps']);
+
 /**
  * Identifies one repo on one host. `identity` is opaque and host-specific — "owner/repo" for
  * GitHub/GitLab/Bitbucket, "organization/project/repository" for Azure DevOps (which has no
@@ -40,6 +81,14 @@ export interface PullRequestSummary {
   checkStatus: CheckStatus;
   reviewDecision: ReviewDecision;
   hasConflicts: boolean;
+  /**
+   * Whether the current user has already submitted a review verdict on this PR — independent of
+   * `reviewDecision` (which reflects the PR's *overall* state, not any one reviewer's) and
+   * independent of `requestedReviewers` (which only tells you who's still owed one). Always
+   * `false` for a PR you authored, and always `false` on a closed/merged one (neither
+   * `listRecentlyClosedPullRequests` call enriches this — nothing reads it there).
+   */
+  reviewedByMe: boolean;
   /** Only set on a PR returned by `listRecentlyClosedPullRequests` — when it was closed (merged or not). Undefined for an open PR. */
   closedAt?: string;
   /** Only meaningful alongside `closedAt`: true if the PR was merged, false if it was closed without merging. */
@@ -78,6 +127,7 @@ export interface ConversationThread {
 
 export const LAUNCHPAD_BUCKETS = [
   'needsReview',
+  'reviewed',
   'readyToMerge',
   'waiting',
   'blocked',

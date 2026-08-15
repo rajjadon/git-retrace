@@ -17,6 +17,7 @@ function pr(overrides: Partial<PullRequestSummary> = {}): PullRequestSummary {
     checkStatus: 'passing',
     reviewDecision: 'approved',
     hasConflicts: false,
+    reviewedByMe: false,
     ...overrides,
   };
 }

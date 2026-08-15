@@ -168,6 +168,47 @@
   text-align: center;
 }
 
+/* ---------- Loading skeleton ---------- */
+
+/* renderPlaceholderHtml()'s 'loading' variant — bars, not text, since a message you re-read on
+   every panel open reads as a stall; a shimmer reads as "something real is coming". */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.75rem;
+}
+
+/* Without this, toggling `.hidden` via JS (the AI summary and comment-post skeletons both do this
+   in place, unlike the full-page loading placeholder) does nothing — an author stylesheet's own
+   `display` on the same element beats the browser's built-in `[hidden] { display: none }` rule at
+   equal specificity. Same fix `.file[hidden]` below already needed for the same reason. */
+.skeleton[hidden] {
+  display: none;
+}
+
+.skeleton-row {
+  height: 14px;
+  border-radius: var(--gitlore-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--vscode-input-background) 25%,
+    var(--vscode-list-hoverBackground) 37%,
+    var(--vscode-input-background) 63%
+  );
+  background-size: 400% 100%;
+  animation: gitlore-shimmer 1.4s ease infinite;
+}
+
+@keyframes gitlore-shimmer {
+  from {
+    background-position: 100% 50%;
+  }
+  to {
+    background-position: 0% 50%;
+  }
+}
+
 /*
  * `border` is deliberate, not decorative: `--vscode-button-secondaryBackground` is nearly
  * identical to the panel background in some themes, which left this reading as plain text with no
@@ -492,5 +533,11 @@ body.wrap .dc {
   * {
     transition: none !important;
     animation: none !important;
+  }
+
+  /* Without this, the animation rule above still freezes the gradient at whatever frame it was on
+     — a static two-tone smear instead of a clean, flat placeholder. */
+  .skeleton-row {
+    background: var(--vscode-input-background);
   }
 }

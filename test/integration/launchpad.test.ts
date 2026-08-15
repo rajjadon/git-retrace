@@ -94,6 +94,46 @@ suite('Launchpad', () => {
       assert.match(api.getLaunchpadHtml() ?? '', /No recognized git-forge remotes/);
     }));
 
+  test('while refreshing: shows a themed, accessible loading state instead of a flash of unstyled content', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/slow-loading.git', async () => {
+        api.launchpadProvider.setFetchImplForTest((async (url: string) => {
+          // Held open long enough to assert against — resolved at the end of this test so it
+          // doesn't leak a pending refresh into whichever test runs next.
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened') || url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          // Not awaited — the point is to observe the board mid-refresh, before the mocked fetch's
+          // delay elapses.
+          void vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Loading Launchpad'));
+
+          const html = api.getLaunchpadHtml() ?? '';
+          assert.match(html, /class="skeleton" role="status" aria-live="polite" aria-busy="true" aria-label="Loading Launchpad…"/);
+          assert.ok(html.includes('class="skeleton-row"'));
+          // Confirms the CSP actually allows the linked stylesheets (the bug: the old shellHtml()
+          // blocked style-src entirely, so this loading state rendered with no theme at all).
+          assert.match(html, /shared\.css/);
+          assert.match(html, /launchpad\.css/);
+
+          await waitFor(() => !(api.getLaunchpadHtml() ?? '').includes('Loading Launchpad'), 5000);
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+      }),
+    ));
+
   test('enabled, with a GitLab remote: prompts for a PAT, fetches, categorizes, and renders real PR data', async () =>
     withLaunchpadEnabled(() =>
       withOriginRemote('https://gitlab.com/acme/widgets.git', async () => {
@@ -547,6 +587,129 @@ suite('Launchpad', () => {
 
         await api.launchpadProvider.reopenPullRequestForTest('gitlab:acme/widgets#70');
         assert.ok(reopenCalled, 'expected the reopen endpoint to be called');
+      }),
+    ));
+
+  test('merging a "Ready to Merge" PR calls the client\'s merge endpoint with the chosen strategy and branch-deletion choice', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/widgets.git', async () => {
+        let mergeCalled = false;
+        let openCallCount = 0;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            openCallCount++;
+            return jsonResponse(
+              openCallCount === 1
+                ? [
+                    {
+                      iid: 80,
+                      title: 'Mergeable PR',
+                      web_url: 'https://gitlab.com/acme/widgets/-/merge_requests/80',
+                      author: { username: 'raj' },
+                      created_at: '2024-01-01T00:00:00Z',
+                      updated_at: '2024-01-01T00:00:00Z',
+                      head_pipeline: { status: 'success' },
+                    },
+                  ]
+                : [],
+            );
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: true, approved_by: [{ user: { username: 'raj' } }] });
+          }
+          if (url.endsWith('/merge_requests/80/merge') && init?.method === 'PUT') {
+            mergeCalled = true;
+            assert.equal(init.body, JSON.stringify({ squash: true, should_remove_source_branch: true }));
+            return jsonResponse({});
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Mergeable PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        const html = api.getLaunchpadHtml() ?? '';
+        assert.match(columnHtml(html, 'readyToMerge'), /Mergeable PR/);
+
+        await api.launchpadProvider.mergePullRequestForTest('gitlab:acme/widgets#80', 'squash', true);
+        assert.ok(mergeCalled, 'expected the merge endpoint to be called');
+        await waitFor(() => !(api.getLaunchpadHtml() ?? '').includes('Mergeable PR'));
+      }),
+    ));
+
+  test('reviewing a PR you do not own keeps it visible in "Reviewed" instead of vanishing from the board (the bug this bucket exists to fix)', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/reviewed-widgets.git', async () => {
+        let approvalsCallCount = 0;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 90,
+                title: 'Reviewable-then-reviewed PR',
+                web_url: 'https://gitlab.com/acme/reviewed-widgets/-/merge_requests/90',
+                author: { username: 'other-dev' },
+                reviewers: [{ username: 'raj' }],
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            approvalsCallCount++;
+            // First load: not yet approved by anyone. After `submitReviewForTest` below: approved
+            // by 'raj' — same MR object, only the approvals response changes, matching how GitLab's
+            // own API actually reflects a submitted review.
+            return jsonResponse(
+              approvalsCallCount === 1
+                ? { approved: false, approved_by: [] }
+                : { approved: true, approved_by: [{ user: { username: 'raj' } }] },
+            );
+          }
+          if (url.endsWith('/merge_requests/90/approve') && init?.method === 'POST') {
+            return jsonResponse({});
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Reviewable-then-reviewed PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        const before = api.getLaunchpadHtml() ?? '';
+        assert.match(columnHtml(before, 'needsReview'), /Reviewable-then-reviewed PR/);
+
+        await api.launchpadProvider.submitReviewForTest('gitlab:acme/reviewed-widgets#90', 'approve');
+        await waitFor(() => columnHtml(api.getLaunchpadHtml() ?? '', 'reviewed').includes('Reviewable-then-reviewed PR'));
+
+        const after = api.getLaunchpadHtml() ?? '';
+        assert.match(columnHtml(after, 'reviewed'), /Reviewable-then-reviewed PR/);
+        assert.ok(!columnHtml(after, 'needsReview').includes('Reviewable-then-reviewed PR'));
       }),
     ));
 

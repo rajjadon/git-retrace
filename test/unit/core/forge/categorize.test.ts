@@ -20,6 +20,7 @@ function pr(overrides: Partial<PullRequestSummary> = {}): PullRequestSummary {
     checkStatus: 'passing',
     reviewDecision: 'approved',
     hasConflicts: false,
+    reviewedByMe: false,
     ...overrides,
   };
 }
@@ -106,13 +107,67 @@ test('categorizePullRequests: excludes PRs I have no stake in — not authored b
   assert.deepEqual(result, []);
 });
 
-test('categorizePullRequests: a completed review (no longer in requestedReviewers) drops the PR once it is not mine and not ready/blocked', () => {
+test('categorizePullRequests: no stake at all (never requested, never reviewed) still drops the PR', () => {
   const result = categorizePullRequests(
-    [pr({ authorLogin: 'someone-else', requestedReviewers: [], reviewDecision: 'reviewRequired', checkStatus: 'pending' })],
+    [pr({ authorLogin: 'someone-else', requestedReviewers: [], reviewedByMe: false, reviewDecision: 'reviewRequired', checkStatus: 'pending' })],
     ME,
     neverSnoozed,
   );
   assert.deepEqual(result, []);
+});
+
+test('categorizePullRequests: a PR I already reviewed but do not own lands in "reviewed" instead of vanishing from the board (the bug "Reviewed" exists to fix)', () => {
+  const result = categorizePullRequests(
+    [pr({ authorLogin: 'someone-else', requestedReviewers: [], reviewedByMe: true, reviewDecision: 'reviewRequired', checkStatus: 'pending' })],
+    ME,
+    neverSnoozed,
+  );
+  assert.equal(result[0]?.bucket, 'reviewed');
+});
+
+test('categorizePullRequests: "reviewed" wins over blocked, even with failing checks and a conflict — your job as reviewer is done regardless of what happens afterward', () => {
+  const result = categorizePullRequests(
+    [pr({ authorLogin: 'someone-else', requestedReviewers: [], reviewedByMe: true, checkStatus: 'failing', hasConflicts: true })],
+    ME,
+    neverSnoozed,
+  );
+  assert.equal(result[0]?.bucket, 'reviewed');
+});
+
+test('categorizePullRequests: "reviewed" wins over readyToMerge too — reviewedByMe alone decides the bucket for a PR you do not author', () => {
+  const result = categorizePullRequests(
+    [pr({ authorLogin: 'someone-else', requestedReviewers: [], reviewedByMe: true, reviewDecision: 'approved', checkStatus: 'passing' })],
+    ME,
+    neverSnoozed,
+  );
+  assert.equal(result[0]?.bucket, 'reviewed');
+});
+
+test('categorizePullRequests: never applies to your own authored PR, even if reviewedByMe were somehow true', () => {
+  const result = categorizePullRequests(
+    [pr({ authorLogin: ME, reviewedByMe: true, reviewDecision: 'reviewRequired', checkStatus: 'pending' })],
+    ME,
+    neverSnoozed,
+  );
+  assert.equal(result[0]?.bucket, 'waiting');
+});
+
+test('categorizePullRequests: a fresh re-request after an earlier review wins over "reviewed" — being asked again is more urgent than "already reviewed"', () => {
+  const result = categorizePullRequests(
+    [pr({ authorLogin: 'someone-else', requestedReviewers: [ME], reviewedByMe: true, reviewDecision: 'reviewRequired', checkStatus: 'pending' })],
+    ME,
+    neverSnoozed,
+  );
+  assert.equal(result[0]?.bucket, 'needsReview');
+});
+
+test('categorizePullRequests: snoozed still wins over "reviewed"', () => {
+  const result = categorizePullRequests(
+    [pr({ authorLogin: 'someone-else', requestedReviewers: [], reviewedByMe: true })],
+    ME,
+    () => true,
+  );
+  assert.equal(result[0]?.bucket, 'snoozed');
 });
 
 test('categorizeClosedPullRequests: a merged PR lands in "merged"', () => {

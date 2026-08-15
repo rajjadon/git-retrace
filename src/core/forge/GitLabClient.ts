@@ -1,6 +1,16 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import type {
+  CheckStatus,
+  ConversationThread,
+  CreatePullRequestOptions,
+  ForgeRepoRef,
+  MergeOptions,
+  PullRequestDiff,
+  PullRequestSummary,
+  ReviewDecision,
+  ReviewSubmission,
+} from './types';
 import { describeErrorBody } from './httpError';
 
 interface GitLabUser {
@@ -152,6 +162,7 @@ export class GitLabClient implements ForgeClient {
       checkStatus: 'none',
       reviewDecision: 'none',
       hasConflicts: false,
+      reviewedByMe: false,
       closedAt: mr.updated_at,
       merged,
     }));
@@ -242,6 +253,44 @@ export class GitLabClient implements ForgeClient {
     await this.request(`/projects/${projectPath}/merge_requests/${number}/discussions/${threadId}?resolved=true`, { method: 'PUT' });
   }
 
+  /** GitLab's merge endpoint only exposes a `squash` boolean, not a distinct strategy field — there's no request that gives `'rebase'` a separate merge-commit-free history the way GitHub/Azure DevOps' rebase does, so it throws rather than silently merging with the wrong history shape (see `MERGE_STRATEGIES_BY_HOST`). */
+  async mergePullRequest(repo: ForgeRepoRef, number: number, options: MergeOptions): Promise<void> {
+    if (options.strategy === 'rebase') {
+      throw new Error('GitLab has no separate "rebase and merge" request — use "Merge" or "Squash and merge" instead');
+    }
+    const projectPath = encodeURIComponent(repo.identity);
+    await this.request(`/projects/${projectPath}/merge_requests/${number}/merge`, {
+      method: 'PUT',
+      body: JSON.stringify({ squash: options.strategy === 'squash', should_remove_source_branch: options.deleteSourceBranch }),
+    });
+  }
+
+  /** GitLab's merge-request creation endpoint has no boolean draft field at all — prefixing the title with `Draft: ` is GitLab's own documented mechanism for marking one as a draft, still the only supported way as of GitLab's current API. No enrichment call afterward — a PR seconds old has no reviews/pipeline yet. */
+  async createPullRequest(repo: ForgeRepoRef, options: CreatePullRequestOptions): Promise<PullRequestSummary> {
+    const projectPath = encodeURIComponent(repo.identity);
+    const title = options.draft ? `Draft: ${options.title}` : options.title;
+    const res = await this.request(`/projects/${projectPath}/merge_requests`, {
+      method: 'POST',
+      body: JSON.stringify({ source_branch: options.compare, target_branch: options.base, title }),
+    });
+    const data = (await res.json()) as GitLabMergeRequest;
+    return {
+      repo,
+      number: data.iid,
+      title: data.title,
+      url: data.web_url,
+      authorLogin: data.author?.username ?? '',
+      isDraft: data.draft ?? data.work_in_progress ?? options.draft,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+      requestedReviewers: [],
+      checkStatus: 'none',
+      reviewDecision: 'none',
+      hasConflicts: false,
+      reviewedByMe: false,
+    };
+  }
+
   private async enrich(repo: ForgeRepoRef, projectPath: string, mr: GitLabMergeRequest): Promise<PullRequestSummary> {
     const approvals = await this.fetchApprovals(projectPath, mr.iid);
     const approvedByUsernames = new Set(approvals.approved_by.map((a) => a.user.username));
@@ -263,6 +312,10 @@ export class GitLabClient implements ForgeClient {
       requestedReviewers: stillOwed,
       checkStatus: computeCheckStatus(mr.head_pipeline),
       reviewDecision: computeReviewDecision(mr, approvals.approved, stillOwed),
+      // GitLab has no formal "request changes" state (see `submitReview`'s own comment on this) —
+      // an approval is the only per-reviewer verdict its API exposes, so this shares the exact same
+      // `approvedByUsernames` set `stillOwed` above already relies on, rather than a separate call.
+      reviewedByMe: approvedByUsernames.has(this.authenticatedUsername ?? ''),
       hasConflicts: mr.has_conflicts ?? false,
     };
   }

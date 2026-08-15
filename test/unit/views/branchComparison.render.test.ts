@@ -176,7 +176,7 @@ test('renderBranchComparisonHtml: no Create PR button when there is no createPr 
 test('renderBranchComparisonHtml: renders a Create PR button when a createPr target is given', () => {
   const html = renderBranchComparisonHtml(
     { ...base, aheadCommits: ahead, behindCommits: behind },
-    { ...opts, createPr: { label: 'GitHub', url: 'https://github.com/o/r/compare/main...feature-x?expand=1' } },
+    { ...opts, createPr: { label: 'GitHub' } },
   );
   assert.match(html, /id="create-pr"/);
   assert.match(html, /Create a PR on GitHub/);

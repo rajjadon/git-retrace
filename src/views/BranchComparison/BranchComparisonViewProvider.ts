@@ -1,15 +1,19 @@
 import * as vscode from 'vscode';
 import { GitService } from '../../core/git/GitService';
+import type { GitLogger } from '../../core/git/errors';
+import { parseRemoteUrl } from '../../core/git/parsers';
 import { renderBranchComparisonHtml, type PrTarget } from './render';
-import { escapeHtml } from '../escapeHtml';
 import { openFileDiff } from '../../providers/GitContentProvider';
-import { pickDefaultRefs } from '../../utils/branchDefaults';
-import { resolveRepoContextPath } from '../CommitGraph/CommitGraphViewProvider';
 import { renderPlaceholderHtml } from '../placeholder';
 import { waitForWebviewView } from '../waitForWebviewView';
-import { COMMANDS, MEDIA, VIEWS } from '../../constants';
-import { buildCreatePrUrl, remoteHostLabel } from '../../utils/remoteLinks';
-import type { FileChange } from '../../core/git/types';
+import { COMMANDS, CONFIG, MEDIA, VIEWS } from '../../constants';
+import { buildForgeClient } from '../../core/forge/buildForgeClient';
+import { detectForgeHost, type DetectedForgeHost, type ForgeHostConfig } from '../../core/forge/hostDetection';
+import { resolveForgeRepoRef } from '../../core/forge/resolveRepoRef';
+import { DRAFT_SUPPORTED_HOSTS, type ForgeRepoRef } from '../../core/forge/types';
+import { azureDevOpsCredentialScheme, resolveForgeToken } from '../../providers/forgeCredentials';
+import { remoteHostLabel } from '../../utils/remoteLinks';
+import type { FileChange, RemoteInfo } from '../../core/git/types';
 
 /** Above this, "Open all changes" confirms first — opening dozens of diff editors in one click is more likely a misclick than the intent. */
 const OPEN_ALL_CONFIRM_THRESHOLD = 20;
@@ -23,10 +27,6 @@ function createNonce(): string {
   return nonce;
 }
 
-function shellHtml(bodyHtml: string): string {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta http-equiv="Content-Security-Policy" content="default-src 'none';" /></head><body>${bodyHtml}</body></html>`;
-}
-
 /** Docks branch comparison in the bottom panel (next to Commit Graph/Commit Details), instead of opening a new editor tab per comparison. */
 export class BranchComparisonViewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
@@ -34,15 +34,29 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
   private currentBase: string | undefined;
   private currentCompare: string | undefined;
   private currentFiles: FileChange[] = [];
-  private currentPrUrl: string | undefined;
+  /** Resolved alongside every comparison, purely from local git/URL parsing — no network call. `remoteInfo` is kept alongside `repo`/`detected` only for `remoteHostLabel`'s nicer cosmetic host name ("GitHub", not "github.com"); `detected`/`repo` are what actually drive host resolution (and, unlike `remoteHostLabel`'s host sniffing, already cover Azure DevOps). */
+  private currentForgeInfo: { repo: ForgeRepoRef; detected: DetectedForgeHost; remoteInfo: RemoteInfo } | undefined;
   // Guards against a superseded `load()` (e.g. a fast ref-picker change) overwriting a newer
   // one's rendered HTML with stale data once it resolves — same idiom as CommitGraphViewProvider.
   private loadGeneration = 0;
 
+  /** Overridable only for tests — a real network call has no place in an automated suite. Defaults to the real global `fetch`. */
+  private fetchImpl: typeof fetch;
+
   constructor(
     private readonly extensionUri: vscode.Uri,
+    private readonly context: vscode.ExtensionContext,
     private readonly git: GitService,
-  ) {}
+    private readonly logger?: GitLogger,
+    fetchImpl: typeof fetch = fetch,
+  ) {
+    this.fetchImpl = fetchImpl;
+  }
+
+  /** Test-only injection seam, since the extension host constructs one long-lived instance with the real `fetch` — a test needs to swap it after the fact, not at construction. */
+  setFetchImplForTest(fetchImpl: typeof fetch): void {
+    this.fetchImpl = fetchImpl;
+  }
 
   /** Test-only introspection seam — VS Code's public API doesn't expose a webview's rendered HTML. */
   getCurrentHtmlForTest(): string | undefined {
@@ -58,51 +72,24 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
     webviewView.webview.onDidReceiveMessage((message: unknown) => {
       void this.handleMessage(message);
     });
-    void this.loadDefault();
-  }
-
-  /**
-   * Loads a sensible comparison as soon as the tab is revealed — the checked-out branch against its
-   * upstream — so the panel is useful without running a command first, matching how Commit Graph
-   * already behaves. The user can retarget both refs in the view's own ref bar.
-   */
-  private async loadDefault(): Promise<void> {
-    if (!this.view || this.currentBase) {
-      return;
-    }
-    const filePath = resolveRepoContextPath();
-    if (!filePath) {
-      return;
-    }
-    const [branches, currentBranch] = await Promise.all([
-      this.git.getBranches(filePath),
-      this.git.getCurrentBranch(filePath),
-    ]);
-    // An explicit `show(base, compare)` can land while those git calls are in flight; it wins, and
-    // this must not overwrite it with the default pair afterwards.
-    if (this.currentBase) {
-      return;
-    }
-    const refs = pickDefaultRefs(branches, currentBranch);
-    if (!refs) {
-      this.view.webview.html = renderPlaceholderHtml('This repo has only one ref — nothing to compare yet.', {
+    // The view resolves the moment its tab is revealed, which can happen before "Compare Branches"
+    // has ever been run — say what to do instead of showing an empty rectangle. Stays closed until
+    // that command actually runs, rather than guessing a default comparison to show.
+    if (!this.currentBase) {
+      webviewView.webview.html = renderPlaceholderHtml('Compare two branches to see their diff here.', {
         nonce: createNonce(),
-        cspSource: this.view.webview.cspSource,
+        cspSource: webviewView.webview.cspSource,
         styleUris: [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.branchComparison)],
       });
-      return;
     }
-    await this.load(filePath, refs.base, refs.compare);
   }
 
   /**
    * Called by the "Compare Branches" command — reveals the panel tab and loads the given
-   * comparison. Claims `currentBase`/`currentCompare` *before* `.focus()`, not after: focusing
-   * the panel for the first time in a session synchronously triggers `resolveWebviewView`, which
-   * fires `loadDefault()` as an unawaited, independent chain. `loadDefault()`'s only defense
-   * against that race is checking `currentBase` — so it has to already be set by the time
-   * `loadDefault()`'s own (cheaper, 2-call) git fetch resolves, or the two calls end up racing to
-   * decide what the user sees, with no guarantee this explicit call wins.
+   * comparison. Claims `currentBase`/`currentCompare` *before* `.focus()`, not after: focusing the
+   * panel for the first time in a session synchronously triggers `resolveWebviewView`, which would
+   * otherwise see no comparison claimed yet and flash the placeholder for a moment before `load()`
+   * replaces it.
    */
   async show(filePath: string, base: string, compare: string): Promise<void> {
     this.currentBase = base;
@@ -125,27 +112,37 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
     this.currentBase = base;
     this.currentCompare = compare;
     this.view.title = `${base}...${compare}`;
-    this.view.webview.html = shellHtml('<p>Loading comparison…</p>');
+    const styleUris = [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.branchComparison)];
+    this.view.webview.html = renderPlaceholderHtml('Loading comparison…', {
+      nonce: createNonce(),
+      cspSource: this.view.webview.cspSource,
+      styleUris,
+      variant: 'loading',
+    });
 
     try {
-      const [aheadCommits, behindCommits, files, diff, branches, remoteInfo] = await Promise.all([
+      const [aheadCommits, behindCommits, files, diff, branches] = await Promise.all([
         this.git.getCommitsBetween(filePath, base, compare),
         this.git.getCommitsBetween(filePath, compare, base),
         this.git.getFilesBetweenRefs(filePath, base, compare),
         this.git.getDiffBetweenRefs(filePath, base, compare),
         this.git.getBranches(filePath),
-        this.git.resolveRemoteInfo(filePath),
       ]);
       if (generation !== this.loadGeneration || !this.view) {
         return;
       }
       this.currentFiles = files;
 
-      // Only offer "Create PR" when we know that host's compare-URL shape — a button that
-      // reliably 404s is worse than no button.
-      const prUrl = remoteInfo ? buildCreatePrUrl(remoteInfo, base, compare) : null;
-      const createPr: PrTarget | null = remoteInfo && prUrl ? { label: remoteHostLabel(remoteInfo), url: prUrl } : null;
-      this.currentPrUrl = prUrl ?? undefined;
+      // Resolving which host this repo is on is pure local parsing — no network call — so the
+      // button shows whenever a host is recognized, same as before. The actual network call
+      // (creating the PR) is what's gated behind `gitLore.launchpad.enabled`, in
+      // `createPullRequestFlow` — the button stays visible either way, and explains itself if
+      // clicked while that's off, rather than disappearing with no explanation.
+      this.currentForgeInfo = (await this.resolveForgeInfo(filePath)) ?? undefined;
+      if (generation !== this.loadGeneration || !this.view) {
+        return;
+      }
+      const createPr: PrTarget | null = this.currentForgeInfo ? { label: remoteHostLabel(this.currentForgeInfo.remoteInfo) } : null;
 
       const editorFontFamily = vscode.workspace
         .getConfiguration('editor')
@@ -156,7 +153,7 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
         {
           nonce: createNonce(),
           cspSource: this.view.webview.cspSource,
-          styleUris: [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.branchComparison)],
+          styleUris,
           editorFontFamily,
           createPr,
         },
@@ -166,7 +163,12 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
         return;
       }
       const message = err instanceof Error ? err.message : String(err);
-      this.view.webview.html = shellHtml(`<p>GitLore: failed to load the comparison — ${escapeHtml(message)}</p>`);
+      this.view.webview.html = renderPlaceholderHtml(`GitLore: failed to load the comparison — ${message}`, {
+        nonce: createNonce(),
+        cspSource: this.view.webview.cspSource,
+        styleUris,
+        variant: 'error',
+      });
     }
   }
 
@@ -208,13 +210,122 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
       });
       return;
     }
-    if (type === 'createPr' && this.currentPrUrl) {
-      await vscode.env.openExternal(vscode.Uri.parse(this.currentPrUrl));
+    if (type === 'createPr') {
+      await this.createPullRequestFlow();
       return;
     }
     if (type === 'openAllChanges' && filePath && this.currentBase && this.currentCompare) {
       await this.openAllChanges(filePath, this.currentBase, this.currentCompare);
     }
+  }
+
+  /** This repo's remote, resolved to a forge repo — single repo, single remote (prefers `origin`), unlike Launchpad's multi-repo scan. Pure local parsing, no network call. */
+  private async resolveForgeInfo(filePath: string): Promise<{ repo: ForgeRepoRef; detected: DetectedForgeHost; remoteInfo: RemoteInfo } | null> {
+    const repoRoot = await this.git.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return null;
+    }
+    const remotes = await this.git.getRemotes(repoRoot);
+    const remote = remotes.find((r) => r.name === 'origin') ?? remotes[0];
+    if (!remote) {
+      return null;
+    }
+    const remoteInfo = parseRemoteUrl(remote.url);
+    if (!remoteInfo) {
+      return null;
+    }
+    const customHosts = vscode.workspace.getConfiguration(CONFIG.section).get<ForgeHostConfig[]>(CONFIG.launchpadCustomHosts, []);
+    const detected = detectForgeHost(remoteInfo.host, customHosts);
+    if (!detected) {
+      return null;
+    }
+    const repo = resolveForgeRepoRef(remote.url, customHosts);
+    if (!repo) {
+      return null;
+    }
+    return { repo, detected, remoteInfo };
+  }
+
+  /**
+   * Prompts for a title (required) and, on a host that supports it, whether to create as a draft —
+   * then calls the host's API directly. No pre-flight check that `compare` has actually been
+   * pushed; a host rejection (e.g. "no commits between these branches") surfaces as-is, same
+   * philosophy as every other write action in GitLore's forge layer.
+   */
+  private async createPullRequestFlow(): Promise<void> {
+    if (!this.currentBase || !this.currentCompare || !this.currentForgeInfo) {
+      return;
+    }
+    // The button itself doesn't check this (resolving the host is pure local parsing, not a
+    // network call — see `currentForgeInfo`'s own comment), so this is where GitLore's "one toggle
+    // gates every remote-host call" contract actually gets enforced for Create PR.
+    const launchpadEnabled = vscode.workspace.getConfiguration(CONFIG.section).get<boolean>(CONFIG.launchpadEnabled, false);
+    if (!launchpadEnabled) {
+      void vscode.window.showInformationMessage('GitLore: enable gitLore.launchpad.enabled to create pull requests from GitLore.');
+      return;
+    }
+    const { repo, detected } = this.currentForgeInfo;
+    const token = await resolveForgeToken(this.context.secrets, detected);
+    if (!token) {
+      return;
+    }
+
+    const title = await vscode.window.showInputBox({
+      title: `GitLore: New Pull Request on ${detected.displayHost}`,
+      prompt: `${this.currentCompare} into ${this.currentBase}`,
+      placeHolder: 'Pull request title',
+      ignoreFocusOut: true,
+      validateInput: (value) => (value.trim() === '' ? 'A title is required.' : undefined),
+    });
+    if (!title) {
+      return;
+    }
+
+    let draft = false;
+    if (DRAFT_SUPPORTED_HOSTS.has(repo.host)) {
+      const picked = await vscode.window.showQuickPick(
+        [
+          { label: 'Create Pull Request', draft: false },
+          { label: 'Create as Draft', draft: true },
+        ],
+        { placeHolder: 'How should this be created?' },
+      );
+      if (!picked) {
+        return;
+      }
+      draft = picked.draft;
+    }
+
+    const client = buildForgeClient(detected.flavor, detected.apiBaseUrl, repo.identity, token, azureDevOpsCredentialScheme(detected), this.fetchImpl);
+    try {
+      const pr = await client.createPullRequest(repo, { title, base: this.currentBase, compare: this.currentCompare, draft });
+      const action = await vscode.window.showInformationMessage(`GitLore: created "${pr.title}" (#${pr.number}) on ${repo.label}.`, 'Open in Browser');
+      if (action === 'Open in Browser') {
+        await vscode.env.openExternal(vscode.Uri.parse(pr.url));
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`Branch Comparison failed to create a PR on ${repo.label}`, err);
+      void vscode.window.showErrorMessage(`GitLore: couldn't create the pull request — ${message}`);
+    }
+  }
+
+  /** Test-only introspection seam — a webview button click, the real title/draft prompts, and their inputs can't be driven from an integration test, so this calls the create flow directly with a fixed title/draft choice, skipping every prompt. Still honors the `gitLore.launchpad.enabled` gate, same as the real flow — it's a business rule, not just a prompt to skip. */
+  async createPullRequestForTest(title: string, draft: boolean): Promise<void> {
+    if (!this.currentBase || !this.currentCompare || !this.currentForgeInfo) {
+      return;
+    }
+    const launchpadEnabled = vscode.workspace.getConfiguration(CONFIG.section).get<boolean>(CONFIG.launchpadEnabled, false);
+    if (!launchpadEnabled) {
+      return;
+    }
+    const { repo, detected } = this.currentForgeInfo;
+    const token = await resolveForgeToken(this.context.secrets, detected);
+    if (!token) {
+      return;
+    }
+    const client = buildForgeClient(detected.flavor, detected.apiBaseUrl, repo.identity, token, azureDevOpsCredentialScheme(detected), this.fetchImpl);
+    await client.createPullRequest(repo, { title, base: this.currentBase, compare: this.currentCompare, draft });
   }
 
   private async openAllChanges(filePath: string, base: string, compare: string): Promise<void> {
