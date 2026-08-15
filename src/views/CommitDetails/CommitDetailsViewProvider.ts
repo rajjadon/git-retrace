@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { GitService } from '../../core/git/GitService';
 import { renderCommitDetailsHtml, type RemoteTarget } from './render';
-import { escapeHtml } from '../escapeHtml';
 import { resolveIssueLinking } from '../../providers/issueLinking';
 import { openFileDiff } from '../../providers/GitContentProvider';
 import { buildCommitUrl, remoteHostLabel } from '../../utils/remoteLinks';
@@ -22,10 +21,6 @@ function createNonce(): string {
     nonce += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
   }
   return nonce;
-}
-
-function shellHtml(bodyHtml: string): string {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta http-equiv="Content-Security-Policy" content="default-src 'none';" /></head><body>${bodyHtml}</body></html>`;
 }
 
 /** Docks commit details in the bottom panel (next to Commit Graph), instead of opening a new editor tab per commit. */
@@ -99,7 +94,13 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
     this.aiAbortController?.abort();
     this.aiMessagesForTest = [];
     this.view.title = `Commit ${sha.slice(0, 7)}`;
-    this.view.webview.html = shellHtml('<p>Loading commit…</p>');
+    const styleUris = [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.commitDetails)];
+    this.view.webview.html = renderPlaceholderHtml('Loading commit…', {
+      nonce: createNonce(),
+      cspSource: this.view.webview.cspSource,
+      styleUris,
+      variant: 'loading',
+    });
 
     try {
       const [commit, files, diff, issueLinking, remoteInfo] = await Promise.all([
@@ -110,7 +111,12 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
         this.git.resolveRemoteInfo(filePath),
       ]);
       if (!commit) {
-        this.view.webview.html = shellHtml('<p>GitLore: commit not found.</p>');
+        this.view.webview.html = renderPlaceholderHtml('GitLore: commit not found.', {
+          nonce: createNonce(),
+          cspSource: this.view.webview.cspSource,
+          styleUris,
+          variant: 'error',
+        });
         return;
       }
       this.currentCommit = commit;
@@ -131,7 +137,7 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
         {
           nonce: createNonce(),
           cspSource: this.view.webview.cspSource,
-          styleUris: [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.commitDetails)],
+          styleUris,
           editorFontFamily,
           issueLinking,
           remote,
@@ -139,7 +145,12 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.view.webview.html = shellHtml(`<p>GitLore: failed to load commit — ${escapeHtml(message)}</p>`);
+      this.view.webview.html = renderPlaceholderHtml(`GitLore: failed to load commit — ${message}`, {
+        nonce: createNonce(),
+        cspSource: this.view.webview.cspSource,
+        styleUris,
+        variant: 'error',
+      });
     }
   }
 

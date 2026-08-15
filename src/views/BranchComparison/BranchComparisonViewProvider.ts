@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { GitService } from '../../core/git/GitService';
 import { renderBranchComparisonHtml, type PrTarget } from './render';
-import { escapeHtml } from '../escapeHtml';
 import { openFileDiff } from '../../providers/GitContentProvider';
 import { pickDefaultRefs } from '../../utils/branchDefaults';
 import { resolveRepoContextPath } from '../CommitGraph/CommitGraphViewProvider';
@@ -21,10 +20,6 @@ function createNonce(): string {
     nonce += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
   }
   return nonce;
-}
-
-function shellHtml(bodyHtml: string): string {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta http-equiv="Content-Security-Policy" content="default-src 'none';" /></head><body>${bodyHtml}</body></html>`;
 }
 
 /** Docks branch comparison in the bottom panel (next to Commit Graph/Commit Details), instead of opening a new editor tab per comparison. */
@@ -125,7 +120,13 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
     this.currentBase = base;
     this.currentCompare = compare;
     this.view.title = `${base}...${compare}`;
-    this.view.webview.html = shellHtml('<p>Loading comparison…</p>');
+    const styleUris = [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.branchComparison)];
+    this.view.webview.html = renderPlaceholderHtml('Loading comparison…', {
+      nonce: createNonce(),
+      cspSource: this.view.webview.cspSource,
+      styleUris,
+      variant: 'loading',
+    });
 
     try {
       const [aheadCommits, behindCommits, files, diff, branches, remoteInfo] = await Promise.all([
@@ -156,7 +157,7 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
         {
           nonce: createNonce(),
           cspSource: this.view.webview.cspSource,
-          styleUris: [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.branchComparison)],
+          styleUris,
           editorFontFamily,
           createPr,
         },
@@ -166,7 +167,12 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
         return;
       }
       const message = err instanceof Error ? err.message : String(err);
-      this.view.webview.html = shellHtml(`<p>GitLore: failed to load the comparison — ${escapeHtml(message)}</p>`);
+      this.view.webview.html = renderPlaceholderHtml(`GitLore: failed to load the comparison — ${message}`, {
+        nonce: createNonce(),
+        cspSource: this.view.webview.cspSource,
+        styleUris,
+        variant: 'error',
+      });
     }
   }
 

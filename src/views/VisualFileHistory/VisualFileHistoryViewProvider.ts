@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { GitService } from '../../core/git/GitService';
 import { layoutFileHistory } from '../../core/graph/fileHistoryLayout';
 import { renderFileHistoryHtml } from './render';
-import { escapeHtml } from '../escapeHtml';
 import { renderPlaceholderHtml } from '../placeholder';
 import { waitForWebviewView } from '../waitForWebviewView';
 import { COMMANDS, MEDIA, VIEWS } from '../../constants';
@@ -14,10 +13,6 @@ function createNonce(): string {
     nonce += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
   }
   return nonce;
-}
-
-function shellHtml(bodyHtml: string): string {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta http-equiv="Content-Security-Policy" content="default-src 'none';" /></head><body>${bodyHtml}</body></html>`;
 }
 
 /** Docks the Visual File History bubble timeline in the bottom panel, alongside Commit Graph/Details/Branch Comparison. */
@@ -69,7 +64,13 @@ export class VisualFileHistoryViewProvider implements vscode.WebviewViewProvider
       return;
     }
     this.currentFilePath = filePath;
-    this.view.webview.html = shellHtml('<p>Loading file history…</p>');
+    const styleUris = [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.visualFileHistory)];
+    this.view.webview.html = renderPlaceholderHtml('Loading file history…', {
+      nonce: createNonce(),
+      cspSource: this.view.webview.cspSource,
+      styleUris,
+      variant: 'loading',
+    });
 
     try {
       const entries = await this.git.getFileHistoryStats(filePath, maxCount);
@@ -79,12 +80,17 @@ export class VisualFileHistoryViewProvider implements vscode.WebviewViewProvider
         {
           nonce: createNonce(),
           cspSource: this.view.webview.cspSource,
-          styleUris: [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.visualFileHistory)],
+          styleUris,
         },
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.view.webview.html = shellHtml(`<p>GitLore: failed to load file history — ${escapeHtml(message)}</p>`);
+      this.view.webview.html = renderPlaceholderHtml(`GitLore: failed to load file history — ${message}`, {
+        nonce: createNonce(),
+        cspSource: this.view.webview.cspSource,
+        styleUris,
+        variant: 'error',
+      });
     }
   }
 

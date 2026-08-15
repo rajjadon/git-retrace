@@ -30,10 +30,6 @@ function createNonce(): string {
   return nonce;
 }
 
-function shellHtml(bodyHtml: string): string {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta http-equiv="Content-Security-Policy" content="default-src 'none';" /></head><body>${bodyHtml}</body></html>`;
-}
-
 /**
  * A cross-repo PR triage board, in a full editor tab (like Rebase Editor — a 6-column board needs
  * real width, not a narrow docked-panel sliver). Not GitHub-only: resolves every workspace
@@ -112,11 +108,11 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     if (!this.panel) {
       return;
     }
-    if (showLoadingPlaceholder) {
-      this.panel.webview.html = shellHtml('<p>Loading Launchpad…</p>');
-    }
     const styleUris = [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.launchpad)];
     const renderOpts = { nonce: createNonce(), cspSource: this.panel.webview.cspSource, styleUris };
+    if (showLoadingPlaceholder) {
+      this.panel.webview.html = renderPlaceholderHtml('Loading Launchpad…', { ...renderOpts, variant: 'loading' });
+    }
 
     const customHosts = this.readCustomHosts();
     const repos = await this.resolveWorkspaceRepos(customHosts);

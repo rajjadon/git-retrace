@@ -94,6 +94,9 @@ ${renderThreads(threads)}
 <textarea id="comment-body" placeholder="Leave a comment…" aria-label="Comment on this pull request" rows="3"></textarea>
 <div class="comment-form-actions">
 <p class="comment-status" id="comment-status" role="status" hidden></p>
+<div class="skeleton" id="comment-status-skeleton" role="status" aria-live="polite" aria-busy="true" aria-label="Posting…" hidden>
+<div class="skeleton-row" style="width: 64px"></div>
+</div>
 <button class="btn" id="post-comment" type="button">${MESSAGE_ICON}Comment</button>
 </div>
 </div>
@@ -110,6 +113,7 @@ document.getElementById('refresh-pr').addEventListener('click', () => {
 
 const commentBody = document.getElementById('comment-body');
 const commentStatus = document.getElementById('comment-status');
+const commentStatusSkeleton = document.getElementById('comment-status-skeleton');
 const postCommentBtn = document.getElementById('post-comment');
 postCommentBtn.addEventListener('click', () => {
   const body = commentBody.value.trim();
@@ -117,8 +121,8 @@ postCommentBtn.addEventListener('click', () => {
     return;
   }
   postCommentBtn.disabled = true;
-  commentStatus.hidden = false;
-  commentStatus.textContent = 'Posting…';
+  commentStatus.hidden = true;
+  commentStatusSkeleton.hidden = false;
   vscode.postMessage({ type: 'addComment', body });
 });
 for (const btn of document.querySelectorAll('.thread-resolve')) {
@@ -133,11 +137,13 @@ window.addEventListener('message', (e) => {
   if (msg.type === 'commentPosted') {
     postCommentBtn.disabled = false;
     commentBody.value = '';
+    commentStatusSkeleton.hidden = true;
+    commentStatus.hidden = false;
     commentStatus.textContent = 'Comment posted.';
     setTimeout(() => { commentStatus.hidden = true; }, 3000);
   } else if (msg.type === 'commentFailed') {
     postCommentBtn.disabled = false;
-    commentStatus.hidden = true;
+    commentStatusSkeleton.hidden = true;
   } else if (msg.type === 'resolveThreadFailed') {
     const btn = document.querySelector('.thread-resolve[data-thread-id="' + msg.threadId + '"]');
     if (btn) {

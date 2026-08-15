@@ -94,6 +94,46 @@ suite('Launchpad', () => {
       assert.match(api.getLaunchpadHtml() ?? '', /No recognized git-forge remotes/);
     }));
 
+  test('while refreshing: shows a themed, accessible loading state instead of a flash of unstyled content', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/slow-loading.git', async () => {
+        api.launchpadProvider.setFetchImplForTest((async (url: string) => {
+          // Held open long enough to assert against — resolved at the end of this test so it
+          // doesn't leak a pending refresh into whichever test runs next.
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened') || url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          // Not awaited — the point is to observe the board mid-refresh, before the mocked fetch's
+          // delay elapses.
+          void vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Loading Launchpad'));
+
+          const html = api.getLaunchpadHtml() ?? '';
+          assert.match(html, /class="skeleton" role="status" aria-live="polite" aria-busy="true" aria-label="Loading Launchpad…"/);
+          assert.ok(html.includes('class="skeleton-row"'));
+          // Confirms the CSP actually allows the linked stylesheets (the bug: the old shellHtml()
+          // blocked style-src entirely, so this loading state rendered with no theme at all).
+          assert.match(html, /shared\.css/);
+          assert.match(html, /launchpad\.css/);
+
+          await waitFor(() => !(api.getLaunchpadHtml() ?? '').includes('Loading Launchpad'), 5000);
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+      }),
+    ));
+
   test('enabled, with a GitLab remote: prompts for a PAT, fetches, categorizes, and renders real PR data', async () =>
     withLaunchpadEnabled(() =>
       withOriginRemote('https://gitlab.com/acme/widgets.git', async () => {

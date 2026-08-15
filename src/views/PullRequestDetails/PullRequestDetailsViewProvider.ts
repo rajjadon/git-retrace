@@ -4,7 +4,6 @@ import type { PullRequestSummary } from '../../core/forge/types';
 import { renderPullRequestDetailsHtml } from './render';
 import { renderPlaceholderHtml } from '../placeholder';
 import { waitForWebviewView } from '../waitForWebviewView';
-import { escapeHtml } from '../escapeHtml';
 import { MEDIA, VIEWS } from '../../constants';
 
 function createNonce(): string {
@@ -14,10 +13,6 @@ function createNonce(): string {
     nonce += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
   }
   return nonce;
-}
-
-function shellHtml(bodyHtml: string): string {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta http-equiv="Content-Security-Policy" content="default-src 'none';" /></head><body>${bodyHtml}</body></html>`;
 }
 
 /** Docks a PR's diff/commits in the bottom panel (next to Commit Details), instead of opening a new editor tab per PR — same shape as `CommitDetailsViewProvider`, for a PR instead of a local commit. */
@@ -71,7 +66,13 @@ export class PullRequestDetailsViewProvider implements vscode.WebviewViewProvide
     this.currentUrl = pr.url;
     this.currentClient = client;
     this.view.title = `PR #${pr.number}`;
-    this.view.webview.html = shellHtml('<p>Loading pull request…</p>');
+    const styleUris = [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.pullRequestDetails)];
+    this.view.webview.html = renderPlaceholderHtml('Loading pull request…', {
+      nonce: createNonce(),
+      cspSource: this.view.webview.cspSource,
+      styleUris,
+      variant: 'loading',
+    });
 
     try {
       const [{ files, diff }, threads] = await Promise.all([
@@ -86,12 +87,17 @@ export class PullRequestDetailsViewProvider implements vscode.WebviewViewProvide
         {
           nonce: createNonce(),
           cspSource: this.view.webview.cspSource,
-          styleUris: [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.pullRequestDetails)],
+          styleUris,
         },
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.view.webview.html = shellHtml(`<p>GitLore: failed to load this pull request's diff — ${escapeHtml(message)}</p>`);
+      this.view.webview.html = renderPlaceholderHtml(`GitLore: failed to load this pull request's diff — ${message}`, {
+        nonce: createNonce(),
+        cspSource: this.view.webview.cspSource,
+        styleUris,
+        variant: 'error',
+      });
     }
   }
 

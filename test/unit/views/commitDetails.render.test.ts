@@ -210,30 +210,33 @@ test('renderCommitDetailsHtml: the Summarize button sits in the same action bar 
   assert.match(html, /class="btn" id="open-remote"/);
 });
 
-test('renderCommitDetailsHtml: clicking Summarize shows a "Generating…" hint until content arrives', () => {
+test('renderCommitDetailsHtml: clicking Summarize shows a shimmering skeleton until content arrives', () => {
   // Regression: the click handler used to leave the summary paragraph empty with zero feedback
   // until the first chunk streamed in — the same "did my click even register?" gap already fixed
-  // for the hover's line-explanation flow.
+  // for the hover's line-explanation flow. Now a skeleton, not a "Generating…" text hint — the
+  // hint paragraph is reserved for the no-model/error terminal messages.
   const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
   assert.match(
     html,
-    /explainBtn\.addEventListener\('click', \(\) => \{\s*explainBtn\.disabled = true;\s*summaryText\.hidden = true;\s*summaryText\.textContent = '';\s*summaryHint\.hidden = false;\s*summaryHint\.textContent = 'Generating…';/,
+    /explainBtn\.addEventListener\('click', \(\) => \{\s*explainBtn\.disabled = true;\s*summaryText\.hidden = true;\s*summaryText\.textContent = '';\s*summaryHint\.hidden = true;\s*summarySkeleton\.hidden = false;/,
   );
 });
 
-test('renderCommitDetailsHtml: every terminal AI-summary message hides the "Generating…" hint', () => {
+test('renderCommitDetailsHtml: every terminal AI-summary message hides the generating skeleton', () => {
   // Regression: aiSummaryCached, aiSummaryDone, and aiSummaryReset never cleared the hint, so a
-  // cached response (which skips chunk events entirely) left "Generating…" showing forever.
+  // cached response (which skips chunk events entirely) left "Generating…" showing forever — same
+  // risk now applies to the skeleton that replaced it.
   const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
-  assert.match(html, /msg\.type === 'aiSummaryCached'\) \{[^}]*summaryHint\.hidden = true;/s);
-  assert.match(html, /msg\.type === 'aiSummaryDone'\) \{[^}]*summaryHint\.hidden = true;/s);
-  assert.match(html, /msg\.type === 'aiSummaryReset'\) \{[^}]*summaryHint\.hidden = true;/s);
+  assert.match(html, /msg\.type === 'aiSummaryCached'\) \{[^}]*summarySkeleton\.hidden = true;/s);
+  assert.match(html, /msg\.type === 'aiSummaryDone'\) \{[^}]*summarySkeleton\.hidden = true;/s);
+  assert.match(html, /msg\.type === 'aiSummaryReset'\) \{[^}]*summarySkeleton\.hidden = true;/s);
 });
 
-test('renderCommitDetailsHtml: the AI summary text and hint start hidden', () => {
+test('renderCommitDetailsHtml: the AI summary text, hint, and generating skeleton all start hidden', () => {
   const html = renderCommitDetailsHtml({ commit, files, diff, now }, opts);
   assert.match(html, /id="ai-summary-text"[^>]*hidden/);
   assert.match(html, /id="ai-summary-hint"[^>]*hidden/);
+  assert.match(html, /id="ai-summary-skeleton"[^>]*hidden/);
 });
 
 test('renderCommitDetailsHtml: the aiSummaryChunk handler unhides the summary text before appending', () => {

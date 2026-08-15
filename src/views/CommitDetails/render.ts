@@ -105,6 +105,10 @@ ${bodyRest ? `<pre class="commit-body">${linkifyHtml(bodyRest, opts.issueLinking
 <div class="ai-summary">
 <p class="ai-summary-text" id="ai-summary-text" aria-live="polite" hidden></p>
 <p class="ai-summary-hint" id="ai-summary-hint" role="status" hidden></p>
+<div class="skeleton" id="ai-summary-skeleton" role="status" aria-live="polite" aria-busy="true" aria-label="Generating…" hidden>
+<div class="skeleton-row" style="width: 92%"></div>
+<div class="skeleton-row" style="width: 68%"></div>
+</div>
 </div>
 <div class="section-head">
 ${FILES_ICON}<span class="section-title">Files changed</span><span class="badge">${files.length}</span>
@@ -133,12 +137,13 @@ if (remoteBtn) {
 const explainBtn = document.getElementById('explain-commit');
 const summaryText = document.getElementById('ai-summary-text');
 const summaryHint = document.getElementById('ai-summary-hint');
+const summarySkeleton = document.getElementById('ai-summary-skeleton');
 explainBtn.addEventListener('click', () => {
   explainBtn.disabled = true;
   summaryText.hidden = true;
   summaryText.textContent = '';
-  summaryHint.hidden = false;
-  summaryHint.textContent = 'Generating…';
+  summaryHint.hidden = true;
+  summarySkeleton.hidden = false;
   vscode.postMessage({ type: 'explainCommit' });
 });
 window.addEventListener('message', (e) => {
@@ -146,26 +151,29 @@ window.addEventListener('message', (e) => {
   if (msg.type === 'aiSummaryChunk') {
     summaryText.hidden = false;
     summaryText.textContent += msg.text;
-    summaryHint.hidden = true;
+    summarySkeleton.hidden = true;
   } else if (msg.type === 'aiSummaryCached') {
     summaryText.hidden = false;
     summaryText.textContent = msg.text;
-    summaryHint.hidden = true;
+    summarySkeleton.hidden = true;
     explainBtn.disabled = false;
   } else if (msg.type === 'aiSummaryDone') {
-    summaryHint.hidden = true;
+    summarySkeleton.hidden = true;
     explainBtn.disabled = false;
   } else if (msg.type === 'aiSummaryReset') {
     explainBtn.disabled = false;
     summaryText.hidden = true;
     summaryHint.hidden = true;
+    summarySkeleton.hidden = true;
   } else if (msg.type === 'aiSummaryNoModel') {
     summaryText.hidden = true;
+    summarySkeleton.hidden = true;
     summaryHint.hidden = false;
     summaryHint.textContent = 'No language model available. Enable a language model (e.g. GitHub Copilot Chat) to use this feature.';
     explainBtn.disabled = false;
   } else if (msg.type === 'aiSummaryError') {
     summaryText.hidden = true;
+    summarySkeleton.hidden = true;
     summaryHint.hidden = false;
     summaryHint.textContent = 'Failed to generate summary: ' + msg.message;
     explainBtn.disabled = false;
