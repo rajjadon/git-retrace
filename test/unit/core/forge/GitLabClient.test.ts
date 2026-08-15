@@ -480,3 +480,51 @@ test('resolveConversationThread: PUTs resolved=true to the discussion endpoint',
   assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests/27/discussions/d1?resolved=true');
   assert.equal(capturedInit?.method, 'PUT');
 });
+
+test('createPullRequest: POSTs source_branch/target_branch/title to the merge_requests endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({
+      iid: 50,
+      title: 'Add feature',
+      web_url: 'https://gitlab.com/acme/widgets/-/merge_requests/50',
+      author: { username: 'raj' },
+      created_at: 'c',
+      updated_at: 'u',
+    });
+  }) as unknown as typeof fetch);
+  const result = await client.createPullRequest(REPO, { title: 'Add feature', base: 'main', compare: 'feature-x', draft: false });
+  assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests');
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(capturedInit?.body, JSON.stringify({ source_branch: 'feature-x', target_branch: 'main', title: 'Add feature' }));
+  assert.equal(result.number, 50);
+  assert.equal(result.url, 'https://gitlab.com/acme/widgets/-/merge_requests/50');
+});
+
+test('createPullRequest: draft prefixes the title with "Draft: " — GitLab has no boolean field for it', async () => {
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (_url: string, init?: RequestInit) => {
+    capturedInit = init;
+    return jsonResponse({
+      iid: 51,
+      title: 'Draft: Add feature',
+      web_url: 'u',
+      author: { username: 'raj' },
+      created_at: 'c',
+      updated_at: 'u',
+    });
+  }) as unknown as typeof fetch);
+  await client.createPullRequest(REPO, { title: 'Add feature', base: 'main', compare: 'feature-x', draft: true });
+  assert.equal(capturedInit?.body, JSON.stringify({ source_branch: 'feature-x', target_branch: 'main', title: 'Draft: Add feature' }));
+});
+
+test('createPullRequest: a rejected request throws with the real HTTP status', async () => {
+  const client = new GitLabClient(BASE, 'tok', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.createPullRequest(REPO, { title: 'x', base: 'main', compare: 'feature', draft: false }),
+    /401 Unauthorized from gitlab\.com/,
+  );
+});

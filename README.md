@@ -80,7 +80,7 @@ Each changed file is its own collapsible section holding only that file's hunks,
 
 Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with counts. It opens on your current branch versus its upstream, so it's useful immediately — retarget either side in place. Diffs are taken against the merge-base, matching what a GitHub or GitLab pull request shows you.
 
-**Create PR** opens your host's compare/create-PR page pre-filled with both branches (GitHub, GitLab, Bitbucket — hidden on hosts GitLore doesn't recognize, rather than guessing a URL that might 404). **Open all changes** opens every changed file's diff at once instead of one at a time, all against the same common base.
+**Create PR** creates the pull request directly on the host — GitHub, GitLab, Bitbucket, or Azure DevOps (hidden on hosts GitLore doesn't recognize, rather than guessing at one). Prompts for a title and, on hosts that support it, whether to create it as a draft, then shows a link to open the new PR once it's live — no browser round-trip to finish the job. Needs `gitLore.launchpad.enabled` on, since it's the one action here that actually calls a host's API rather than just building a local URL; the button still shows either way and explains itself if you click it while that's off. **Open all changes** opens every changed file's diff at once instead of one at a time, all against the same common base.
 
 ### Launchpad — a cross-repo PR triage board (off by default)
 
@@ -205,9 +205,9 @@ GitLore runs entirely locally. Your git data never leaves your machine.
 
 The one network request it makes on its own: author avatars from `gravatar.com`, keyed by an MD5 hash of the commit email — that's Gravatar's own lookup spec, not a security-relevant use of the hash.
 
-A few things open your browser, and only when you click them: **Open on GitHub/GitLab/Bitbucket**, **Create PR**, **Open Remote in Browser**, and issue links. Every one of those URLs is built locally from your git remote; GitLore doesn't contact the host to construct them.
+A few things open your browser, and only when you click them: **Open on GitHub/GitLab/Bitbucket**, **Open Remote in Browser**, and issue links. Every one of those URLs is built locally from your git remote; GitLore doesn't contact the host to construct them.
 
-**Launchpad is the one exception to "everything is local"** — it's off by default (`gitLore.launchpad.enabled`), and only fetches PR data from hosts you've explicitly authenticated with (VS Code's own built-in sign-in for GitHub and Azure DevOps Services, or a Personal Access Token you provide for anything else, stored in VS Code's encrypted secret storage). No GitLore backend ever sees your code, your token, or your PR data — GitLore talks directly to the host you configured.
+**Launchpad — and Branch Comparison's Create PR — are the exceptions to "everything is local"**: both are off/inert by default (`gitLore.launchpad.enabled`), and only ever talk to a host you've explicitly authenticated with (VS Code's own built-in sign-in for GitHub and Azure DevOps Services, or a Personal Access Token you provide for anything else, stored in VS Code's encrypted secret storage). No GitLore backend ever sees your code, your token, or your PR data — GitLore talks directly to the host you configured.
 
 No telemetry. No analytics. No account.
 

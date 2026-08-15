@@ -1,6 +1,16 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ConversationThread, ForgeRepoRef, MergeOptions, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import type {
+  CheckStatus,
+  ConversationThread,
+  CreatePullRequestOptions,
+  ForgeRepoRef,
+  MergeOptions,
+  PullRequestDiff,
+  PullRequestSummary,
+  ReviewDecision,
+  ReviewSubmission,
+} from './types';
 import { describeErrorBody } from './httpError';
 
 interface BitbucketUser {
@@ -251,6 +261,37 @@ export class BitbucketClient implements ForgeClient {
         close_source_branch: options.deleteSourceBranch,
       }),
     });
+  }
+
+  /** Bitbucket Cloud has no draft-PR concept at all — not through its API, not through its own web UI — so a draft request throws a clear platform-gap error rather than silently creating a regular PR (see `DRAFT_SUPPORTED_HOSTS`, which the caller uses to keep "Draft" off the create-PR flow for this host in the first place). No enrichment call afterward — a PR seconds old has no reviewers/build status yet. */
+  async createPullRequest(repo: ForgeRepoRef, options: CreatePullRequestOptions): Promise<PullRequestSummary> {
+    if (options.draft) {
+      throw new Error('Bitbucket Cloud has no draft pull requests — create it as a regular PR instead');
+    }
+    const res = await this.request(`/repositories/${repo.identity}/pullrequests`, {
+      method: 'POST',
+      body: JSON.stringify({
+        title: options.title,
+        source: { branch: { name: options.compare } },
+        destination: { branch: { name: options.base } },
+      }),
+    });
+    const data = (await res.json()) as BitbucketPullRequest;
+    return {
+      repo,
+      number: data.id,
+      title: data.title,
+      url: data.links.html.href,
+      authorLogin: loginOf(data.author),
+      isDraft: false,
+      createdAt: data.created_on,
+      updatedAt: data.updated_on,
+      requestedReviewers: [],
+      checkStatus: 'none',
+      reviewDecision: 'none',
+      hasConflicts: false,
+      reviewedByMe: false,
+    };
   }
 
   private async enrich(repo: ForgeRepoRef, pr: BitbucketPullRequest): Promise<PullRequestSummary> {

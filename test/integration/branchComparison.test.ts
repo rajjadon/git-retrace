@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import * as vscode from 'vscode';
 import { buildBranchFixtureRepo } from '../fixtures/build-fixture-repo';
 import type { GitLoreTestApi } from '../../src/extension';
-import { COMMANDS, VIEWS } from '../../src/constants';
+import { COMMANDS, CONFIG, VIEWS } from '../../src/constants';
 import { EXTENSION_ID } from './extensionId';
 
 
@@ -126,5 +126,76 @@ suite('Branch comparison webview', () => {
     assert.match(html, /id="create-pr"/);
     assert.match(html, /Create a PR on GitHub/);
     assert.match(html, /type: 'createPr'/);
+  });
+
+  test('creating a pull request calls the host\'s API when gitLore.launchpad.enabled is on', async () => {
+    const config = vscode.workspace.getConfiguration(CONFIG.section);
+    await config.update('launchpad.enabled', true, vscode.ConfigurationTarget.Global);
+    try {
+      const fixture = buildBranchFixtureRepo();
+      execFileSync('git', ['remote', 'add', 'origin', 'https://github.com/acme/created-widgets.git'], { cwd: fixture.repoRoot });
+
+      const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+      await vscode.window.showTextDocument(doc);
+      await vscode.commands.executeCommand(COMMANDS.compareBranches, fixture.baseBranch, fixture.featureBranch);
+      await waitFor(() => (api.getBranchComparisonHtml() ?? '').includes('add feature line'));
+
+      let capturedBody: string | undefined;
+      api.branchComparisonViewProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+        if (url.endsWith('/repos/acme/created-widgets/pulls') && init?.method === 'POST') {
+          capturedBody = init.body as string;
+          return {
+            ok: true,
+            json: async () => ({
+              number: 99,
+              title: 'Add feature line',
+              html_url: 'https://github.com/acme/created-widgets/pull/99',
+              user: { login: 'raj' },
+              draft: false,
+              created_at: '2024-01-01T00:00:00Z',
+              updated_at: '2024-01-01T00:00:00Z',
+            }),
+          } as unknown as Response;
+        }
+        throw new Error(`unmocked request in test: ${url}`);
+      }) as unknown as typeof fetch);
+
+      const originalGetSession = vscode.authentication.getSession;
+      (vscode.authentication as { getSession: typeof vscode.authentication.getSession }).getSession = (async () => ({
+        id: 'fake-session',
+        accessToken: 'fake-github-token',
+        account: { id: 'fake-account', label: 'raj' },
+        scopes: [],
+      })) as typeof vscode.authentication.getSession;
+      try {
+        await api.branchComparisonViewProvider.createPullRequestForTest('Add feature line', false);
+      } finally {
+        vscode.authentication.getSession = originalGetSession;
+      }
+
+      assert.ok(capturedBody, 'expected the create-PR endpoint to be called');
+      assert.equal(capturedBody, JSON.stringify({ title: 'Add feature line', head: 'feature-x', base: 'main', draft: false }));
+    } finally {
+      await config.update('launchpad.enabled', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  test('creating a pull request is a no-op when gitLore.launchpad.enabled is off — Create PR shares that toggle\'s "only thing that calls out to a remote host" contract', async () => {
+    const fixture = buildBranchFixtureRepo();
+    execFileSync('git', ['remote', 'add', 'origin', 'https://github.com/acme/disabled-widgets.git'], { cwd: fixture.repoRoot });
+
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand(COMMANDS.compareBranches, fixture.baseBranch, fixture.featureBranch);
+    await waitFor(() => (api.getBranchComparisonHtml() ?? '').includes('add feature line'));
+
+    let calledNetwork = false;
+    api.branchComparisonViewProvider.setFetchImplForTest((async () => {
+      calledNetwork = true;
+      return { ok: true, json: async () => ({}) } as unknown as Response;
+    }) as unknown as typeof fetch);
+
+    await api.branchComparisonViewProvider.createPullRequestForTest('Add feature line', false);
+    assert.ok(!calledNetwork, 'expected no network call when Launchpad is disabled');
   });
 });

@@ -529,3 +529,39 @@ test('resolveConversationThread: POSTs to /comments/{id}/resolve', async () => {
   assert.equal(capturedUrl, 'https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests/38/comments/1/resolve');
   assert.equal(capturedInit?.method, 'POST');
 });
+
+test('createPullRequest: POSTs source/destination branch objects to the pullrequests endpoint', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new BitbucketClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({
+      id: 50,
+      title: 'Add feature',
+      links: { html: { href: 'https://bitbucket.org/acme/widgets/pull-requests/50' } },
+      author: { username: 'raj' },
+      created_on: 'c',
+      updated_on: 'u',
+    });
+  }) as unknown as typeof fetch);
+  const result = await client.createPullRequest(REPO, { title: 'Add feature', base: 'main', compare: 'feature-x', draft: false });
+  assert.equal(capturedUrl, 'https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests');
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(
+    capturedInit?.body,
+    JSON.stringify({ title: 'Add feature', source: { branch: { name: 'feature-x' } }, destination: { branch: { name: 'main' } } }),
+  );
+  assert.equal(result.number, 50);
+  assert.equal(result.isDraft, false);
+});
+
+test('createPullRequest: draft throws a platform-gap error — Bitbucket Cloud has no draft pull requests', async () => {
+  const client = new BitbucketClient(BASE, 'tok', (async () => {
+    throw new Error('should never call the network for this');
+  }) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.createPullRequest(REPO, { title: 'x', base: 'main', compare: 'feature', draft: true }),
+    /Bitbucket Cloud has no draft pull requests/,
+  );
+});

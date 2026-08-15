@@ -2,7 +2,18 @@ import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
 import { splitAzureDevOpsIdentity } from './azureDevOpsIdentity';
 import { describeErrorBody } from './httpError';
-import type { CheckStatus, ConversationThread, ForgeRepoRef, MergeOptions, MergeStrategy, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import type {
+  CheckStatus,
+  ConversationThread,
+  CreatePullRequestOptions,
+  ForgeRepoRef,
+  MergeOptions,
+  MergeStrategy,
+  PullRequestDiff,
+  PullRequestSummary,
+  ReviewDecision,
+  ReviewSubmission,
+} from './types';
 
 interface AzureDevOpsIdentityRef {
   uniqueName?: string;
@@ -393,6 +404,40 @@ export class AzureDevOpsClient implements ForgeClient {
         },
       }),
     });
+  }
+
+  /** `isDraft` is a real boolean field on this endpoint, and ref names need the `refs/heads/` prefix Azure DevOps expects everywhere — `options.base`/`options.compare` are plain branch names, same as every other host's `createPullRequest`. No enrichment call afterward — a PR seconds old has no reviewers/checks yet. */
+  async createPullRequest(repo: ForgeRepoRef, options: CreatePullRequestOptions): Promise<PullRequestSummary> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      throw new Error('could not resolve this repo\'s Azure DevOps organization/project/repository identity');
+    }
+    const apiBase = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    const res = await this.request(`${apiBase}/pullrequests?api-version=7.1`, {
+      method: 'POST',
+      body: JSON.stringify({
+        sourceRefName: `refs/heads/${options.compare}`,
+        targetRefName: `refs/heads/${options.base}`,
+        title: options.title,
+        isDraft: options.draft,
+      }),
+    });
+    const data = (await res.json()) as AzureDevOpsPullRequest;
+    return {
+      repo,
+      number: data.pullRequestId,
+      title: data.title,
+      url: `https://dev.azure.com/${id.organization}/${id.project}/_git/${id.repository}/pullrequest/${data.pullRequestId}`,
+      authorLogin: loginOf(data.createdBy),
+      isDraft: data.isDraft ?? options.draft,
+      createdAt: data.creationDate,
+      updatedAt: data.creationDate,
+      requestedReviewers: [],
+      checkStatus: 'none',
+      reviewDecision: 'none',
+      hasConflicts: false,
+      reviewedByMe: false,
+    };
   }
 
   private async enrich(

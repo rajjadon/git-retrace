@@ -65,6 +65,7 @@ export interface GitLoreTestApi {
   getLaunchpadHtml: () => string | undefined;
   getPullRequestDetailsHtml: () => string | undefined;
   repoExplorerProvider: RepoExplorerProvider;
+  branchComparisonViewProvider: BranchComparisonViewProvider;
   launchpadProvider: LaunchpadViewProvider;
   pullRequestDetailsProvider: PullRequestDetailsViewProvider;
   explainCommit: () => Promise<void>;
@@ -100,7 +101,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
   const statusBarProvider = new StatusBarProvider(blameProvider);
   const commitGraphViewProvider = new CommitGraphViewProvider(ctx.extensionUri, git, blameSource);
   const commitDetailsViewProvider = new CommitDetailsViewProvider(ctx.extensionUri, git, languageModelClient, logger);
-  const branchComparisonViewProvider = new BranchComparisonViewProvider(ctx.extensionUri, git);
+  const branchComparisonViewProvider = new BranchComparisonViewProvider(ctx.extensionUri, ctx, git, logger);
   const visualFileHistoryViewProvider = new VisualFileHistoryViewProvider(ctx.extensionUri, git);
   const rebaseEditorProvider = new RebaseEditorProvider(ctx.extensionUri);
   const launchpadProvider = new LaunchpadViewProvider(ctx.extensionUri, ctx, git, logger);
@@ -181,6 +182,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     getLaunchpadHtml: () => launchpadProvider.getCurrentHtmlForTest(),
     getPullRequestDetailsHtml: () => pullRequestDetailsViewProvider.getCurrentHtmlForTest(),
     repoExplorerProvider,
+    branchComparisonViewProvider,
     launchpadProvider,
     pullRequestDetailsProvider: pullRequestDetailsViewProvider,
     explainCommit: () => commitDetailsViewProvider.explainCommit(),

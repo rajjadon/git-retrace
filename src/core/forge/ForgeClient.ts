@@ -1,4 +1,12 @@
-import type { ConversationThread, ForgeRepoRef, MergeOptions, PullRequestDiff, PullRequestSummary, ReviewSubmission } from './types';
+import type {
+  ConversationThread,
+  CreatePullRequestOptions,
+  ForgeRepoRef,
+  MergeOptions,
+  PullRequestDiff,
+  PullRequestSummary,
+  ReviewSubmission,
+} from './types';
 
 /**
  * One host's PR API, normalized to GitLore's common shape. Each implementation (GitHub, GitLab,
@@ -64,4 +72,16 @@ export interface ForgeClient {
    * for those hosts in the first place.
    */
   mergePullRequest(repo: ForgeRepoRef, number: number, options: MergeOptions): Promise<void>;
+  /**
+   * Creates a new PR/MR from `compare` into `base`, returning a thin `PullRequestSummary` built
+   * straight from the creation response — no follow-up enrichment call, since a PR that's seconds
+   * old has no reviews/checks yet to enrich. Throws with the real reason (HTTP status, network
+   * failure, a validation rejection like "no commits between these branches") on failure — same
+   * contract as `closePullRequest`. `options.draft: true` throws a platform-gap error on Bitbucket,
+   * which has no draft-PR concept at all — see `DRAFT_SUPPORTED_HOSTS`, which the caller uses to
+   * keep that choice off the create-PR flow for that host in the first place. GitLab has no
+   * boolean draft field either, but represents it by prefixing the title instead of rejecting it —
+   * see `GitLabClient.createPullRequest`.
+   */
+  createPullRequest(repo: ForgeRepoRef, options: CreatePullRequestOptions): Promise<PullRequestSummary>;
 }

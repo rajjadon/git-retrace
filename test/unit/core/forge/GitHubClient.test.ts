@@ -628,3 +628,37 @@ test('mergePullRequest: a rejected request throws with the real HTTP status', as
     /401 Unauthorized from api\.github\.com/,
   );
 });
+
+test('createPullRequest: POSTs head/base/draft to the pulls endpoint, mapping the response into a PullRequestSummary', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitHubClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({
+      number: 50,
+      title: 'Add feature',
+      html_url: 'https://github.com/acme/widgets/pull/50',
+      user: { login: 'raj' },
+      draft: true,
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+    });
+  }) as unknown as typeof fetch);
+  const result = await client.createPullRequest(REPO, { title: 'Add feature', base: 'main', compare: 'feature-x', draft: true });
+  assert.equal(capturedUrl, 'https://api.github.com/repos/acme/widgets/pulls');
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(capturedInit?.body, JSON.stringify({ title: 'Add feature', head: 'feature-x', base: 'main', draft: true }));
+  assert.equal(result.number, 50);
+  assert.equal(result.url, 'https://github.com/acme/widgets/pull/50');
+  assert.equal(result.isDraft, true);
+  assert.equal(result.reviewedByMe, false);
+});
+
+test('createPullRequest: a rejected request throws with the real HTTP status', async () => {
+  const client = new GitHubClient(BASE, 'tok', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.createPullRequest(REPO, { title: 'x', base: 'main', compare: 'feature', draft: false }),
+    /401 Unauthorized from api\.github\.com/,
+  );
+});

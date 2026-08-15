@@ -664,3 +664,37 @@ test('resolveConversationThread: PATCHes status="fixed" (the enum name, not a nu
   assert.equal(capturedInit?.method, 'PATCH');
   assert.equal(capturedInit?.body, JSON.stringify({ status: 'fixed' }));
 });
+
+test('createPullRequest: POSTs sourceRefName/targetRefName/isDraft with the refs/heads/ prefix', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({
+      pullRequestId: 70,
+      title: 'Add feature',
+      createdBy: { uniqueName: 'raj@acme.com' },
+      creationDate: 'c',
+      isDraft: true,
+    });
+  }) as unknown as typeof fetch);
+  const result = await client.createPullRequest(REPO, { title: 'Add feature', base: 'main', compare: 'feature-x', draft: true });
+  assert.equal(capturedUrl, 'https://dev.azure.com/acme/Widgets/_apis/git/repositories/widgets-api/pullrequests?api-version=7.1');
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(
+    capturedInit?.body,
+    JSON.stringify({ sourceRefName: 'refs/heads/feature-x', targetRefName: 'refs/heads/main', title: 'Add feature', isDraft: true }),
+  );
+  assert.equal(result.number, 70);
+  assert.equal(result.isDraft, true);
+  assert.equal(result.url, 'https://dev.azure.com/acme/Widgets/_git/widgets-api/pullrequest/70');
+});
+
+test('createPullRequest: a rejected request throws with the real HTTP status', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.createPullRequest(REPO, { title: 'x', base: 'main', compare: 'feature', draft: false }),
+    /401 Unauthorized from dev\.azure\.com/,
+  );
+});

@@ -1,6 +1,16 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ConversationThread, ForgeRepoRef, MergeOptions, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import type {
+  CheckStatus,
+  ConversationThread,
+  CreatePullRequestOptions,
+  ForgeRepoRef,
+  MergeOptions,
+  PullRequestDiff,
+  PullRequestSummary,
+  ReviewDecision,
+  ReviewSubmission,
+} from './types';
 import { describeErrorBody } from './httpError';
 
 interface GitLabUser {
@@ -253,6 +263,32 @@ export class GitLabClient implements ForgeClient {
       method: 'PUT',
       body: JSON.stringify({ squash: options.strategy === 'squash', should_remove_source_branch: options.deleteSourceBranch }),
     });
+  }
+
+  /** GitLab's merge-request creation endpoint has no boolean draft field at all — prefixing the title with `Draft: ` is GitLab's own documented mechanism for marking one as a draft, still the only supported way as of GitLab's current API. No enrichment call afterward — a PR seconds old has no reviews/pipeline yet. */
+  async createPullRequest(repo: ForgeRepoRef, options: CreatePullRequestOptions): Promise<PullRequestSummary> {
+    const projectPath = encodeURIComponent(repo.identity);
+    const title = options.draft ? `Draft: ${options.title}` : options.title;
+    const res = await this.request(`/projects/${projectPath}/merge_requests`, {
+      method: 'POST',
+      body: JSON.stringify({ source_branch: options.compare, target_branch: options.base, title }),
+    });
+    const data = (await res.json()) as GitLabMergeRequest;
+    return {
+      repo,
+      number: data.iid,
+      title: data.title,
+      url: data.web_url,
+      authorLogin: data.author?.username ?? '',
+      isDraft: data.draft ?? data.work_in_progress ?? options.draft,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+      requestedReviewers: [],
+      checkStatus: 'none',
+      reviewDecision: 'none',
+      hasConflicts: false,
+      reviewedByMe: false,
+    };
   }
 
   private async enrich(repo: ForgeRepoRef, projectPath: string, mr: GitLabMergeRequest): Promise<PullRequestSummary> {

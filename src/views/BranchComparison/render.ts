@@ -15,11 +15,10 @@ import {
   WRAP_ICON,
 } from '../icons';
 
-/** Where "Create PR" should send the user, when the repo has a remote we know the compare/PR URL shape for. */
+/** Shown when the repo's remote resolves to a recognized forge host — the button posts `createPr` and the extension host does the rest (auth, title prompt, the actual API call). */
 export interface PrTarget {
   /** Display name of the hosting service, e.g. "GitHub". */
   label: string;
-  url: string;
 }
 
 export interface RenderBranchComparisonOptions {

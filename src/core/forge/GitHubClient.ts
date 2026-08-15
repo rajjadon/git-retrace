@@ -1,6 +1,16 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ConversationThread, ForgeRepoRef, MergeOptions, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import type {
+  CheckStatus,
+  ConversationThread,
+  CreatePullRequestOptions,
+  ForgeRepoRef,
+  MergeOptions,
+  PullRequestDiff,
+  PullRequestSummary,
+  ReviewDecision,
+  ReviewSubmission,
+} from './types';
 import { describeErrorBody } from './httpError';
 
 /** Fetches up to 100 review threads and each one's first comment — enough to identify and resolve a conversation without paginating replies nobody asked to see. */
@@ -283,6 +293,30 @@ export class GitHubClient implements ForgeClient {
         await this.request(`/repos/${repo.identity}/git/refs/heads/${encodeURIComponent(branch)}`, { method: 'DELETE' });
       }
     }
+  }
+
+  /** `head`/`base` map directly to GitHub's own field names; `draft` is a real boolean field on this endpoint. No enrichment call afterward — a PR seconds old has no reviews/checks yet. */
+  async createPullRequest(repo: ForgeRepoRef, options: CreatePullRequestOptions): Promise<PullRequestSummary> {
+    const res = await this.request(`/repos/${repo.identity}/pulls`, {
+      method: 'POST',
+      body: JSON.stringify({ title: options.title, head: options.compare, base: options.base, draft: options.draft }),
+    });
+    const data = (await res.json()) as GitHubPull;
+    return {
+      repo,
+      number: data.number,
+      title: data.title,
+      url: data.html_url,
+      authorLogin: data.user?.login ?? '',
+      isDraft: data.draft ?? options.draft,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+      requestedReviewers: [],
+      checkStatus: 'none',
+      reviewDecision: 'none',
+      hasConflicts: false,
+      reviewedByMe: false,
+    };
   }
 
   /** Best-effort: if this fails, the merge itself already succeeded, so the caller just keeps the source branch around rather than failing an otherwise-successful merge over branch cleanup. */

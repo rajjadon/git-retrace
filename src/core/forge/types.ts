@@ -36,6 +36,23 @@ export const MERGE_STRATEGIES_BY_HOST: Record<ForgeHost, MergeStrategy[]> = {
   azureDevOps: ['merge', 'squash', 'rebase'],
 };
 
+/** Options for `ForgeClient.createPullRequest`. `base`/`compare` are branch names, not refs — each client builds its own host-specific ref/branch shape from them. */
+export interface CreatePullRequestOptions {
+  title: string;
+  base: string;
+  compare: string;
+  draft: boolean;
+}
+
+/**
+ * Which hosts support creating a PR/MR as a draft — the create-PR flow filters its draft choice
+ * against this so it never offers what would just error. Bitbucket Cloud has no draft-PR concept
+ * at all; GitLab has no boolean field for it either (its own documented mechanism is prefixing the
+ * title with `Draft: `, handled inside `GitLabClient.createPullRequest` itself, not by excluding it
+ * here — only a host with truly no way to represent a draft belongs in this exclusion).
+ */
+export const DRAFT_SUPPORTED_HOSTS: ReadonlySet<ForgeHost> = new Set<ForgeHost>(['github', 'gitlab', 'azureDevOps']);
+
 /**
  * Identifies one repo on one host. `identity` is opaque and host-specific — "owner/repo" for
  * GitHub/GitLab/Bitbucket, "organization/project/repository" for Azure DevOps (which has no
