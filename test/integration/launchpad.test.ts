@@ -590,6 +590,66 @@ suite('Launchpad', () => {
       }),
     ));
 
+  test('merging a "Ready to Merge" PR calls the client\'s merge endpoint with the chosen strategy and branch-deletion choice', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/widgets.git', async () => {
+        let mergeCalled = false;
+        let openCallCount = 0;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            openCallCount++;
+            return jsonResponse(
+              openCallCount === 1
+                ? [
+                    {
+                      iid: 80,
+                      title: 'Mergeable PR',
+                      web_url: 'https://gitlab.com/acme/widgets/-/merge_requests/80',
+                      author: { username: 'raj' },
+                      created_at: '2024-01-01T00:00:00Z',
+                      updated_at: '2024-01-01T00:00:00Z',
+                      head_pipeline: { status: 'success' },
+                    },
+                  ]
+                : [],
+            );
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: true, approved_by: [{ user: { username: 'raj' } }] });
+          }
+          if (url.endsWith('/merge_requests/80/merge') && init?.method === 'PUT') {
+            mergeCalled = true;
+            assert.equal(init.body, JSON.stringify({ squash: true, should_remove_source_branch: true }));
+            return jsonResponse({});
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Mergeable PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        const html = api.getLaunchpadHtml() ?? '';
+        assert.match(columnHtml(html, 'readyToMerge'), /Mergeable PR/);
+
+        await api.launchpadProvider.mergePullRequestForTest('gitlab:acme/widgets#80', 'squash', true);
+        assert.ok(mergeCalled, 'expected the merge endpoint to be called');
+        await waitFor(() => !(api.getLaunchpadHtml() ?? '').includes('Mergeable PR'));
+      }),
+    ));
+
   test('approving a PR calls the client\'s approve endpoint', async () =>
     withLaunchpadEnabled(() =>
       withOriginRemote('https://gitlab.com/acme/widgets.git', async () => {

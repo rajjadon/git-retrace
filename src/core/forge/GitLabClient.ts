@@ -1,6 +1,6 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import type { CheckStatus, ConversationThread, ForgeRepoRef, MergeOptions, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
 import { describeErrorBody } from './httpError';
 
 interface GitLabUser {
@@ -240,6 +240,18 @@ export class GitLabClient implements ForgeClient {
   async resolveConversationThread(repo: ForgeRepoRef, number: number, threadId: string): Promise<void> {
     const projectPath = encodeURIComponent(repo.identity);
     await this.request(`/projects/${projectPath}/merge_requests/${number}/discussions/${threadId}?resolved=true`, { method: 'PUT' });
+  }
+
+  /** GitLab's merge endpoint only exposes a `squash` boolean, not a distinct strategy field — there's no request that gives `'rebase'` a separate merge-commit-free history the way GitHub/Azure DevOps' rebase does, so it throws rather than silently merging with the wrong history shape (see `MERGE_STRATEGIES_BY_HOST`). */
+  async mergePullRequest(repo: ForgeRepoRef, number: number, options: MergeOptions): Promise<void> {
+    if (options.strategy === 'rebase') {
+      throw new Error('GitLab has no separate "rebase and merge" request — use "Merge" or "Squash and merge" instead');
+    }
+    const projectPath = encodeURIComponent(repo.identity);
+    await this.request(`/projects/${projectPath}/merge_requests/${number}/merge`, {
+      method: 'PUT',
+      body: JSON.stringify({ squash: options.strategy === 'squash', should_remove_source_branch: options.deleteSourceBranch }),
+    });
   }
 
   private async enrich(repo: ForgeRepoRef, projectPath: string, mr: GitLabMergeRequest): Promise<PullRequestSummary> {

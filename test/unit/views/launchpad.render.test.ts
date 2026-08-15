@@ -130,6 +130,33 @@ test('renderLaunchpadHtml: the Reopen button posts reopenPr with the PR\'s stabl
   assert.match(html, /type: 'reopenPr', key: btn\.dataset\.key, title: btn\.dataset\.title/);
 });
 
+test('renderLaunchpadHtml: a "Ready to Merge" card offers Merge', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'readyToMerge' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /class="pr-card-merge[^"]*" type="button" data-key="github:acme\/widgets#1" data-title="Add feature"/);
+});
+
+test('renderLaunchpadHtml: a card in any other open bucket offers no Merge — only "Ready to Merge" matches the board\'s own mergeability check', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'waiting' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.ok(!html.includes('class="pr-card-merge'));
+});
+
+test('renderLaunchpadHtml: merged/closed cards offer no Merge — nothing left to merge on a PR that is already done', () => {
+  const categorized: CategorizedPullRequest[] = [
+    { pr: pr({ number: 1, closedAt: '2024-02-02T10:00:00Z', merged: true }), bucket: 'merged' },
+    { pr: pr({ number: 2, closedAt: '2024-02-02T10:00:00Z', merged: false }), bucket: 'closed' },
+  ];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.ok(!html.includes('class="pr-card-merge'));
+});
+
+test('renderLaunchpadHtml: the Merge button posts mergePr with the PR\'s stable key and title', () => {
+  const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'readyToMerge' }];
+  const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);
+  assert.match(html, /type: 'mergePr', key: btn\.dataset\.key, title: btn\.dataset\.title/);
+});
+
 test('renderLaunchpadHtml: the "View diff" button posts showPullRequestDetails with the PR\'s stable key', () => {
   const categorized: CategorizedPullRequest[] = [{ pr: pr(), bucket: 'waiting' }];
   const html = renderLaunchpadHtml({ categorized, errors: [], now }, opts);

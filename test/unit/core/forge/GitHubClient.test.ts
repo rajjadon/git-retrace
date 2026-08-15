@@ -507,3 +507,63 @@ test('GraphQL calls against a GitHub Enterprise Server apiBaseUrl use <host>/api
   await client.resolveConversationThread(REPO, 18, 'x');
   assert.equal(capturedUrl, 'https://ghe.example.com/api/graphql');
 });
+
+test('mergePullRequest: PUTs merge_method to the merge endpoint, one call per strategy', async () => {
+  for (const strategy of ['merge', 'squash', 'rebase'] as const) {
+    let capturedUrl: string | undefined;
+    let capturedInit: RequestInit | undefined;
+    const client = new GitHubClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedInit = init;
+      return jsonResponse({});
+    }) as unknown as typeof fetch);
+    await client.mergePullRequest(REPO, 20, { strategy, deleteSourceBranch: false });
+    assert.equal(capturedUrl, 'https://api.github.com/repos/acme/widgets/pulls/20/merge');
+    assert.equal(capturedInit?.method, 'PUT');
+    assert.equal(capturedInit?.body, JSON.stringify({ merge_method: strategy }));
+  }
+});
+
+test('mergePullRequest: deleteSourceBranch fetches the head ref and deletes it, URL-encoding a slash in the branch name', async () => {
+  const calls: string[] = [];
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    (async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? 'GET'} ${url}`);
+      if (url.endsWith('/pulls/21/merge')) {
+        return jsonResponse({});
+      }
+      if (url.endsWith('/pulls/21')) {
+        return jsonResponse({ head: { ref: 'feature/x' } });
+      }
+      if (url.endsWith('/git/refs/heads/feature%2Fx')) {
+        return jsonResponse({});
+      }
+      throw new Error(`unmocked: ${url}`);
+    }) as unknown as typeof fetch,
+  );
+  await client.mergePullRequest(REPO, 21, { strategy: 'squash', deleteSourceBranch: true });
+  assert.ok(calls.includes('DELETE https://api.github.com/repos/acme/widgets/git/refs/heads/feature%2Fx'));
+});
+
+test('mergePullRequest: deleteSourceBranch false never fetches or deletes the head ref', async () => {
+  let calls = 0;
+  const client = new GitHubClient(BASE, 'tok', (async (url: string) => {
+    calls++;
+    if (url.endsWith('/pulls/22/merge')) {
+      return jsonResponse({});
+    }
+    throw new Error(`unexpected call: ${url}`);
+  }) as unknown as typeof fetch);
+  await client.mergePullRequest(REPO, 22, { strategy: 'merge', deleteSourceBranch: false });
+  assert.equal(calls, 1);
+});
+
+test('mergePullRequest: a rejected request throws with the real HTTP status', async () => {
+  const client = new GitHubClient(BASE, 'tok', (async () => jsonResponse({}, false)) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.mergePullRequest(REPO, 23, { strategy: 'merge', deleteSourceBranch: false }),
+    /401 Unauthorized from api\.github\.com/,
+  );
+});

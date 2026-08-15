@@ -1,4 +1,4 @@
-import type { ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewSubmission } from './types';
+import type { ConversationThread, ForgeRepoRef, MergeOptions, PullRequestDiff, PullRequestSummary, ReviewSubmission } from './types';
 
 /**
  * One host's PR API, normalized to GitLore's common shape. Each implementation (GitHub, GitLab,
@@ -54,4 +54,14 @@ export interface ForgeClient {
    * (see `GitHubClient`'s dedicated `graphql()` request path, alongside its normal REST `request()`).
    */
   resolveConversationThread(repo: ForgeRepoRef, number: number, threadId: string): Promise<void>;
+  /**
+   * Merges an open PR/MR with the given strategy, optionally deleting its source branch
+   * afterward. Throws with the real reason (HTTP status, network failure, a permissions
+   * rejection, merge conflicts, or a required check that hasn't passed) on failure — same contract
+   * as `closePullRequest`; there's no pre-flight mergeability check, the host's own rejection is
+   * the truth. `strategy: 'rebase'` throws a platform-gap error on GitLab and Bitbucket — see
+   * `MERGE_STRATEGIES_BY_HOST`, which the caller uses to keep that option off the merge QuickPick
+   * for those hosts in the first place.
+   */
+  mergePullRequest(repo: ForgeRepoRef, number: number, options: MergeOptions): Promise<void>;
 }

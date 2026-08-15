@@ -350,6 +350,73 @@ test('reopenPullRequest: PATCHes status=active to the pull request endpoint', as
   assert.equal(capturedInit?.body, JSON.stringify({ status: 'active' }));
 });
 
+test('mergePullRequest: fetches the PR fresh for its head commit, then PATCHes completed with the mapped strategy', async () => {
+  const mapping: Array<['merge' | 'squash' | 'rebase', string]> = [
+    ['merge', 'noFastForward'],
+    ['squash', 'squash'],
+    ['rebase', 'rebase'],
+  ];
+  for (const [strategy, azureStrategy] of mapping) {
+    let patchBody: string | undefined;
+    const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string, init?: RequestInit) => {
+      // `AzureDevOpsClient.request` always passes a real `init` object to `fetchImpl` (it merges
+      // in headers even when the caller passed none), so the GET call's `init` is never actually
+      // `undefined` here — `init?.method` (present only on the PATCH) is what distinguishes them.
+      if (url.endsWith('/pullrequests/60?api-version=7.1') && !init?.method) {
+        return jsonResponse({ lastMergeSourceCommit: { commitId: 'abc123' } });
+      }
+      if (url.endsWith('/pullrequests/60?api-version=7.1') && init?.method === 'PATCH') {
+        patchBody = init.body as string;
+        return jsonResponse({});
+      }
+      throw new Error(`unmocked: ${url}`);
+    }) as unknown as typeof fetch);
+    await client.mergePullRequest(REPO, 60, { strategy, deleteSourceBranch: false });
+    assert.equal(
+      patchBody,
+      JSON.stringify({
+        status: 'completed',
+        lastMergeSourceCommit: { commitId: 'abc123' },
+        completionOptions: { mergeStrategy: azureStrategy, deleteSourceBranch: false },
+      }),
+    );
+  }
+});
+
+test('mergePullRequest: carries deleteSourceBranch through to completionOptions', async () => {
+  let patchBody: string | undefined;
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string, init?: RequestInit) => {
+    if (!init?.method) {
+      return jsonResponse({ lastMergeSourceCommit: { commitId: 'def456' } });
+    }
+    patchBody = init.body as string;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.mergePullRequest(REPO, 61, { strategy: 'squash', deleteSourceBranch: true });
+  assert.match(patchBody ?? '', /"deleteSourceBranch":true/);
+});
+
+test('mergePullRequest: no lastMergeSourceCommit yet (still computing) throws a clear message instead of PATCHing garbage', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async () => jsonResponse({})) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.mergePullRequest(REPO, 62, { strategy: 'merge', deleteSourceBranch: false }),
+    /hasn't finished computing this pull request's mergeability yet/,
+  );
+});
+
+test('mergePullRequest: a rejected completion PATCH throws with the real HTTP status', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (_url: string, init?: RequestInit) => {
+    if (!init?.method) {
+      return jsonResponse({ lastMergeSourceCommit: { commitId: 'abc123' } });
+    }
+    return jsonResponse({}, false);
+  }) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.mergePullRequest(REPO, 63, { strategy: 'merge', deleteSourceBranch: false }),
+    /401 Unauthorized from dev\.azure\.com/,
+  );
+});
+
 test('getPullRequestDiff: no diff text is available — returns changed files (leading slash stripped) with 0/0 stats, not fabricated numbers', async () => {
   const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
     if (url.includes('/iterations?api-version')) {

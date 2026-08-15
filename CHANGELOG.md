@@ -6,6 +6,10 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+### Added
+
+- **Launchpad: Merge PR** — a Merge action on every "Ready to Merge" card, across all four supported hosts. Prompts for a merge strategy (Merge / Squash and merge / Rebase and merge, filtered to what the PR's host actually supports) and lets you also delete the source branch, then confirms before merging. GitLab and Bitbucket have no true "rebase and merge" of their own, so that option simply doesn't appear for them.
+
 ### Changed
 
 - Commit Details now shows the repo's most recent commit as soon as the tab is revealed, instead of an empty "select a commit" placeholder, matching Commit Graph's existing behavior.

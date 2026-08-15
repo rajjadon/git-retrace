@@ -1,6 +1,6 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import type { CheckStatus, ConversationThread, ForgeRepoRef, MergeOptions, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
 import { describeErrorBody } from './httpError';
 
 /** Fetches up to 100 review threads and each one's first comment — enough to identify and resolve a conversation without paginating replies nobody asked to see. */
@@ -259,6 +259,30 @@ export class GitHubClient implements ForgeClient {
   /** `resolveReviewThread` — the GraphQL mutation counterpart to `reviewThreads`; same reasoning as `listConversationThreads` for why this isn't a REST call. */
   async resolveConversationThread(_repo: ForgeRepoRef, _number: number, threadId: string): Promise<void> {
     await this.graphql(RESOLVE_REVIEW_THREAD_MUTATION, { threadId });
+  }
+
+  /** `merge_method` maps directly to GitHub's own three strategies. Deleting the source branch is a separate call — GitHub's merge endpoint has no option for it — so it only fetches the head ref (one extra GET) when actually requested. */
+  async mergePullRequest(repo: ForgeRepoRef, number: number, options: MergeOptions): Promise<void> {
+    await this.request(`/repos/${repo.identity}/pulls/${number}/merge`, {
+      method: 'PUT',
+      body: JSON.stringify({ merge_method: options.strategy }),
+    });
+    if (options.deleteSourceBranch) {
+      const branch = await this.fetchHeadBranch(repo, number);
+      if (branch) {
+        await this.request(`/repos/${repo.identity}/git/refs/heads/${encodeURIComponent(branch)}`, { method: 'DELETE' });
+      }
+    }
+  }
+
+  /** Best-effort: if this fails, the merge itself already succeeded, so the caller just keeps the source branch around rather than failing an otherwise-successful merge over branch cleanup. */
+  private async fetchHeadBranch(repo: ForgeRepoRef, number: number): Promise<string | undefined> {
+    const res = await this.requestOrNull(`/repos/${repo.identity}/pulls/${number}`);
+    if (!res) {
+      return undefined;
+    }
+    const data = (await res.json()) as { head?: { ref?: string } };
+    return data.head?.ref;
   }
 
   private async enrich(repo: ForgeRepoRef, pull: GitHubPull): Promise<PullRequestSummary> {

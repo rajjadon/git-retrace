@@ -298,6 +298,40 @@ test('reopenPullRequest: PUTs state_event=reopen to the merge request endpoint',
   assert.equal(capturedInit?.body, JSON.stringify({ state_event: 'reopen' }));
 });
 
+test('mergePullRequest: PUTs squash=false for the "merge" strategy, carrying deleteSourceBranch through', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.mergePullRequest(REPO, 24, { strategy: 'merge', deleteSourceBranch: true });
+  assert.equal(capturedUrl, 'https://gitlab.com/api/v4/projects/acme%2Fwidgets/merge_requests/24/merge');
+  assert.equal(capturedInit?.method, 'PUT');
+  assert.equal(capturedInit?.body, JSON.stringify({ squash: false, should_remove_source_branch: true }));
+});
+
+test('mergePullRequest: PUTs squash=true for the "squash" strategy', async () => {
+  let capturedInit: RequestInit | undefined;
+  const client = new GitLabClient(BASE, 'tok', (async (_url: string, init?: RequestInit) => {
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.mergePullRequest(REPO, 25, { strategy: 'squash', deleteSourceBranch: false });
+  assert.equal(capturedInit?.body, JSON.stringify({ squash: true, should_remove_source_branch: false }));
+});
+
+test('mergePullRequest: "rebase" throws a platform-gap error — GitLab has no distinct rebase-and-merge request', async () => {
+  const client = new GitLabClient(BASE, 'tok', (async () => {
+    throw new Error('should never call the network for this');
+  }) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.mergePullRequest(REPO, 26, { strategy: 'rebase', deleteSourceBranch: false }),
+    /GitLab has no separate "rebase and merge" request/,
+  );
+});
+
 test('getPullRequestDiff: synthesizes a diff --git header per file so the shared renderer can split it, and counts +/- lines itself', async () => {
   const client = new GitLabClient(
     BASE,

@@ -2,7 +2,7 @@ import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
 import { splitAzureDevOpsIdentity } from './azureDevOpsIdentity';
 import { describeErrorBody } from './httpError';
-import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import type { CheckStatus, ConversationThread, ForgeRepoRef, MergeOptions, MergeStrategy, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
 
 interface AzureDevOpsIdentityRef {
   uniqueName?: string;
@@ -72,6 +72,13 @@ interface AzureDevOpsThread {
 }
 
 const UNRESOLVED_STATUSES = new Set<AzureDevOpsThreadStatus | undefined>(['active', 'pending', 'unknown', undefined]);
+
+/** Azure DevOps' own completion-option strategy names, one per `MergeStrategy` — `'merge'` maps to `noFastForward` (a real merge commit, its closest match to GitHub's plain "Merge"), and `'rebase'` maps to `rebase` (not `rebaseMerge`, which still leaves a merge commit — GitHub's "Rebase and merge" has none). */
+const AZURE_MERGE_STRATEGY: Record<MergeStrategy, string> = {
+  merge: 'noFastForward',
+  squash: 'squash',
+  rebase: 'rebase',
+};
 
 function loginOf(ref: AzureDevOpsIdentityRef): string {
   return ref.uniqueName ?? ref.displayName ?? '';
@@ -343,6 +350,36 @@ export class AzureDevOpsClient implements ForgeClient {
     await this.request(`${base}/pullrequests/${number}/threads/${threadId}?api-version=7.1`, {
       method: 'PATCH',
       body: JSON.stringify({ status: 'fixed' }),
+    });
+  }
+
+  /**
+   * Azure DevOps requires the PR's current head commit in the completion request
+   * (`lastMergeSourceCommit.commitId`) — not carried through `PullRequestSummary`, so this re-fetches
+   * it fresh immediately before completing, the same "don't trust board-refresh-time data for a
+   * mutating call" precedent as `getPullRequestDiff`.
+   */
+  async mergePullRequest(repo: ForgeRepoRef, number: number, options: MergeOptions): Promise<void> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      throw new Error('could not resolve this repo\'s Azure DevOps organization/project/repository identity');
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    const prRes = await this.request(`${base}/pullrequests/${number}?api-version=7.1`);
+    const pr = (await prRes.json()) as AzureDevOpsPullRequest;
+    if (!pr.lastMergeSourceCommit?.commitId) {
+      throw new Error("Azure DevOps hasn't finished computing this pull request's mergeability yet — try again in a moment");
+    }
+    await this.request(`${base}/pullrequests/${number}?api-version=7.1`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        status: 'completed',
+        lastMergeSourceCommit: { commitId: pr.lastMergeSourceCommit.commitId },
+        completionOptions: {
+          mergeStrategy: AZURE_MERGE_STRATEGY[options.strategy],
+          deleteSourceBranch: options.deleteSourceBranch,
+        },
+      }),
     });
   }
 

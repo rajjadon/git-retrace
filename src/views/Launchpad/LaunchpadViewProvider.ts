@@ -8,9 +8,11 @@ import { detectForgeHost, type DetectedForgeHost, type ForgeHostConfig } from '.
 import type { ForgeClient } from '../../core/forge/ForgeClient';
 import { resolveForgeRepoRef } from '../../core/forge/resolveRepoRef';
 import {
+  MERGE_STRATEGIES_BY_HOST,
   pullRequestKey,
   type CategorizedPullRequest,
   type ForgeRepoRef,
+  type MergeStrategy,
   type PullRequestSummary,
   type ReviewSubmission,
 } from '../../core/forge/types';
@@ -20,6 +22,13 @@ import { renderPlaceholderHtml } from '../placeholder';
 import { COMMANDS, CONFIG, MEDIA, SYNC_TERMINAL_NAME, VIEWS } from '../../constants';
 
 const SNOOZE_STATE_KEY = 'gitLore.launchpad.snoozed';
+
+/** Labels/descriptions for the merge-strategy QuickPick, one per `MergeStrategy` — filtered per host via `MERGE_STRATEGIES_BY_HOST` before it's ever shown, so a host never offers a strategy it can't actually perform. */
+const STRATEGY_QUICK_PICK_LABELS: Record<MergeStrategy, { label: string; description: string }> = {
+  merge: { label: 'Merge', description: 'Create a merge commit' },
+  squash: { label: 'Squash and merge', description: 'Combine all commits into one' },
+  rebase: { label: 'Rebase and merge', description: 'Replay commits onto the base — no merge commit' },
+};
 
 function createNonce(): string {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -297,6 +306,10 @@ export class LaunchpadViewProvider implements vscode.Disposable {
       await this.reopenPullRequest(key, typeof title === 'string' ? title : key);
       return;
     }
+    if (type === 'mergePr' && typeof key === 'string') {
+      await this.mergePullRequest(key, typeof title === 'string' ? title : key);
+      return;
+    }
     if (type === 'submitReview' && typeof key === 'string' && (decision === 'approve' || decision === 'requestChanges')) {
       await this.submitReview(key, typeof title === 'string' ? title : key, decision);
       return;
@@ -421,6 +434,64 @@ export class LaunchpadViewProvider implements vscode.Disposable {
       return;
     }
     await client.reopenPullRequest(pr.repo, pr.number);
+    await this.refresh(false);
+  }
+
+  /**
+   * A QuickPick for the strategy (filtered to what this PR's host actually supports), then one
+   * modal confirm with two buttons — "Merge" and "Merge & Delete Branch" — rather than a third,
+   * separate prompt for the delete-branch choice. Escaping either prompt aborts without calling
+   * the host at all, same as every other confirmed Launchpad action.
+   */
+  private async mergePullRequest(key: string, title: string): Promise<void> {
+    const pr = this.prsByKey.get(key);
+    if (!pr) {
+      return;
+    }
+    const strategy = await this.pickMergeStrategy(pr);
+    if (!strategy) {
+      return;
+    }
+    const confirmed = await vscode.window.showWarningMessage(
+      `Merge "${title}" on ${pr.repo.label}? This can't be undone.`,
+      { modal: true },
+      'Merge',
+      'Merge & Delete Branch',
+    );
+    if (confirmed !== 'Merge' && confirmed !== 'Merge & Delete Branch') {
+      return;
+    }
+    const client = this.clientsByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    if (!client) {
+      return;
+    }
+    try {
+      await client.mergePullRequest(pr.repo, pr.number, { strategy, deleteSourceBranch: confirmed === 'Merge & Delete Branch' });
+      await this.refresh(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`Launchpad failed to merge PR ${key}`, err);
+      void vscode.window.showErrorMessage(`GitLore: couldn't merge the PR — ${message}`);
+    }
+  }
+
+  private async pickMergeStrategy(pr: PullRequestSummary): Promise<MergeStrategy | undefined> {
+    const items = MERGE_STRATEGIES_BY_HOST[pr.repo.host].map((strategy) => ({ ...STRATEGY_QUICK_PICK_LABELS[strategy], strategy }));
+    const picked = await vscode.window.showQuickPick(items, { placeHolder: 'How should this pull request be merged?' });
+    return picked?.strategy;
+  }
+
+  /** Test-only introspection seam — the merge QuickPick and confirmation modal can't be driven from an integration test, so this calls the merge flow directly with a fixed strategy/delete choice, skipping both prompts. */
+  async mergePullRequestForTest(key: string, strategy: MergeStrategy, deleteSourceBranch: boolean): Promise<void> {
+    const pr = this.prsByKey.get(key);
+    if (!pr) {
+      return;
+    }
+    const client = this.clientsByRepoKey.get(`${pr.repo.host}:${pr.repo.identity}`);
+    if (!client) {
+      return;
+    }
+    await client.mergePullRequest(pr.repo, pr.number, { strategy, deleteSourceBranch });
     await this.refresh(false);
   }
 

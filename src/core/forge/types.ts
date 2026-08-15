@@ -12,6 +12,30 @@ export type ReviewDecision = 'approved' | 'changesRequested' | 'reviewRequired' 
 /** A review decision the user is submitting — the write-side counterpart to `ReviewDecision`, which only ever describes a PR's already-settled state. */
 export type ReviewSubmission = 'approve' | 'requestChanges';
 
+/** A merge strategy for `ForgeClient.mergePullRequest` — see `MERGE_STRATEGIES_BY_HOST` for which of these each host actually supports. */
+export type MergeStrategy = 'merge' | 'squash' | 'rebase';
+
+/** Options for `ForgeClient.mergePullRequest`. */
+export interface MergeOptions {
+  strategy: MergeStrategy;
+  deleteSourceBranch: boolean;
+}
+
+/**
+ * Which merge strategies each host's API actually supports — the merge QuickPick filters against
+ * this so it never offers an option that would just error. GitLab's merge endpoint only exposes a
+ * `squash` boolean, not a separate "rebase and merge" request; Bitbucket's third strategy
+ * (`fast_forward`) only succeeds when the branch is already fast-forwardable, which isn't the same
+ * capability as GitHub/Azure DevOps' true rebase-and-replay — neither host is credited here with a
+ * `'rebase'` it can't actually do.
+ */
+export const MERGE_STRATEGIES_BY_HOST: Record<ForgeHost, MergeStrategy[]> = {
+  github: ['merge', 'squash', 'rebase'],
+  gitlab: ['merge', 'squash'],
+  bitbucket: ['merge', 'squash'],
+  azureDevOps: ['merge', 'squash', 'rebase'],
+};
+
 /**
  * Identifies one repo on one host. `identity` is opaque and host-specific — "owner/repo" for
  * GitHub/GitLab/Bitbucket, "organization/project/repository" for Azure DevOps (which has no

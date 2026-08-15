@@ -1,6 +1,6 @@
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
-import type { CheckStatus, ConversationThread, ForgeRepoRef, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
+import type { CheckStatus, ConversationThread, ForgeRepoRef, MergeOptions, PullRequestDiff, PullRequestSummary, ReviewDecision, ReviewSubmission } from './types';
 import { describeErrorBody } from './httpError';
 
 interface BitbucketUser {
@@ -221,6 +221,22 @@ export class BitbucketClient implements ForgeClient {
 
   async resolveConversationThread(repo: ForgeRepoRef, number: number, threadId: string): Promise<void> {
     await this.request(`/repositories/${repo.identity}/pullrequests/${number}/comments/${threadId}/resolve`, { method: 'POST' });
+  }
+
+  /** Bitbucket's third merge strategy, `fast_forward`, only succeeds when the branch already fast-forwards cleanly — not the same guarantee as GitHub/Azure DevOps' true rebase-and-replay, so `'rebase'` isn't offered here (see `MERGE_STRATEGIES_BY_HOST`) and throws a clear message if requested anyway. */
+  async mergePullRequest(repo: ForgeRepoRef, number: number, options: MergeOptions): Promise<void> {
+    if (options.strategy === 'rebase') {
+      throw new Error(
+        'Bitbucket has no true rebase-and-merge — its closest option, fast-forward, only works when the branch already fast-forwards cleanly. Use "Merge" or "Squash and merge" instead',
+      );
+    }
+    await this.request(`/repositories/${repo.identity}/pullrequests/${number}/merge`, {
+      method: 'POST',
+      body: JSON.stringify({
+        merge_strategy: options.strategy === 'squash' ? 'squash' : 'merge_commit',
+        close_source_branch: options.deleteSourceBranch,
+      }),
+    });
   }
 
   private async enrich(repo: ForgeRepoRef, pr: BitbucketPullRequest): Promise<PullRequestSummary> {

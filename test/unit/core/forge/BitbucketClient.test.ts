@@ -293,6 +293,40 @@ test('reopenPullRequest: throws a clear platform-gap error — Bitbucket Cloud h
   await assert.rejects(() => client.reopenPullRequest(REPO, 32), /Bitbucket has no way to reopen a declined pull request/);
 });
 
+test('mergePullRequest: POSTs merge_strategy=merge_commit for the "merge" strategy, carrying close_source_branch through', async () => {
+  let capturedUrl: string | undefined;
+  let capturedInit: RequestInit | undefined;
+  const client = new BitbucketClient(BASE, 'tok', (async (url: string, init?: RequestInit) => {
+    capturedUrl = url;
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.mergePullRequest(REPO, 40, { strategy: 'merge', deleteSourceBranch: true });
+  assert.equal(capturedUrl, 'https://api.bitbucket.org/2.0/repositories/acme/widgets/pullrequests/40/merge');
+  assert.equal(capturedInit?.method, 'POST');
+  assert.equal(capturedInit?.body, JSON.stringify({ merge_strategy: 'merge_commit', close_source_branch: true }));
+});
+
+test('mergePullRequest: POSTs merge_strategy=squash for the "squash" strategy', async () => {
+  let capturedInit: RequestInit | undefined;
+  const client = new BitbucketClient(BASE, 'tok', (async (_url: string, init?: RequestInit) => {
+    capturedInit = init;
+    return jsonResponse({});
+  }) as unknown as typeof fetch);
+  await client.mergePullRequest(REPO, 41, { strategy: 'squash', deleteSourceBranch: false });
+  assert.equal(capturedInit?.body, JSON.stringify({ merge_strategy: 'squash', close_source_branch: false }));
+});
+
+test('mergePullRequest: "rebase" throws a platform-gap error — Bitbucket has no true rebase-and-merge', async () => {
+  const client = new BitbucketClient(BASE, 'tok', (async () => {
+    throw new Error('should never call the network for this');
+  }) as unknown as typeof fetch);
+  await assert.rejects(
+    () => client.mergePullRequest(REPO, 42, { strategy: 'rebase', deleteSourceBranch: false }),
+    /Bitbucket has no true rebase-and-merge/,
+  );
+});
+
 test('getPullRequestDiff: fetches raw diff text from /diff and stats from /diffstat', async () => {
   const client = new BitbucketClient(BASE, 'tok', (async (url: string) => {
     if (url.endsWith('/pullrequests/33/diff')) {

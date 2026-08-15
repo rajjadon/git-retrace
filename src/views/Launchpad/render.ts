@@ -8,6 +8,7 @@ import {
   ARROW_UP_ICON,
   AUTHOR_ICON,
   CLOSE_ICON,
+  MERGE_ICON,
   OPEN_CHANGES_ICON,
   REFRESH_ICON,
   REOPEN_ICON,
@@ -69,6 +70,14 @@ function renderCard(pr: PullRequestSummary, now: Date, bucket: LaunchpadBucket):
   // doesn't need its own "is this my own PR" check on top of that.
   // Reopen only makes sense on "closed", never "merged" — no host we support lets a merge be
   // undone through this action.
+  // Merge only appears on a "readyToMerge" card — matching the board's own categorization (already
+  // approved, checks passing, no conflicts) means clicking it never just bounces off a host-side
+  // rejection (branch protection, failing checks) that the card itself already ruled out.
+  const mergeButton =
+    bucket === 'readyToMerge'
+      ? `<button class="pr-card-merge icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Merge PR" aria-label="Merge ${escapeHtml(pr.title)}">${MERGE_ICON}</button>
+`
+      : '';
   const stateActions = isTerminal
     ? bucket === 'closed'
       ? `<button class="pr-card-reopen icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Reopen PR" aria-label="Reopen ${escapeHtml(pr.title)}">${REOPEN_ICON}</button>`
@@ -76,7 +85,7 @@ function renderCard(pr: PullRequestSummary, now: Date, bucket: LaunchpadBucket):
     : `<button class="pr-card-snooze icon-btn" type="button" data-key="${escapeHtml(key)}" data-tooltip="${snoozeTitle} PR" aria-label="${snoozeTitle} ${escapeHtml(pr.title)}">${SNOOZE_ICON}</button>
 <button class="pr-card-approve icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Approve PR" aria-label="Approve ${escapeHtml(pr.title)}">${APPROVE_ICON}</button>
 <button class="pr-card-request-changes icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Request changes on PR" aria-label="Request changes on ${escapeHtml(pr.title)}">${REQUEST_CHANGES_ICON}</button>
-<button class="pr-card-close icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Close PR" aria-label="Close ${escapeHtml(pr.title)}">${CLOSE_ICON}</button>`;
+${mergeButton}<button class="pr-card-close icon-btn" type="button" data-key="${escapeHtml(key)}" data-title="${escapeHtml(pr.title)}" data-tooltip="Close PR" aria-label="Close ${escapeHtml(pr.title)}">${CLOSE_ICON}</button>`;
   const actions = `<div class="pr-card-actions">
 <button class="pr-card-details icon-btn" type="button" data-key="${escapeHtml(key)}" data-tooltip="View PR diff" aria-label="View diff for ${escapeHtml(pr.title)}">${OPEN_CHANGES_ICON}</button>
 ${stateActions}
@@ -193,6 +202,16 @@ for (const btn of document.querySelectorAll('.pr-card-reopen')) {
     e.preventDefault();
     e.stopPropagation();
     vscode.postMessage({ type: 'reopenPr', key: btn.dataset.key, title: btn.dataset.title });
+  });
+}
+
+for (const btn of document.querySelectorAll('.pr-card-merge')) {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Strategy choice and confirmation both happen on the extension side (a real QuickPick and
+    // modal, not this webview's own UI) — this only ever sends the request to merge.
+    vscode.postMessage({ type: 'mergePr', key: btn.dataset.key, title: btn.dataset.title });
   });
 }
 
