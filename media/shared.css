@@ -179,6 +179,14 @@
   margin: 0.75rem;
 }
 
+/* Without this, toggling `.hidden` via JS (the AI summary and comment-post skeletons both do this
+   in place, unlike the full-page loading placeholder) does nothing — an author stylesheet's own
+   `display` on the same element beats the browser's built-in `[hidden] { display: none }` rule at
+   equal specificity. Same fix `.file[hidden]` below already needed for the same reason. */
+.skeleton[hidden] {
+  display: none;
+}
+
 .skeleton-row {
   height: 14px;
   border-radius: var(--gitlore-radius-sm);

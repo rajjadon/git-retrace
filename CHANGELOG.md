@@ -9,6 +9,7 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 ### Fixed
 
 - Every panel's loading and error states (Commit Graph, Commit Details, Branch Comparison, Visual File History, Launchpad, Pull Request Details) now render themed to match VS Code's colors instead of a brief flash of unstyled, unthemed text on every panel open and refresh. Loading now shows a shimmering skeleton instead of "Loading X…" text (still announced to screen readers via `aria-label`), and load failures are announced as an alert. The same shimmer replaces Commit Details' "Generating…" text while an AI commit summary is in flight, and Pull Request Details' "Posting…" text while a comment is being posted.
+- The Commit Details and Pull Request Details loading skeletons could get stuck visible even after the real content (an AI summary, a posted comment) had already loaded, since the skeleton's own CSS never actually hid when toggled off.
 
 ## [1.1.0] - 2026-08-14
 
