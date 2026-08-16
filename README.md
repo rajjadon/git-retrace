@@ -62,7 +62,9 @@ The hover card also has **Compare** / **File History** / **Copy SHA** quick acti
 
 <img src="media/screenshots/commit-graph.png" alt="The GitLore panel showing the commit graph with branch labels, a working-changes row, pull/push badges, and commit details beside it" />
 
-A repo-wide, branch-and-merge-aware graph — not a flat log. Branch, tag and remote-tracking labels are each styled distinctly, uncommitted work is pinned at the top as a **Working Changes** row, and the toolbar lets you scope to one branch, filter by message/author/SHA as you type, and refresh. Arrow keys move the selection; Enter opens the commit.
+A repo-wide, branch-and-merge-aware graph — not a flat log. Branch, tag and remote-tracking labels are each styled distinctly, uncommitted work is pinned at the top as a **Working Changes** row, and the toolbar lets you scope to one branch, filter by message/author/SHA as you type, and refresh. Arrow keys move the selection; Enter opens the commit. It opens scoped to whatever branch you're currently on, not every branch at once, and keeps following you across any checkout — from GitLore, a terminal, or another tool — until you pick a specific branch or **All branches** from the ref picker yourself. Any stash shows as a small chip on the row of the commit it was made from; click it to **Apply** or **Delete**.
+
+Right-click any commit for **Checkout**, **Reset Branch to Here** (soft/mixed/hard), **Revert This Commit**, **Cherry-pick onto Current Branch**, **Create Branch from Commit**, **Tag This Commit**, and **Copy SHA** — no terminal needed to reset, revert, cherry-pick, branch, or tag from history you're already looking at. Reset and Checkout confirm first and can't be undone once accepted; Revert and Cherry-pick run in a real terminal since either can land a conflict you resolve yourself.
 
 Pull and push buttons sit in the toolbar too, badged with how many commits you're behind/ahead of the upstream (hidden when there's no upstream to compare against) — both run in a real terminal, so you see prompts and conflicts instead of them failing silently. The graph also auto-refreshes on any external `git pull`/push/checkout, not just its own buttons.
 
@@ -100,7 +102,7 @@ Off by default (`gitLore.launchpad.enabled`) — it's opt-in, same as AI, since 
 
 <img src="media/screenshots/sidebar-explorer.png" alt="The GitLore Explorer sidebar showing Branches, Remotes, Tags, Stashes, Worktrees, and Contributors sections" />
 
-Branches, Remotes, Tags, Stashes, Worktrees, and Contributors, each a collapsible section, always visible in its own activity bar icon — no command needed to open it. Right-click a branch to **Checkout** or **Compare with Current Branch**; right-click a remote to **Open Remote in Browser**; right-click a stash to **Apply** or **Drop** (with confirmation — it can't be undone).
+Branches, Remotes, Tags, Stashes, Worktrees, and Contributors, each a collapsible section, always visible in its own activity bar icon — no command needed to open it. Right-click a branch to **Checkout**, **Compare with Current Branch**, **Merge into Current Branch**, or **Rebase Current Branch onto This** (the last two run in a real terminal, since either can land a conflict you resolve yourself); right-click a remote to **Open Remote in Browser**; right-click a stash to **Apply** or **Drop** (with confirmation — it can't be undone).
 
 ### File History
 
@@ -182,6 +184,8 @@ Every command is also a title-bar button in the GitLore panel.
 | `GitLore: Rebase Branch Interactively...` | Pick a target ref and start an interactive rebase, opened in GitLore's own editor |
 | `GitLore: Checkout Branch` | Check out the selected branch (from the Explorer's context menu) |
 | `GitLore: Compare with Current Branch` | Open Branch Comparison against the selected branch (from the Explorer's context menu) |
+| `GitLore: Merge into Current Branch` | Merge the selected branch into the current one, in a real terminal (from the Explorer's context menu) |
+| `GitLore: Rebase Current Branch onto This` | Rebase the current branch onto the selected one, in a real terminal (from the Explorer's context menu) |
 | `GitLore: Open Remote in Browser` | Open the selected remote's repo page (from the Explorer's context menu) |
 | `GitLore: Apply Stash` | Re-apply the selected stash without dropping it (from the Explorer's context menu) |
 | `GitLore: Drop Stash` | Permanently delete the selected stash, after confirming (from the Explorer's context menu) |

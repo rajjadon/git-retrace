@@ -5,6 +5,7 @@ import { GitCommandError } from '../core/git/errors';
 import { parseRemoteUrl } from '../core/git/parsers';
 import { buildRepoUrl } from '../utils/remoteLinks';
 import { resolveRepoContextPath } from '../views/CommitGraph/CommitGraphViewProvider';
+import { runInGitSyncTerminal } from '../views/gitSyncTerminal';
 import type { RepoExplorerProvider } from '../providers/RepoExplorerProvider';
 import type { ExplorerLeafNode } from '../core/explorer/buildExplorerTree';
 
@@ -46,6 +47,58 @@ export function handleCompareBranchCommand(git: GitService): vscode.Disposable {
       return;
     }
     await vscode.commands.executeCommand(COMMANDS.compareBranches, currentBranch, node.branch.name);
+  });
+}
+
+/** Runs in the shared Git Sync terminal, not via simple-git — a merge can conflict, and a terminal is where the user resolves one. */
+export function handleMergeBranchCommand(git: GitService): vscode.Disposable {
+  return vscode.commands.registerCommand(COMMANDS.mergeBranchFromExplorer, async (node?: ExplorerLeafNode) => {
+    if (node?.kind !== 'branch') {
+      return;
+    }
+    const filePath = resolveRepoContextPath();
+    if (!filePath) {
+      return;
+    }
+    const confirmed = await vscode.window.showWarningMessage(
+      `Merge '${node.branch.name}' into the current branch? A conflict, if there is one, opens in the terminal for you to resolve.`,
+      { modal: true },
+      'Merge',
+    );
+    if (confirmed !== 'Merge') {
+      return;
+    }
+    const repoRoot = await git.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    runInGitSyncTerminal(repoRoot, `git merge ${node.branch.name}`);
+  });
+}
+
+/** Runs in the shared Git Sync terminal, not via simple-git — a rebase can conflict, and a terminal is where the user resolves one. */
+export function handleRebaseOntoBranchCommand(git: GitService): vscode.Disposable {
+  return vscode.commands.registerCommand(COMMANDS.rebaseOntoBranchFromExplorer, async (node?: ExplorerLeafNode) => {
+    if (node?.kind !== 'branch') {
+      return;
+    }
+    const filePath = resolveRepoContextPath();
+    if (!filePath) {
+      return;
+    }
+    const confirmed = await vscode.window.showWarningMessage(
+      `Rebase the current branch onto '${node.branch.name}'? A conflict, if there is one, opens in the terminal for you to resolve.`,
+      { modal: true },
+      'Rebase',
+    );
+    if (confirmed !== 'Rebase') {
+      return;
+    }
+    const repoRoot = await git.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    runInGitSyncTerminal(repoRoot, `git rebase ${node.branch.name}`);
   });
 }
 

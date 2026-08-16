@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import * as vscode from 'vscode';
 import { buildExplorerFixtureRepo, type ExplorerFixtureManifest } from '../fixtures/build-fixture-repo';
 import type { GitLoreTestApi } from '../../src/extension';
-import { COMMANDS, VIEWS } from '../../src/constants';
+import { COMMANDS, SYNC_TERMINAL_NAME, VIEWS } from '../../src/constants';
 import { EXTENSION_ID } from './extensionId';
 import type { ExplorerLeafNode, ExplorerSectionNode } from '../../src/core/explorer/buildExplorerTree';
 
@@ -61,6 +61,8 @@ suite('Sidebar Explorer', () => {
     for (const id of [
       COMMANDS.checkoutBranch,
       COMMANDS.compareBranchFromExplorer,
+      COMMANDS.mergeBranchFromExplorer,
+      COMMANDS.rebaseOntoBranchFromExplorer,
       COMMANDS.openRemote,
       COMMANDS.applyStash,
       COMMANDS.dropStash,
@@ -178,6 +180,56 @@ suite('Sidebar Explorer', () => {
     await waitFor(() => (api.getBranchComparisonHtml() ?? '').includes('add feature line'));
     const html = api.getBranchComparisonHtml() ?? '';
     assert.match(html, /add feature line/);
+  });
+
+  test('gitLore.mergeBranchFromExplorer opens the shared Git Sync terminal after confirmation', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    const sections = await openExplorerFor(fixture);
+    const branchNode = findBranch(sections, fixture.otherBranch);
+
+    const original = vscode.window.showWarningMessage;
+    (vscode.window as unknown as { showWarningMessage: unknown }).showWarningMessage = async () => 'Merge';
+    try {
+      await vscode.commands.executeCommand(COMMANDS.mergeBranchFromExplorer, branchNode);
+    } finally {
+      (vscode.window as unknown as { showWarningMessage: unknown }).showWarningMessage = original;
+    }
+
+    assert.ok(vscode.window.terminals.some((t) => t.name === SYNC_TERMINAL_NAME));
+  });
+
+  test('gitLore.rebaseOntoBranchFromExplorer opens the shared Git Sync terminal after confirmation', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    const sections = await openExplorerFor(fixture);
+    const branchNode = findBranch(sections, fixture.otherBranch);
+
+    const original = vscode.window.showWarningMessage;
+    (vscode.window as unknown as { showWarningMessage: unknown }).showWarningMessage = async () => 'Rebase';
+    try {
+      await vscode.commands.executeCommand(COMMANDS.rebaseOntoBranchFromExplorer, branchNode);
+    } finally {
+      (vscode.window as unknown as { showWarningMessage: unknown }).showWarningMessage = original;
+    }
+
+    assert.ok(vscode.window.terminals.some((t) => t.name === SYNC_TERMINAL_NAME));
+  });
+
+  test('gitLore.mergeBranchFromExplorer and gitLore.rebaseOntoBranchFromExplorer are no-ops when the confirm dialog is dismissed', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    const sections = await openExplorerFor(fixture);
+    const branchNode = findBranch(sections, fixture.otherBranch);
+    const before = vscode.window.terminals.length;
+
+    const original = vscode.window.showWarningMessage;
+    (vscode.window as unknown as { showWarningMessage: unknown }).showWarningMessage = async () => undefined;
+    try {
+      await vscode.commands.executeCommand(COMMANDS.mergeBranchFromExplorer, branchNode);
+      await vscode.commands.executeCommand(COMMANDS.rebaseOntoBranchFromExplorer, branchNode);
+    } finally {
+      (vscode.window as unknown as { showWarningMessage: unknown }).showWarningMessage = original;
+    }
+
+    assert.equal(vscode.window.terminals.length, before);
   });
 
   test('gitLore.openRemote is a silent no-op when the remote URL cannot be parsed', async () => {

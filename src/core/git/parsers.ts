@@ -450,17 +450,18 @@ export function parseTags(raw: string): TagInfo[] {
     .map((name) => ({ name }));
 }
 
-/** Parses `git stash list --format=%gd<FIELD>%s` output, extracting the numeric index from `stash@{N}` — what `git stash apply/drop` expects. Pure — no I/O. */
+/** Parses `git stash list --format=%gd<FIELD>%s<FIELD>%P` output, extracting the numeric index from `stash@{N}` — what `git stash apply/drop` expects — and the base commit sha, a stash commit's first parent (`%P`'s first token), for placing a stash chip on the matching graph row. Pure — no I/O. */
 export function parseStashes(raw: string): StashInfo[] {
   const stashes: StashInfo[] = [];
   for (const line of raw.split('\n')) {
     if (!line.trim()) {
       continue;
     }
-    const [ref, message] = line.split(LOG_FIELD_SEP);
+    const [ref, message, parentsRaw] = line.split(LOG_FIELD_SEP);
     const match = /stash@\{(\d+)\}/.exec(ref ?? '');
+    const baseSha = (parentsRaw ?? '').split(' ')[0] ?? '';
     if (match?.[1]) {
-      stashes.push({ index: Number(match[1]), message: message ?? '' });
+      stashes.push({ index: Number(match[1]), message: message ?? '', baseSha });
     }
   }
   return stashes;

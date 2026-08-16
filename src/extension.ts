@@ -45,6 +45,8 @@ import { handleRebaseInteractivelyCommand } from './commands/rebaseCommands';
 import {
   handleCheckoutBranchCommand,
   handleCompareBranchCommand,
+  handleMergeBranchCommand,
+  handleRebaseOntoBranchCommand,
   handleOpenRemoteCommand,
   handleApplyStashCommand,
   handleDropStashCommand,
@@ -77,6 +79,8 @@ export interface GitLoreTestApi {
   getCommitDetailsHtml: () => string | undefined;
   getCommitGraphHtml: () => string | undefined;
   loadMoreCommitGraph: () => Promise<void>;
+  commitGraphActionForTest: (action: string, sha: string) => Promise<void>;
+  commitGraphStashActionForTest: (action: 'apply' | 'drop', index: number) => Promise<void>;
   getBranchComparisonHtml: () => string | undefined;
   getVisualFileHistoryHtml: () => string | undefined;
   getRebaseEditorHtml: () => string | undefined;
@@ -171,6 +175,8 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     repoExplorerProvider,
     handleCheckoutBranchCommand(git, repoExplorerProvider),
     handleCompareBranchCommand(git),
+    handleMergeBranchCommand(git),
+    handleRebaseOntoBranchCommand(git),
     handleOpenRemoteCommand(),
     handleApplyStashCommand(git, repoExplorerProvider),
     handleDropStashCommand(git, repoExplorerProvider),
@@ -215,6 +221,8 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     getCommitDetailsHtml: () => commitDetailsViewProvider.getCurrentHtmlForTest(),
     getCommitGraphHtml: () => commitGraphViewProvider.getCurrentHtmlForTest(),
     loadMoreCommitGraph: () => commitGraphViewProvider.loadMore(),
+    commitGraphActionForTest: (action, sha) => commitGraphViewProvider.handleCommitActionForTest(action, sha),
+    commitGraphStashActionForTest: (action, index) => commitGraphViewProvider.handleStashActionForTest(action, index),
     getBranchComparisonHtml: () => branchComparisonViewProvider.getCurrentHtmlForTest(),
     getVisualFileHistoryHtml: () => visualFileHistoryViewProvider.getCurrentHtmlForTest(),
     getRebaseEditorHtml: () => rebaseEditorProvider.getCurrentHtmlForTest(),

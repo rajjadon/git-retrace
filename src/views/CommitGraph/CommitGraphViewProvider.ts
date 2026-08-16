@@ -4,10 +4,17 @@ import { layoutGraph } from '../../core/graph/layout';
 import { renderGraphHtml } from './render';
 import { renderPlaceholderHtml } from '../placeholder';
 import { waitForWebviewView } from '../waitForWebviewView';
-import { COMMANDS, CONFIG, MEDIA, SYNC_TERMINAL_NAME, VIEWS } from '../../constants';
+import { runInGitSyncTerminal } from '../gitSyncTerminal';
+import { COMMANDS, CONFIG, MEDIA, VIEWS } from '../../constants';
 import type { BlameSource } from '../../providers/BlameSource';
+import { GitCommandError } from '../../core/git/errors';
+import type { GraphCommit } from '../../core/git/types';
 
 const DEFAULT_MAX_GRAPH_ITEMS = 200;
+
+function errorMessage(err: unknown): string {
+  return err instanceof GitCommandError ? err.stderr : err instanceof Error ? err.message : String(err);
+}
 
 function createNonce(): string {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -40,7 +47,15 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
   private currentRepoRoot: string | undefined;
   /** Ref the graph is scoped to; empty string means every ref (`--all`). */
   private currentRef = '';
+  // True until the ref picker's dropdown is touched — while true, `currentRef` re-resolves to
+  // whatever branch is actually checked out on every load, so a checkout from a terminal, another
+  // tool, or the graph's own future actions keeps the graph following HEAD. An explicit dropdown
+  // pick (including re-picking the same branch, or "All branches") turns this off for good.
+  private refIsAutoTracking = true;
   private selectedSha: string | undefined;
+  // The last load's commits, kept for the context menu's server-side lookups (e.g. "is this sha a
+  // branch tip") — cheaper than round-tripping ref data through the DOM on every right-click.
+  private currentCommits: GraphCommit[] = [];
   // The cap actually used by the last load — starts at `gitLore.maxGraphItems` and grows each
   // time "Load more" is clicked. A plain refresh (or the HEAD/refs auto-refresh) re-asks with
   // this same cap rather than snapping back to the configured default.
@@ -131,16 +146,24 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
         this.blameSource.watchHeadFor(repoRoot);
       }
 
+      if (this.refIsAutoTracking) {
+        // Detached HEAD or an empty repo leaves this null — falls back to "all branches" rather
+        // than scoping to a branch that doesn't exist.
+        this.currentRef = (await this.git.getCurrentBranch(filePath)) ?? '';
+      }
+
       // One round of parallel git calls, not a waterfall — the graph log dominates, so the
       // branch list and working-tree status ride alongside it for free.
-      const [commits, branches, workingChanges] = await Promise.all([
+      const [commits, branches, workingChanges, stashes] = await Promise.all([
         this.git.getGraphCommits(filePath, maxCount, this.currentRef || undefined),
         this.git.getBranches(filePath),
         this.git.getWorkingChanges(filePath),
+        this.git.getStashes(filePath),
       ]);
       if (generation !== this.loadGeneration || !this.view) {
         return;
       }
+      this.currentCommits = commits;
       const nodes = layoutGraph(commits);
       // A signal, not a guarantee: `git log -n <cap>` can't distinguish "exactly cap commits
       // total" from "more than cap". "Load more" re-asking with a higher cap resolves either way.
@@ -150,6 +173,7 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
           nodes,
           branches,
           workingChanges,
+          stashes,
           currentRef: this.currentRef,
           selectedSha: this.selectedSha,
           hasMore,
@@ -190,11 +214,187 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
     }
   }
 
+  /** Test-only introspection seam — a right-click + menu-item click can't be simulated in an integration test. */
+  async handleCommitActionForTest(action: string, sha: string): Promise<void> {
+    await this.handleCommitAction(action, sha);
+  }
+
+  private async handleCommitAction(action: string, sha: string): Promise<void> {
+    const filePath = this.currentFilePath;
+    const repoRoot = this.currentRepoRoot;
+    if (!filePath || !repoRoot) {
+      return;
+    }
+
+    if (action === 'copySha') {
+      await vscode.commands.executeCommand(COMMANDS.copySha, sha);
+      return;
+    }
+
+    if (action === 'checkout') {
+      const commit = this.currentCommits.find((c) => c.sha === sha);
+      const branchRef = commit?.refs.find((r) => r.type === 'branch');
+      const target = branchRef?.name ?? sha;
+      if (!branchRef) {
+        const confirmed = await vscode.window.showWarningMessage(
+          `Checkout commit ${sha.slice(0, 7)}? This detaches HEAD — you won't be on a branch.`,
+          { modal: true },
+          'Checkout',
+        );
+        if (confirmed !== 'Checkout') {
+          return;
+        }
+      }
+      try {
+        await this.git.checkoutBranch(filePath, target);
+      } catch (err) {
+        void vscode.window.showErrorMessage(`GitLore: couldn't checkout — ${errorMessage(err)}`);
+      }
+      return;
+    }
+
+    if (action === 'reset') {
+      const modes = [
+        { label: 'Soft', description: 'Keep changes staged', mode: 'soft' as const },
+        { label: 'Mixed', description: 'Keep changes, unstaged', mode: 'mixed' as const },
+        { label: 'Hard', description: "Discard all changes — can't be undone", mode: 'hard' as const },
+      ];
+      const picked = await vscode.window.showQuickPick(modes, { placeHolder: 'How should the branch be reset to this commit?' });
+      if (!picked) {
+        return;
+      }
+      const confirmed = await vscode.window.showWarningMessage(
+        picked.mode === 'hard'
+          ? `Hard reset the current branch to ${sha.slice(0, 7)}? This discards uncommitted changes and can't be undone.`
+          : `Reset the current branch to ${sha.slice(0, 7)} (--${picked.mode})?`,
+        { modal: true },
+        'Reset',
+      );
+      if (confirmed !== 'Reset') {
+        return;
+      }
+      try {
+        await this.git.resetTo(filePath, sha, picked.mode);
+      } catch (err) {
+        void vscode.window.showErrorMessage(`GitLore: couldn't reset — ${errorMessage(err)}`);
+      }
+      return;
+    }
+
+    if (action === 'revert') {
+      const confirmed = await vscode.window.showWarningMessage(
+        `Revert commit ${sha.slice(0, 7)}? A conflict, if there is one, opens in the terminal for you to resolve.`,
+        { modal: true },
+        'Revert',
+      );
+      if (confirmed !== 'Revert') {
+        return;
+      }
+      runInGitSyncTerminal(repoRoot, `git revert ${sha}`);
+      return;
+    }
+
+    if (action === 'cherryPick') {
+      const confirmed = await vscode.window.showWarningMessage(
+        `Cherry-pick commit ${sha.slice(0, 7)} onto the current branch? A conflict, if there is one, opens in the terminal for you to resolve.`,
+        { modal: true },
+        'Cherry-pick',
+      );
+      if (confirmed !== 'Cherry-pick') {
+        return;
+      }
+      runInGitSyncTerminal(repoRoot, `git cherry-pick ${sha}`);
+      return;
+    }
+
+    if (action === 'createBranch') {
+      const name = await vscode.window.showInputBox({ prompt: 'New branch name', placeHolder: 'feature/my-branch' });
+      if (!name) {
+        return;
+      }
+      try {
+        await this.git.createBranch(filePath, name, sha);
+      } catch (err) {
+        void vscode.window.showErrorMessage(`GitLore: couldn't create branch — ${errorMessage(err)}`);
+      }
+      return;
+    }
+
+    if (action === 'tag') {
+      const name = await vscode.window.showInputBox({ prompt: 'New tag name', placeHolder: 'v1.2.0' });
+      if (!name) {
+        return;
+      }
+      try {
+        await this.git.createTag(filePath, name, sha);
+      } catch (err) {
+        void vscode.window.showErrorMessage(`GitLore: couldn't create tag — ${errorMessage(err)}`);
+      }
+      return;
+    }
+  }
+
+  /** Test-only introspection seam — a stash chip's click-then-QuickPick can't be simulated in an integration test. */
+  async handleStashActionForTest(action: 'apply' | 'drop', index: number): Promise<void> {
+    await this.handleStashAction(action, index);
+  }
+
+  private async handleStashAction(action: 'apply' | 'drop', index: number): Promise<void> {
+    const filePath = this.currentFilePath;
+    if (!filePath) {
+      return;
+    }
+    if (action === 'apply') {
+      try {
+        await this.git.applyStash(filePath, index);
+        await this.reload();
+      } catch (err) {
+        void vscode.window.showErrorMessage(`GitLore: couldn't apply stash — ${errorMessage(err)}`);
+      }
+      return;
+    }
+    const confirmed = await vscode.window.showWarningMessage(`Delete stash@{${index}}? This can't be undone.`, { modal: true }, 'Delete');
+    if (confirmed !== 'Delete') {
+      return;
+    }
+    try {
+      await this.git.dropStash(filePath, index);
+      await this.reload();
+    } catch (err) {
+      void vscode.window.showErrorMessage(`GitLore: couldn't drop stash — ${errorMessage(err)}`);
+    }
+  }
+
   private async handleMessage(message: unknown): Promise<void> {
     if (typeof message !== 'object' || message === null) {
       return;
     }
-    const { type, sha, ref } = message as { type?: unknown; sha?: unknown; ref?: unknown };
+    const { type, sha, ref, action, index } = message as {
+      type?: unknown;
+      sha?: unknown;
+      ref?: unknown;
+      action?: unknown;
+      index?: unknown;
+    };
+
+    if (type === 'commitAction' && typeof action === 'string' && typeof sha === 'string') {
+      await this.handleCommitAction(action, sha);
+      return;
+    }
+
+    if (type === 'stashClick' && typeof index === 'number') {
+      const picked = await vscode.window.showQuickPick(
+        [
+          { label: 'Apply Stash', action: 'apply' as const },
+          { label: 'Delete Stash', action: 'drop' as const },
+        ],
+        { placeHolder: `stash@{${index}}` },
+      );
+      if (picked) {
+        await this.handleStashAction(picked.action, index);
+      }
+      return;
+    }
 
     if (type === 'openCommit' && typeof sha === 'string' && this.currentFilePath) {
       // Remembered so a later refresh re-renders with the same row still selected.
@@ -209,6 +409,7 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
       return;
     }
     if (type === 'setRef' && typeof ref === 'string') {
+      this.refIsAutoTracking = false;
       this.currentRef = ref;
       // A different scope is a fresh view — starts back at the configured cap rather than
       // carrying over a "Load more" expansion made under the previous ref.
@@ -230,11 +431,7 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
       // is where the user can actually see and handle either. The graph doesn't need its own
       // "did it finish" tracking either: the HEAD/refs watcher wired in the constructor picks up
       // the result the moment the command actually changes something.
-      const terminal =
-        vscode.window.terminals.find((t) => t.name === SYNC_TERMINAL_NAME) ??
-        vscode.window.createTerminal({ name: SYNC_TERMINAL_NAME, cwd: this.currentRepoRoot });
-      terminal.show();
-      terminal.sendText(type === 'pull' ? 'git pull' : 'git push');
+      runInGitSyncTerminal(this.currentRepoRoot, type === 'pull' ? 'git pull' : 'git push');
     }
   }
 }

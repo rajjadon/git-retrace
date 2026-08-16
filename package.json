@@ -115,6 +115,16 @@
         "icon": "$(git-compare)"
       },
       {
+        "command": "gitLore.mergeBranchFromExplorer",
+        "title": "GitLore: Merge into Current Branch",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "gitLore.rebaseOntoBranchFromExplorer",
+        "title": "GitLore: Rebase Current Branch onto This",
+        "icon": "$(git-branch)"
+      },
+      {
         "command": "gitLore.openRemote",
         "title": "GitLore: Open Remote in Browser",
         "icon": "$(link-external)"
@@ -271,6 +281,14 @@
           "when": "view == gitLore.explorer && (viewItem == gitLore.branch || viewItem == gitLore.branch.remote)"
         },
         {
+          "command": "gitLore.mergeBranchFromExplorer",
+          "when": "view == gitLore.explorer && (viewItem == gitLore.branch || viewItem == gitLore.branch.remote)"
+        },
+        {
+          "command": "gitLore.rebaseOntoBranchFromExplorer",
+          "when": "view == gitLore.explorer && (viewItem == gitLore.branch || viewItem == gitLore.branch.remote)"
+        },
+        {
           "command": "gitLore.openRemote",
           "when": "view == gitLore.explorer && viewItem == gitLore.remote",
           "group": "inline"
@@ -378,6 +396,14 @@
         },
         {
           "command": "gitLore.compareBranchFromExplorer",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.mergeBranchFromExplorer",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.rebaseOntoBranchFromExplorer",
           "when": "false"
         },
         {

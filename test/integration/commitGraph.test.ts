@@ -2,7 +2,7 @@ import * as assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import * as vscode from 'vscode';
-import { MANIFEST_PATH, type FixtureManifest, buildSyncFixtureRepo } from '../fixtures/build-fixture-repo';
+import { MANIFEST_PATH, type FixtureManifest, buildSyncFixtureRepo, buildExplorerFixtureRepo } from '../fixtures/build-fixture-repo';
 import type { GitLoreTestApi } from '../../src/extension';
 import { COMMANDS } from '../../src/constants';
 import { resolveRepoContextPath } from '../../src/views/CommitGraph/CommitGraphViewProvider';
@@ -88,11 +88,12 @@ suite('Commit graph webview', () => {
     assert.match(html, /class="stat-add" title="1 added">\+1</);
   });
 
-  test('lists the repo\'s branches in the ref picker, defaulting to all of them', async () => {
+  test('lists the repo\'s branches in the ref picker, defaulting to the current branch', async () => {
     const html = await openGraph();
-    // No ref filter is applied on load, so "All branches" is the selected option — not merely present.
-    assert.match(html, /<option value="" selected>All branches<\/option>/);
-    assert.match(html, /<option value="main">main \(current\)<\/option>/);
+    // The current branch is selected on first load, not "All branches" — the common case is
+    // "what have I been doing", not the whole repo's history across every branch.
+    assert.match(html, /<option value="main" selected>main \(current\)<\/option>/);
+    assert.match(html, /<option value="">All branches<\/option>/);
   });
 
   test('falls back to the workspace folder when no editor is open, instead of refusing to open', async () => {
@@ -158,5 +159,159 @@ suite('Commit graph webview', () => {
     } finally {
       await config.update('maxGraphItems', undefined, vscode.ConfigurationTarget.Global);
     }
+  });
+});
+
+suite('Commit graph context menu actions', () => {
+  let api: GitLoreTestApi;
+
+  suiteSetup(async () => {
+    const ext = vscode.extensions.getExtension<GitLoreTestApi>(EXTENSION_ID);
+    assert.ok(ext, 'extension not found');
+    api = await ext.activate();
+  });
+
+
+  test('defaults the graph to the current branch, and follows a checkout done outside GitLore', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    execFileSync('git', ['checkout', '-q', fixture.otherBranch], { cwd: fixture.repoRoot });
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand(COMMANDS.openGraph);
+    await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('add feature line'));
+    assert.match(api.getCommitGraphHtml() ?? '', new RegExp(`ref-head" title="${fixture.otherBranch} \\(current\\)"`));
+  });
+
+  test('places a stash chip on the row of the commit it was based on', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand(COMMANDS.openGraph);
+    await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('base commit'));
+    assert.match(api.getCommitGraphHtml() ?? '', new RegExp(`data-stash-index="0"[\\s\\S]*?${fixture.stashMessage}`));
+  });
+
+  test('"Checkout" on a commit decorated with another branch switches to that branch', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    execFileSync('git', ['checkout', '-q', fixture.otherBranch], { cwd: fixture.repoRoot });
+    const baseSha = execFileSync('git', ['rev-parse', fixture.currentBranch], { cwd: fixture.repoRoot }).toString().trim();
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand(COMMANDS.openGraph);
+    await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('add feature line'));
+
+    await api.commitGraphActionForTest('checkout', baseSha);
+    assert.equal(await api.git.getCurrentBranch(fixture.trackedFile), fixture.currentBranch);
+  });
+
+  test('"Reset Branch to Here" moves HEAD after a QuickPick mode choice and a confirm', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    const baseSha = execFileSync('git', ['rev-parse', fixture.currentBranch], { cwd: fixture.repoRoot }).toString().trim();
+    // Advance main one commit past base, so the reset target actually moves HEAD back.
+    execFileSync('git', ['commit', '--allow-empty', '-q', '-m', 'second commit'], { cwd: fixture.repoRoot });
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand(COMMANDS.openGraph);
+    await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('second commit'));
+
+    const originalQuickPick = vscode.window.showQuickPick;
+    const originalWarning = vscode.window.showWarningMessage;
+    (vscode.window as unknown as { showQuickPick: unknown }).showQuickPick = async () => ({ label: 'Mixed', mode: 'mixed' });
+    (vscode.window as unknown as { showWarningMessage: unknown }).showWarningMessage = async () => 'Reset';
+    try {
+      await api.commitGraphActionForTest('reset', baseSha);
+    } finally {
+      (vscode.window as unknown as { showQuickPick: unknown }).showQuickPick = originalQuickPick;
+      (vscode.window as unknown as { showWarningMessage: unknown }).showWarningMessage = originalWarning;
+    }
+
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: fixture.repoRoot }).toString().trim();
+    assert.equal(head, baseSha);
+  });
+
+  test('"Create Branch from Commit" creates a branch at the given sha after an input box', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    const baseSha = execFileSync('git', ['rev-parse', fixture.currentBranch], { cwd: fixture.repoRoot }).toString().trim();
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand(COMMANDS.openGraph);
+    await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('base commit'));
+
+    const originalInputBox = vscode.window.showInputBox;
+    (vscode.window as unknown as { showInputBox: unknown }).showInputBox = async () => 'from-graph';
+    try {
+      await api.commitGraphActionForTest('createBranch', baseSha);
+    } finally {
+      (vscode.window as unknown as { showInputBox: unknown }).showInputBox = originalInputBox;
+    }
+
+    const branches = await api.git.getBranches(fixture.trackedFile);
+    const created = branches.find((b) => b.name === 'from-graph');
+    assert.ok(created, 'expected the new branch to exist');
+    assert.equal(execFileSync('git', ['rev-parse', 'from-graph'], { cwd: fixture.repoRoot }).toString().trim(), baseSha);
+  });
+
+  test('"Tag This Commit" creates a tag at the given sha after an input box', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    const baseSha = execFileSync('git', ['rev-parse', fixture.currentBranch], { cwd: fixture.repoRoot }).toString().trim();
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand(COMMANDS.openGraph);
+    await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('base commit'));
+
+    const originalInputBox = vscode.window.showInputBox;
+    (vscode.window as unknown as { showInputBox: unknown }).showInputBox = async () => 'v2.0.0-graph';
+    try {
+      await api.commitGraphActionForTest('tag', baseSha);
+    } finally {
+      (vscode.window as unknown as { showInputBox: unknown }).showInputBox = originalInputBox;
+    }
+
+    const tags = await api.git.getTags(fixture.trackedFile);
+    assert.ok(tags.some((t) => t.name === 'v2.0.0-graph'));
+  });
+
+  test('"Copy SHA" copies the exact sha to the clipboard', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand(COMMANDS.openGraph);
+    await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('base commit'));
+
+    await api.commitGraphActionForTest('copySha', 'deadbeefcafe1234');
+    assert.equal(await vscode.env.clipboard.readText(), 'deadbeefcafe1234');
+  });
+
+  test('stash chip: Apply keeps the stash and restores the uncommitted change', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand(COMMANDS.openGraph);
+    await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('base commit'));
+
+    await api.commitGraphStashActionForTest('apply', 0);
+
+    assert.ok(readFileSync(fixture.trackedFile, 'utf8').includes('uncommitted change'));
+    const stashesAfter = await api.git.getStashes(fixture.trackedFile);
+    assert.equal(stashesAfter.length, 1, 'apply must not drop the stash');
+  });
+
+  test('stash chip: Delete requires confirmation and then removes the stash', async () => {
+    const fixture = buildExplorerFixtureRepo();
+    const doc = await vscode.workspace.openTextDocument(fixture.trackedFile);
+    await vscode.window.showTextDocument(doc);
+    await vscode.commands.executeCommand(COMMANDS.openGraph);
+    await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('base commit'));
+
+    const original = vscode.window.showWarningMessage;
+    (vscode.window as unknown as { showWarningMessage: unknown }).showWarningMessage = async () => 'Delete';
+    try {
+      await api.commitGraphStashActionForTest('drop', 0);
+    } finally {
+      (vscode.window as unknown as { showWarningMessage: unknown }).showWarningMessage = original;
+    }
+
+    const stashesAfter = await api.git.getStashes(fixture.trackedFile);
+    assert.equal(stashesAfter.length, 0);
   });
 });

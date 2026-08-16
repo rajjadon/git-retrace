@@ -100,6 +100,8 @@ export interface StashInfo {
   /** The `N` in `stash@{N}` — what `git stash apply/drop` expects. */
   index: number;
   message: string;
+  /** The commit HEAD pointed at when the stash was made — a stash commit's first parent. Used to place a stash chip on the matching row in the commit graph. */
+  baseSha: string;
 }
 
 export interface WorktreeInfo {

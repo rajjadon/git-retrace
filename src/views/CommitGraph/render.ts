@@ -1,5 +1,5 @@
 import type { GraphNode } from '../../core/graph/layout';
-import type { BranchInfo, Ref, WorkingChanges } from '../../core/git/types';
+import type { BranchInfo, Ref, StashInfo, WorkingChanges } from '../../core/git/types';
 import { formatAge, formatAbsolute } from '../../utils/date';
 import { escapeHtml } from '../escapeHtml';
 import { buildGravatarUrl } from '../../utils/gravatar';
@@ -16,6 +16,7 @@ import {
   REFRESH_ICON,
   REMOTE_ICON,
   SEARCH_ICON,
+  STASH_ICON,
   TAG_ICON,
 } from '../icons';
 
@@ -34,6 +35,8 @@ export interface GraphData {
   currentRef?: string;
   /** Uncommitted work, rendered as a pinned row above the newest commit when non-empty. */
   workingChanges?: WorkingChanges;
+  /** Every stash, placed as a chip on the row of its base commit (a stash's first parent). */
+  stashes?: StashInfo[];
   /** Row to mark selected on load, so a refresh doesn't lose the user's place. */
   selectedSha?: string;
   /** True when the last load returned exactly `maxGraphItems` commits — there may be more past the cap. */
@@ -150,6 +153,10 @@ function renderRefs(refs: Ref[]): string {
   return `${visible}<span class="ref ref-more" title="${title}">+${hidden.length}</span>`;
 }
 
+function renderStashChip(stash: StashInfo): string {
+  return `<span class="ref ref-stash" role="button" tabindex="0" data-stash-index="${stash.index}" title="${escapeHtml(stash.message)}">${STASH_ICON}<span class="ref-name">stash@{${stash.index}}</span></span>`;
+}
+
 function maxLane(nodes: GraphNode[]): number {
   let max = 0;
   for (const node of nodes) {
@@ -223,7 +230,13 @@ function renderWorkingChangesRow(changes: WorkingChanges, svgWidth: number, tabb
 
 /** Builds the commit graph webview's full HTML document. Pure — nonce/cspSource/styleUris come from the caller, so this is unit-testable without a real webview host. */
 export function renderGraphHtml(data: GraphData, opts: RenderGraphOptions): string {
-  const { nodes, branches = [], currentRef = '', workingChanges, selectedSha, hasMore = false } = data;
+  const { nodes, branches = [], currentRef = '', workingChanges, stashes = [], selectedSha, hasMore = false } = data;
+  const stashesByBase = new Map<string, StashInfo[]>();
+  for (const stash of stashes) {
+    const list = stashesByBase.get(stash.baseSha) ?? [];
+    list.push(stash);
+    stashesByBase.set(stash.baseSha, list);
+  }
   const now = data.now ?? new Date();
   const styles = opts.styleUris.map((uri) => `<link rel="stylesheet" href="${uri}" />`).join('\n');
   // A little extra room beyond the widest lane so the dot never sits flush against the text
@@ -254,8 +267,9 @@ export function renderGraphHtml(data: GraphData, opts: RenderGraphOptions): stri
           : `${commit.filesChanged} files, +${commit.insertions} −${commit.deletions}`;
       // Lowercased haystack for the toolbar filter — cheaper than re-reading each row's text.
       const filter = `${commit.message} ${commit.author} ${commit.sha}`.toLowerCase();
+      const stashChips = (stashesByBase.get(commit.sha) ?? []).map(renderStashChip).join('');
       return `<div class="row commit${isSelected ? ' selected' : ''}" role="row" tabindex="${commit.sha === tabStopSha ? '0' : '-1'}" aria-selected="${isSelected}" data-sha="${escapeHtml(commit.sha)}" data-filter="${escapeHtml(filter)}">
-<span class="cell cell-refs" role="gridcell">${renderRefs(commit.refs)}</span>
+<span class="cell cell-refs" role="gridcell">${renderRefs(commit.refs)}${stashChips}</span>
 <span class="cell cell-graph" role="gridcell">${renderRowGraphics(node, svgWidth, avatarUrl)}</span>
 <span class="cell cell-message" role="gridcell" data-full-message="${escapeHtml(commit.message)}">${escapeHtml(commit.message)}</span>
 <span class="cell cell-author" role="gridcell">${escapeHtml(commit.author)}</span>
@@ -303,6 +317,16 @@ ${empty ? '<p class="empty">No commits yet.</p>' : ''}
 </div>
 ${hasMore ? '<div class="load-more"><button id="load-more" class="btn" type="button">Load more commits</button></div>' : ''}
 <div id="row-tooltip" class="row-tooltip gitlore-enter" role="tooltip" aria-hidden="true" hidden></div>
+<div id="commit-ctx-menu" class="ctx-menu" role="menu" hidden>
+<button type="button" role="menuitem" data-action="checkout">Checkout</button>
+<button type="button" role="menuitem" data-action="reset">Reset Branch to Here…</button>
+<button type="button" role="menuitem" data-action="revert">Revert This Commit</button>
+<button type="button" role="menuitem" data-action="cherryPick">Cherry-pick onto Current Branch</button>
+<button type="button" role="menuitem" data-action="createBranch">Create Branch from Commit…</button>
+<button type="button" role="menuitem" data-action="tag">Tag This Commit…</button>
+<hr />
+<button type="button" role="menuitem" data-action="copySha">Copy SHA</button>
+</div>
 <script nonce="${opts.nonce}">
 const vscode = acquireVsCodeApi();
 const rowsEl = document.getElementById('rows');
@@ -411,12 +435,68 @@ function hideTooltip() {
   tooltipEl.hidden = true;
 }
 
+const ctxMenuEl = document.getElementById('commit-ctx-menu');
+let ctxMenuSha = null;
+
+function hideCtxMenu() {
+  ctxMenuEl.hidden = true;
+  ctxMenuSha = null;
+}
+
+function showCtxMenu(sha, x, y) {
+  ctxMenuSha = sha;
+  ctxMenuEl.hidden = false;
+  ctxMenuEl.style.left = '0px';
+  ctxMenuEl.style.top = '0px';
+  const w = ctxMenuEl.offsetWidth;
+  const h = ctxMenuEl.offsetHeight;
+  ctxMenuEl.style.left = Math.min(x, window.innerWidth - w - 8) + 'px';
+  ctxMenuEl.style.top = Math.min(y, window.innerHeight - h - 8) + 'px';
+}
+
+ctxMenuEl.addEventListener('click', (e) => {
+  const item = e.target.closest('[data-action]');
+  if (!item || !ctxMenuSha) return;
+  vscode.postMessage({ type: 'commitAction', action: item.dataset.action, sha: ctxMenuSha });
+  hideCtxMenu();
+});
+
+document.addEventListener('click', (e) => {
+  if (!ctxMenuEl.hidden && !ctxMenuEl.contains(e.target)) hideCtxMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideCtxMenu();
+});
+document.querySelector('.grid').addEventListener('scroll', hideCtxMenu);
+
+for (const chip of rowsEl.querySelectorAll('.ref-stash')) {
+  chip.addEventListener('click', (e) => {
+    e.stopPropagation();
+    vscode.postMessage({ type: 'stashClick', index: Number(chip.dataset.stashIndex) });
+  });
+  chip.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      vscode.postMessage({ type: 'stashClick', index: Number(chip.dataset.stashIndex) });
+    }
+  });
+}
+
 for (const row of allRows) {
   row.addEventListener('click', () => select(row));
   row.addEventListener('mouseenter', () => showTooltip(row));
   row.addEventListener('mouseleave', hideTooltip);
   row.addEventListener('focus', () => showTooltip(row));
   row.addEventListener('blur', hideTooltip);
+  if (row.dataset.sha) {
+    row.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      hideTooltip();
+      select(row, { open: false });
+      showCtxMenu(row.dataset.sha, e.clientX, e.clientY);
+    });
+  }
 }
 
 document.querySelector('.grid').addEventListener('scroll', () => {

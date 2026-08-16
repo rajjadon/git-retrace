@@ -459,7 +459,7 @@ export class GitService {
       return [];
     }
     try {
-      const raw = await this.gitFor(repoRoot).raw(['stash', 'list', '--format=%gd\x1f%s']);
+      const raw = await this.gitFor(repoRoot).raw(['stash', 'list', '--format=%gd\x1f%s\x1f%P']);
       return parseStashes(raw);
     } catch {
       // An empty stash list exits non-zero in some git versions — no stashes, not an error.
@@ -604,6 +604,54 @@ export class GitService {
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err);
       this.logger?.error(`git checkout ${branchName} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Moves the current branch's HEAD to `sha`, for the commit graph's "Reset Branch to Here" action. `mode` controls the index/working tree — caller confirms first, `mixed`/`hard` discard changes. */
+  async resetTo(filePath: string, sha: string, mode: 'soft' | 'mixed' | 'hard'): Promise<void> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    const args = ['reset', `--${mode}`, sha];
+    try {
+      await this.gitFor(repoRoot).raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git reset --${mode} ${sha} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Creates a new local branch named `name` pointing at `sha`, for the commit graph's "Create Branch from Commit" action. Does not check it out. */
+  async createBranch(filePath: string, name: string, sha: string): Promise<void> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    const args = ['branch', name, sha];
+    try {
+      await this.gitFor(repoRoot).raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git branch ${name} ${sha} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Creates a lightweight tag named `name` pointing at `sha`, for the commit graph's "Tag This Commit" action. */
+  async createTag(filePath: string, name: string, sha: string): Promise<void> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    const args = ['tag', name, sha];
+    try {
+      await this.gitFor(repoRoot).raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git tag ${name} ${sha} failed`, err);
       throw new GitCommandError(args.join(' '), stderr);
     }
   }

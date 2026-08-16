@@ -14,6 +14,10 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **Generate Changelog with AI** — a new command picks two refs and streams a Markdown changelog (grouped into Added/Changed/Fixed) into a fresh editor tab.
 - **AI PR review draft** — a Draft Review button in Pull Request Details drafts one review comment into the existing comment box, for you to edit and post yourself — the model never posts on its own.
 - New setting: `gitLore.ai.maxToolIterations` (default `6`) caps how many tool-call round trips GitLore Chat makes per question before showing whatever answer the model has produced so far.
+- **Commit graph: right-click actions** — Checkout, Reset Branch to Here (soft/mixed/hard, via QuickPick), Revert This Commit, Cherry-pick onto Current Branch, Create Branch from Commit, Tag This Commit, and Copy SHA, all from a right-click on any commit. Revert and cherry-pick run in the same shared **GitLore: Git Sync** terminal as Pull/Push, since either can hit a conflict you need to resolve yourself; Reset and Checkout confirm first and can't be undone once accepted.
+- **Commit graph: scoped to your current branch by default** — the graph now opens showing just the branch you're on, instead of every branch at once, and keeps following you across any checkout (from GitLore, a terminal, or another tool) until you pick a specific branch or "All branches" from the ref picker yourself.
+- **Commit graph: stash chip** — any stash shows as a small chip on the row of the commit it was made from; click it to Apply or Delete.
+- **Sidebar Explorer: Merge and Rebase from a branch's right-click menu** — "Merge into Current Branch" and "Rebase Current Branch onto This" on any branch or remote-tracking branch row, so a merge or rebase no longer requires dropping into a terminal to type the command yourself. Runs in the shared **GitLore: Git Sync** terminal, since either can conflict.
 
 ## [1.2.0] - 2026-08-15
 

@@ -40,6 +40,8 @@ export const COMMANDS = {
   summarizeBranchComparison: 'gitLore.summarizeBranchComparison',
   generateChangelog: 'gitLore.generateChangelog',
   draftPrReview: 'gitLore.draftPrReview',
+  mergeBranchFromExplorer: 'gitLore.mergeBranchFromExplorer',
+  rebaseOntoBranchFromExplorer: 'gitLore.rebaseOntoBranchFromExplorer',
 } as const;
 
 export const CONFIG = {

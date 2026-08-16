@@ -47,6 +47,9 @@ export const COPY_ICON = icon(
 /** Pending-changes row marker — a dashed node, the common convention for an uncommitted row. */
 export const PENDING_ICON = icon('<circle cx="8" cy="8" r="5.2" stroke-dasharray="2.4 2" />', 'ref-icon', 12);
 
+/** Stash — a small stacked-box glyph, for the commit graph's stash chip. */
+export const STASH_ICON = icon('<rect x="2.5" y="5" width="11" height="8" rx="1" /><path d="M2.5 8.5h11" /><path d="M5.5 5V3.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V5" />', 'ref-icon', 12);
+
 /** Open this file's before/after in a real diff editor. */
 export const OPEN_CHANGES_ICON = icon(
   '<path d="M5 2v9a2 2 0 0 0 2 2h4M5 2 2.5 4.5M5 2l2.5 2.5M11 14V5a2 2 0 0 0-2-2H5m6 11 2.5-2.5M11 14l-2.5-2.5" />',
