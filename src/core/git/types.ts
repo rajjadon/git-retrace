@@ -100,6 +100,8 @@ export interface StashInfo {
   /** The `N` in `stash@{N}` — what `git stash apply/drop` expects. */
   index: number;
   message: string;
+  /** The commit HEAD pointed at when the stash was made — a stash commit's first parent. Used to place a stash chip on the matching row in the commit graph. */
+  baseSha: string;
 }
 
 export interface WorktreeInfo {
@@ -114,4 +116,22 @@ export interface ContributorInfo {
   name: string;
   email: string;
   commitCount: number;
+}
+
+/** One commit's changed-file list (repo-relative paths), the raw material for co-change detection. */
+export interface CommitFileList {
+  sha: string;
+  files: string[];
+}
+
+/** A file that frequently changes alongside another — the commit graph's co-change CodeLens. */
+export interface CoChangedFile {
+  /** Repo-relative path. */
+  path: string;
+  /** Commits, within the analyzed window, where both files changed together. */
+  coChanges: number;
+  /** Commits, within the analyzed window, where the target file changed at all. */
+  totalCommits: number;
+  /** `coChanges / totalCommits` — how often the other file comes along when the target file changes. */
+  coupling: number;
 }

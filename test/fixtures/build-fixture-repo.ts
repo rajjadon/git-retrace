@@ -187,6 +187,54 @@ export function buildStaleFixtureRepo(): StaleFixtureManifest {
   return { repoRoot, staleFile, staleSha };
 }
 
+export interface CoChangeFixtureManifest {
+  repoRoot: string;
+  mainFile: string;
+  coupledFile: string;
+  uncoupledFile: string;
+}
+
+/**
+ * `main.ts` and `coupled.ts` change together in 4 of 5 commits touching `main.ts` (80% —
+ * above the detector's floor); `uncoupled.ts` rides along in only 1 of those 5 (20% — below
+ * it), so the co-change tests have both a definite hit and a definite miss in one repo.
+ */
+export function buildCoChangeFixtureRepo(): CoChangeFixtureManifest {
+  const repoRoot = mkdtempSync(join(tmpdir(), 'gitlore-cochange-fixture-'));
+  git(repoRoot, ['init', '-q', '-b', 'main']);
+  git(repoRoot, ['config', 'user.name', 'Raj Jadon']);
+  git(repoRoot, ['config', 'user.email', 'raj@example.com']);
+
+  const mainFile = join(repoRoot, 'main.ts');
+  const coupledFile = join(repoRoot, 'coupled.ts');
+  const uncoupledFile = join(repoRoot, 'uncoupled.ts');
+
+  writeFileSync(uncoupledFile, 'export const untouched = 0;\n');
+  git(repoRoot, ['add', 'uncoupled.ts']);
+  git(repoRoot, ['commit', '-q', '-m', 'add uncoupled.ts'], commitEnv('Raj Jadon', 'raj@example.com', '2024-01-01T10:00:00'));
+
+  for (let i = 0; i < 5; i++) {
+    writeFileSync(mainFile, `export const main = ${i};\n`);
+    git(repoRoot, ['add', 'main.ts']);
+    const alsoTouchCoupled = i < 4;
+    if (alsoTouchCoupled) {
+      writeFileSync(coupledFile, `export const coupled = ${i};\n`);
+      git(repoRoot, ['add', 'coupled.ts']);
+    }
+    if (i === 0) {
+      writeFileSync(uncoupledFile, 'export const untouched = 1;\n');
+      git(repoRoot, ['add', 'uncoupled.ts']);
+    }
+    git(
+      repoRoot,
+      ['commit', '-q', '-m', `update main.ts ${i}`],
+      commitEnv('Raj Jadon', 'raj@example.com', `2024-01-0${2 + i}T10:00:00`),
+    );
+  }
+
+  return { repoRoot, mainFile, coupledFile, uncoupledFile };
+}
+
 export interface OwnershipFixtureManifest {
   repoRoot: string;
   trackedFile: string;

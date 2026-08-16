@@ -4,6 +4,7 @@ import { escapeHtml } from '../escapeHtml';
 import { renderFileSections } from '../diffRender';
 import { buildGravatarUrl } from '../../utils/gravatar';
 import {
+  AI_ICON,
   BRANCH_ICON,
   CHECK_ICON,
   EXTERNAL_ICON,
@@ -149,8 +150,17 @@ ${renderRefPicker('base', base, branches, 'Base ref — the side changes are mea
 <button class="icon-btn" id="swap" type="button" title="Swap base and compare" aria-label="Swap base and compare">${SWAP_ICON}</button>
 ${renderRefPicker('compare', compare, branches, 'Compare ref — the side changes are measured to')}
 <span class="refbar-spacer"></span>
+<button class="btn btn-accent" id="summarize-comparison" type="button" title="Summarize this comparison with AI">${AI_ICON}Summarize</button>
 ${createPrBtn}
 <button class="icon-btn" id="refresh" type="button" title="Refresh" aria-label="Refresh the comparison">${REFRESH_ICON}</button>
+</div>
+<div class="ai-summary">
+<p class="ai-summary-text" id="ai-summary-text" aria-live="polite" hidden></p>
+<p class="ai-summary-hint" id="ai-summary-hint" role="status" hidden></p>
+<div class="skeleton" id="ai-summary-skeleton" role="status" aria-live="polite" aria-busy="true" aria-label="Generating…" hidden>
+<div class="skeleton-row" style="width: 92%"></div>
+<div class="skeleton-row" style="width: 68%"></div>
+</div>
 </div>
 <div class="tabs" role="tablist" aria-label="Comparison views">
 ${renderTab('ahead', 'Ahead', aheadCommits.length, initial === 'ahead')}
@@ -215,6 +225,53 @@ document.getElementById('swap').addEventListener('click', () => {
 });
 document.getElementById('refresh').addEventListener('click', () => {
   vscode.postMessage({ type: 'refresh' });
+});
+
+const summarizeBtn = document.getElementById('summarize-comparison');
+const summaryText = document.getElementById('ai-summary-text');
+const summaryHint = document.getElementById('ai-summary-hint');
+const summarySkeleton = document.getElementById('ai-summary-skeleton');
+summarizeBtn.addEventListener('click', () => {
+  summarizeBtn.disabled = true;
+  summaryText.hidden = true;
+  summaryText.textContent = '';
+  summaryHint.hidden = true;
+  summarySkeleton.hidden = false;
+  vscode.postMessage({ type: 'summarizeComparison' });
+});
+
+window.addEventListener('message', (e) => {
+  const msg = e.data;
+  if (msg.type === 'aiSummaryChunk') {
+    summaryText.hidden = false;
+    summaryText.textContent += msg.text;
+    summarySkeleton.hidden = true;
+  } else if (msg.type === 'aiSummaryCached') {
+    summaryText.hidden = false;
+    summaryText.textContent = msg.text;
+    summarySkeleton.hidden = true;
+    summarizeBtn.disabled = false;
+  } else if (msg.type === 'aiSummaryDone') {
+    summarySkeleton.hidden = true;
+    summarizeBtn.disabled = false;
+  } else if (msg.type === 'aiSummaryReset') {
+    summarizeBtn.disabled = false;
+    summaryText.hidden = true;
+    summaryHint.hidden = true;
+    summarySkeleton.hidden = true;
+  } else if (msg.type === 'aiSummaryNoModel') {
+    summaryText.hidden = true;
+    summarySkeleton.hidden = true;
+    summaryHint.hidden = false;
+    summaryHint.textContent = 'No language model available. Enable a language model (e.g. GitHub Copilot Chat) to use this feature.';
+    summarizeBtn.disabled = false;
+  } else if (msg.type === 'aiSummaryError') {
+    summaryText.hidden = true;
+    summarySkeleton.hidden = true;
+    summaryHint.hidden = false;
+    summaryHint.textContent = 'Failed to generate summary: ' + msg.message;
+    summarizeBtn.disabled = false;
+  }
 });
 
 const createPrBtnEl = document.getElementById('create-pr');

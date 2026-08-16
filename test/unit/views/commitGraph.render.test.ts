@@ -392,3 +392,28 @@ test('renderGraphHtml: shows a "Load more" button when hasMore is true', () => {
   const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now, hasMore: true }, opts);
   assert.match(html, /id="load-more"[^>]*>Load more commits</);
 });
+
+test('renderGraphHtml: includes a hidden right-click context menu with every commit action', () => {
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
+  assert.match(html, /<div id="commit-ctx-menu" class="ctx-menu" role="menu" hidden>/);
+  for (const action of ['checkout', 'reset', 'revert', 'cherryPick', 'createBranch', 'tag', 'copySha']) {
+    assert.match(html, new RegExp(`data-action="${action}"`));
+  }
+});
+
+test('renderGraphHtml: wires a contextmenu listener on commit rows, not the working-changes row', () => {
+  const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
+  assert.match(html, /row\.addEventListener\('contextmenu'/);
+});
+
+test('renderGraphHtml: places a stash chip on the row of its base commit', () => {
+  const commits = [commit('B', ['A']), commit('A', [])];
+  const html = renderGraphHtml(
+    { nodes: layoutGraph(commits), now, stashes: [{ index: 2, message: 'WIP on main', baseSha: 'A' }] },
+    opts,
+  );
+  assert.match(html, /data-sha="A"[\s\S]*?data-stash-index="2"[\s\S]*?stash@\{2\}/);
+  // Commit B has no stash based on it — no chip on its row.
+  const rowB = html.slice(html.indexOf('data-sha="B"'), html.indexOf('data-sha="A"'));
+  assert.ok(!rowB.includes('ref-stash'));
+});

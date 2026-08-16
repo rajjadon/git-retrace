@@ -3,6 +3,7 @@ import type {
   BranchInfo,
   Commit,
   CommitDetail,
+  CommitFileList,
   ContributorInfo,
   FileChange,
   FileHistoryEntry,
@@ -43,6 +44,14 @@ export const COMMIT_DETAIL_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LO
 
 /** Pass to `git log --all --topo-order --numstat --decorate=full --pretty=tformat:<this>` for the commit graph. `%P` = parent shas (space-separated), `%D` = ref decorations. */
 export const GRAPH_LOG_FORMAT = `%H${LOG_FIELD_SEP}%h${LOG_FIELD_SEP}%an${LOG_FIELD_SEP}%ae${LOG_FIELD_SEP}%aI${LOG_FIELD_SEP}%P${LOG_FIELD_SEP}%D${LOG_FIELD_SEP}%s${LOG_RECORD_SEP}`;
+
+/**
+ * Pass to `git log --name-only --pretty=<this>` for co-change detection. Deliberately `format:`,
+ * not this codebase's usual `tformat:` — `--name-only`'s own blank-line spacing between a
+ * commit's file list and the next record depends on `format:`'s implicit trailing newline;
+ * `tformat:` suppresses it and runs file lists together. Verified against this repo's own log.
+ */
+export const CO_CHANGE_LOG_FORMAT = `${LOG_RECORD_SEP}%H`;
 
 /** Pass to `git for-each-ref refs/heads refs/remotes --format=<this>`. Uses the full refname (not `:short`) so local vs remote can be told apart reliably by prefix. `%(upstream:track)` lets git compute ahead/behind itself — no per-branch `rev-list --count` calls. */
 export const BRANCH_FORMAT = `%(refname)${LOG_FIELD_SEP}%(HEAD)${LOG_FIELD_SEP}%(upstream:track)`;
@@ -450,17 +459,18 @@ export function parseTags(raw: string): TagInfo[] {
     .map((name) => ({ name }));
 }
 
-/** Parses `git stash list --format=%gd<FIELD>%s` output, extracting the numeric index from `stash@{N}` — what `git stash apply/drop` expects. Pure — no I/O. */
+/** Parses `git stash list --format=%gd<FIELD>%s<FIELD>%P` output, extracting the numeric index from `stash@{N}` — what `git stash apply/drop` expects — and the base commit sha, a stash commit's first parent (`%P`'s first token), for placing a stash chip on the matching graph row. Pure — no I/O. */
 export function parseStashes(raw: string): StashInfo[] {
   const stashes: StashInfo[] = [];
   for (const line of raw.split('\n')) {
     if (!line.trim()) {
       continue;
     }
-    const [ref, message] = line.split(LOG_FIELD_SEP);
+    const [ref, message, parentsRaw] = line.split(LOG_FIELD_SEP);
     const match = /stash@\{(\d+)\}/.exec(ref ?? '');
+    const baseSha = (parentsRaw ?? '').split(' ')[0] ?? '';
     if (match?.[1]) {
-      stashes.push({ index: Number(match[1]), message: message ?? '' });
+      stashes.push({ index: Number(match[1]), message: message ?? '', baseSha });
     }
   }
   return stashes;
@@ -514,6 +524,20 @@ export function parseContributors(raw: string): ContributorInfo[] {
     }
   }
   return contributors;
+}
+
+/** Parses `git log --name-only --pretty=<CO_CHANGE_LOG_FORMAT>` output into one file list per commit. Pure — no I/O. */
+export function parseCoChangeLog(raw: string): CommitFileList[] {
+  const commits: CommitFileList[] = [];
+  for (const block of raw.split(LOG_RECORD_SEP)) {
+    const lines = block.split('\n').filter((line) => line.length > 0);
+    const sha = lines[0];
+    if (!sha) {
+      continue;
+    }
+    commits.push({ sha, files: lines.slice(1) });
+  }
+  return commits;
 }
 
 /**

@@ -4,6 +4,24 @@ All notable changes to GitLore are documented here. Format follows [Keep a Chang
 
 The VS Code Marketplace shows this file on GitLore's extension page, so entries describe what changed for someone *using* GitLore. Why a change was made the way it was belongs in the commit message and in code comments, next to the code it explains.
 
+## [Unreleased]
+
+## [1.2.1] - 2026-08-17
+
+### Added
+
+- **GitLore Chat** — a docked chat panel (**GitLore: Open Chat**) for asking free-form questions about a repo's history ("who touched this file last", "why did this get rewritten", "what changed between these two tags"). The model answers by calling git-backed tools GitLore runs locally against your own repo — no retrieval index, no guessed context — and every tool call is shown in the panel as it happens. Also reachable pre-seeded with a subject via **Ask GitLore About This File/Commit/Pull Request** from Commit Graph, Commit Details, and Pull Request Details. Same privacy contract as every other AI feature: nothing runs unless `gitLore.ai.enabled` is on, and every tool call is a local `git` read, never a network call.
+- **Explain this PR** — an Explain button in Pull Request Details summarizes what a PR changes and calls out its riskiest area, the same way Commit Details' AI summary already does.
+- **Branch Compare AI summary** — a Summarize button in Branch Comparison explains what the compare branch changes relative to the base, in plain English.
+- **Generate Changelog with AI** — a new command picks two refs and streams a Markdown changelog (grouped into Added/Changed/Fixed) into a fresh editor tab.
+- **AI PR review draft** — a Draft Review button in Pull Request Details drafts one review comment into the existing comment box, for you to edit and post yourself — the model never posts on its own.
+- New setting: `gitLore.ai.maxToolIterations` (default `6`) caps how many tool-call round trips GitLore Chat makes per question before showing whatever answer the model has produced so far.
+- **Commit graph: right-click actions** — Checkout, Reset Branch to Here (soft/mixed/hard, via QuickPick), Revert This Commit, Cherry-pick onto Current Branch, Create Branch from Commit, Tag This Commit, and Copy SHA, all from a right-click on any commit. Revert and cherry-pick run in the same shared **GitLore: Git Sync** terminal as Pull/Push, since either can hit a conflict you need to resolve yourself; Reset and Checkout confirm first and can't be undone once accepted.
+- **Commit graph: scoped to your current branch by default** — the graph now opens showing just the branch you're on, instead of every branch at once, and keeps following you across any checkout (from GitLore, a terminal, or another tool) until you pick a specific branch or "All branches" from the ref picker yourself.
+- **Commit graph: stash chip** — any stash shows as a small chip on the row of the commit it was made from; click it to Apply or Delete.
+- **Sidebar Explorer: Merge and Rebase from a branch's right-click menu** — "Merge into Current Branch" and "Rebase Current Branch onto This" on any branch or remote-tracking branch row, so a merge or rebase no longer requires dropping into a terminal to type the command yourself. Runs in the shared **GitLore: Git Sync** terminal, since either can conflict.
+- **Co-change detector** — a new CodeLens above the file naming other files that frequently change alongside it, computed from `git log` (no AI, no separate analysis service). Click for a QuickPick with the exact co-occurrence ratio; pick one to open it. New setting `gitLore.coChange.enabled` (default `true`).
+
 ## [1.2.0] - 2026-08-15
 
 ### Added

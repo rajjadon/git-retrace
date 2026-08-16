@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import type { SummaryModel } from '../core/ai/commitSummaryFlow';
 import type { GitLogger } from '../core/git/errors';
+import type { ChatMessage, ChatModel, ChatStreamPart } from '../core/ai/chatFlow';
+import type { GitToolDefinition } from '../core/ai/gitTools';
 
 /**
  * Thin adapter over `vscode.lm` — the only file that touches the Language Model API directly.
@@ -31,6 +33,56 @@ export class LanguageModelClient {
     };
   }
 
+  async selectChatModel(modelFamily: string): Promise<ChatModel | undefined> {
+    if (typeof vscode.lm === 'undefined') {
+      return undefined;
+    }
+    let models = await vscode.lm.selectChatModels({ family: modelFamily });
+    if (models.length === 0) {
+      models = await vscode.lm.selectChatModels();
+    }
+    const model = models[0];
+    if (!model) {
+      return undefined;
+    }
+    return {
+      sendChat: (messages, tools, signal) => this.streamChat(model, messages, tools, signal),
+    };
+  }
+
+  private async *streamChat(
+    model: vscode.LanguageModelChat,
+    messages: ChatMessage[],
+    tools: GitToolDefinition[],
+    signal: AbortSignal,
+  ): AsyncIterable<ChatStreamPart> {
+    const tokenSource = new vscode.CancellationTokenSource();
+    const onAbort = () => tokenSource.cancel();
+    signal.addEventListener('abort', onAbort);
+    try {
+      const vscodeMessages = messages.map(toVscodeChatMessage);
+      const vscodeTools: vscode.LanguageModelChatTool[] = tools.map((t) => ({
+        name: t.name,
+        description: t.description,
+        inputSchema: t.inputSchema,
+      }));
+      const response = await model.sendRequest(vscodeMessages, { tools: vscodeTools }, tokenSource.token);
+      for await (const part of response.stream) {
+        if (part instanceof vscode.LanguageModelTextPart) {
+          yield { kind: 'text', text: part.value };
+        } else if (part instanceof vscode.LanguageModelToolCallPart) {
+          yield { kind: 'toolCall', callId: part.callId, name: part.name, args: part.input as Record<string, unknown> };
+        }
+      }
+    } catch (err) {
+      this.logger.error('GitLore chat request failed', err);
+      throw err;
+    } finally {
+      signal.removeEventListener('abort', onAbort);
+      tokenSource.dispose();
+    }
+  }
+
   private async *streamText(model: vscode.LanguageModelChat, prompt: string, signal: AbortSignal): AsyncIterable<string> {
     const tokenSource = new vscode.CancellationTokenSource();
     const onAbort = () => tokenSource.cancel();
@@ -48,4 +100,22 @@ export class LanguageModelClient {
       tokenSource.dispose();
     }
   }
+}
+
+function toVscodeChatMessage(message: ChatMessage): vscode.LanguageModelChatMessage {
+  if (message.toolCall) {
+    return vscode.LanguageModelChatMessage.Assistant([
+      new vscode.LanguageModelToolCallPart(message.toolCall.callId, message.toolCall.name, message.toolCall.args),
+    ]);
+  }
+  if (message.toolResult) {
+    return vscode.LanguageModelChatMessage.User([
+      new vscode.LanguageModelToolResultPart(message.toolResult.callId, [
+        new vscode.LanguageModelTextPart(JSON.stringify(message.toolResult.result)),
+      ]),
+    ]);
+  }
+  return message.role === 'user'
+    ? vscode.LanguageModelChatMessage.User(message.text ?? '')
+    : vscode.LanguageModelChatMessage.Assistant(message.text ?? '');
 }

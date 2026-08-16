@@ -39,7 +39,7 @@ test('buildExplorerSections: wraps remotes, tags, stashes, worktrees, and contri
     branches: [],
     remotes: [{ name: 'origin', url: 'https://github.com/x/y.git' }],
     tags: [{ name: 'v1.0.0' }],
-    stashes: [{ index: 0, message: 'WIP' }],
+    stashes: [{ index: 0, message: 'WIP', baseSha: 'a1b2c3d' }],
     worktrees: [{ path: '/repo', branch: 'main', isMain: true }],
     contributors: [{ name: 'Raj', email: 'raj@example.com', commitCount: 10 }],
   };

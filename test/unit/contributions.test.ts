@@ -34,9 +34,9 @@ const viewIds = new Set([...Object.values(views).flat().map((v) => v.id), ...cus
  */
 
 test('contributes.commands: every COMMANDS entry that is user-invocable is declared', () => {
-  // No commands are Phase-2-reserved-but-uncontributed anymore — both explainCommit and
-  // explainLine are now declared. If a future sub-project reserves a new command, it goes
-  // back in this set.
+  // Conversational AI Chat sub-project: every COMMANDS entry, including draftPrReview, is now
+  // fully wired (command + handler + package.json declaration), same bar every other declared
+  // command meets — nothing left reserved.
   const reserved = new Set<string>([]);
   for (const [key, id] of Object.entries(COMMANDS)) {
     if (reserved.has(id)) {

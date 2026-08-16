@@ -19,7 +19,8 @@ Re-run the relevant one after any UI change instead of re-shooting by hand.
 
 | File | Script |
 |---|---|
-| `commit-graph.png` | `npm run shots` |
+| `commit-graph.png` | `npm run shots` (stash chip uses a synthesized stash — see below) |
+| `commit-graph-context-menu.png` | `npm run shots` (right-click menu forced open — see below) |
 | `commit-details.png` | `npm run shots` |
 | `branch-comparison.png` | `npm run shots` |
 | `visual-file-history.png` | `npm run shots` |
@@ -30,6 +31,7 @@ Re-run the relevant one after any UI change instead of re-shooting by hand.
 | `file-history.png` | `npm run shots:native` |
 | `sidebar-explorer.png` | `npm run shots:native` |
 | `stale-code.png` | `npm run shots:native` |
+| `co-change-detector.png` | `npm run shots:native` |
 | `full-file-blame.png` | `npm run shots:native` |
 | `ownership-heatmap.png` | `npm run shots:native` |
 
@@ -37,6 +39,7 @@ Two things worth knowing about what's *not* 100% real:
 
 1. **The theme.** VS Code injects ~100 `--vscode-*` custom properties into every webview; `shoot-screenshots.ts` approximates Dark Modern for the headless-Chrome renders. `shoot-native-screenshots.ts` doesn't have this problem — it's real VS Code, so the theme is exactly whatever the demo profile's default is.
 2. **Launchpad's data.** It pools PRs from real, authenticated remote hosts — there's nothing to render without a live network call and real credentials, so `launchpad.png` is built from realistic hand-written sample data instead of this repo's own history. Same reason `pull-request-details.png`'s review conversations are sample data — the PR title, changed files, and diff underneath them are real (reused from the commit-details shot) so nothing on screen contradicts the diff actually shown. Every other screenshot is this repo's real commits, real authors, real dates (or the demo repo's, for the native ones).
+3. **The stash chip and the open context menu.** This repo has no real stash sitting around, so `commit-graph.png`'s stash chip is synthesized against a real commit sha (same reasoning as the ahead/behind counts above). `commit-graph-context-menu.png` forces the menu's `hidden` attribute off and gives it a fixed position — there's no real click to fire against a static headless-Chrome render.
 
 ## Why a separate demo repo for the native shots
 

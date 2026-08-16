@@ -19,7 +19,8 @@ import {
 import { azureDevOpsCredentialScheme, clearForgeToken, resolveForgeToken } from '../../providers/forgeCredentials';
 import { renderLaunchpadHtml, type LaunchpadRepoError, type LaunchpadRepoRow } from './render';
 import { renderPlaceholderHtml } from '../placeholder';
-import { COMMANDS, CONFIG, MEDIA, SYNC_TERMINAL_NAME, VIEWS } from '../../constants';
+import { COMMANDS, CONFIG, MEDIA, VIEWS } from '../../constants';
+import { runInGitSyncTerminal } from '../gitSyncTerminal';
 
 const SNOOZE_STATE_KEY = 'gitLore.launchpad.snoozed';
 
@@ -339,10 +340,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     if (!repoRoot) {
       return;
     }
-    const terminal =
-      vscode.window.terminals.find((t) => t.name === SYNC_TERMINAL_NAME) ?? vscode.window.createTerminal({ name: SYNC_TERMINAL_NAME, cwd: repoRoot });
-    terminal.show();
-    terminal.sendText(direction === 'pull' ? 'git pull' : 'git push');
+    runInGitSyncTerminal(repoRoot, direction === 'pull' ? 'git pull' : 'git push');
   }
 
   /** Test-only introspection seam — a webview button click can't be simulated in an integration test, so this drives the same lookup-then-terminal flow the push/pull message handler does. */

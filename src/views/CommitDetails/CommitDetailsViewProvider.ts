@@ -56,6 +56,11 @@ export class CommitDetailsViewProvider implements vscode.WebviewViewProvider {
     return this.currentCommit !== undefined;
   }
 
+  /** A short label for the chat's subject chip, e.g. when opened via "Ask about this commit". */
+  getCurrentSubjectForChat(): string | undefined {
+    return this.currentCommit ? `commit ${this.currentCommit.shortSha}` : undefined;
+  }
+
   resolveWebviewView(webviewView: vscode.WebviewView): void {
     this.view = webviewView;
     webviewView.webview.options = {

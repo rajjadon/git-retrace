@@ -9,6 +9,7 @@ import { FileHistoryProvider } from './providers/FileHistoryProvider';
 import { StatusBarProvider } from './providers/StatusBarProvider';
 import { GitContentProvider } from './providers/GitContentProvider';
 import { StaleCodeLensProvider } from './providers/CodeLensProvider';
+import { CoChangeCodeLensProvider } from './providers/CoChangeCodeLensProvider';
 import { OwnershipDecorationProvider } from './providers/OwnershipDecorationProvider';
 import { FullFileBlameDecorationProvider } from './providers/FullFileBlameDecorationProvider';
 import { warnIfGitUnavailable } from './providers/GitAvailabilityCheck';
@@ -22,12 +23,32 @@ import { handleShowCommitCommand } from './commands/commitCommands';
 import { handleOpenGraphCommand } from './commands/graphCommands';
 import { handleShowVisualFileHistoryCommand } from './commands/visualFileHistoryCommands';
 import { handleCompareBranchesCommand } from './commands/branchCommands';
-import { handleExplainCommitCommand, handleExplainLineCommand, handleGenerateCommitMessageCommand } from './commands/aiCommands';
+import {
+  handleExplainCommitCommand,
+  handleExplainLineCommand,
+  handleGenerateCommitMessageCommand,
+  handleExplainPullRequestCommand,
+  handleSummarizeBranchComparisonCommand,
+  handleGenerateChangelogCommand,
+  handleDraftPrReviewCommand,
+} from './commands/aiCommands';
+import { ChatService } from './ai/ChatService';
+import { ChatViewProvider } from './views/Chat/ChatViewProvider';
+import {
+  handleOpenChatCommand,
+  handleAskAboutFileCommand,
+  handleAskAboutCommitCommand,
+  handleAskAboutLineCommand,
+  handleAskAboutPullRequestCommand,
+} from './commands/chatCommands';
 import { handleShowFileOwnershipCommand, buildOwnershipQuickPickItems } from './commands/ownershipCommands';
+import { handleShowCoChangedFilesCommand } from './commands/coChangeCommands';
 import { handleRebaseInteractivelyCommand } from './commands/rebaseCommands';
 import {
   handleCheckoutBranchCommand,
   handleCompareBranchCommand,
+  handleMergeBranchCommand,
+  handleRebaseOntoBranchCommand,
   handleOpenRemoteCommand,
   handleApplyStashCommand,
   handleDropStashCommand,
@@ -45,6 +66,7 @@ import { RepoExplorerProvider } from './providers/RepoExplorerProvider';
 import { LanguageModelClient } from './ai/LanguageModelClient';
 import { LineExplanationService } from './ai/LineExplanationService';
 import { CommitMessageService } from './ai/CommitMessageService';
+import { ChangelogService } from './ai/ChangelogService';
 import { LruCache } from './core/cache/LruCache';
 import type { LineExplanationState } from './core/ai/lineExplanationKey';
 
@@ -59,6 +81,8 @@ export interface GitLoreTestApi {
   getCommitDetailsHtml: () => string | undefined;
   getCommitGraphHtml: () => string | undefined;
   loadMoreCommitGraph: () => Promise<void>;
+  commitGraphActionForTest: (action: string, sha: string) => Promise<void>;
+  commitGraphStashActionForTest: (action: 'apply' | 'drop', index: number) => Promise<void>;
   getBranchComparisonHtml: () => string | undefined;
   getVisualFileHistoryHtml: () => string | undefined;
   getRebaseEditorHtml: () => string | undefined;
@@ -70,8 +94,16 @@ export interface GitLoreTestApi {
   pullRequestDetailsProvider: PullRequestDetailsViewProvider;
   explainCommit: () => Promise<void>;
   getAiSummaryMessagesForTest: () => unknown[];
+  explainPr: () => Promise<void>;
+  getPrAiSummaryMessagesForTest: () => unknown[];
+  draftReview: () => Promise<void>;
+  summarizeBranchComparison: () => Promise<void>;
+  getBranchComparisonAiSummaryMessagesForTest: () => unknown[];
   getLineExplanationStateForTest: (filePath: string, sha: string, lineContent: string) => Promise<LineExplanationState | undefined>;
   getOwnershipItemsForTest: (filePath: string) => Promise<vscode.QuickPickItem[] | null>;
+  getChatHtml: () => string | undefined;
+  chatProvider: ChatViewProvider;
+  sendChatForTest: (text: string) => Promise<void>;
 }
 
 export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
@@ -90,22 +122,26 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
   const lineExplanationStore = new LruCache<string, LineExplanationState>(50);
   const lineExplanationService = new LineExplanationService(git, languageModelClient, logger, lineExplanationStore);
   const commitMessageService = new CommitMessageService(git, languageModelClient, logger);
+  const changelogService = new ChangelogService(git, languageModelClient, logger);
   const lineHistoryNavStore = new LruCache<string, number>(50);
   const blameSource = new BlameSource(git, logger);
   const blameProvider = new BlameDecorationProvider(blameSource);
   const hoverProvider = new BlameHoverProvider(blameSource, git, lineExplanationStore, lineHistoryNavStore);
   const staleCodeLensProvider = new StaleCodeLensProvider(blameSource);
+  const coChangeCodeLensProvider = new CoChangeCodeLensProvider(git, blameSource);
   const ownershipProvider = new OwnershipDecorationProvider(blameSource);
   const fullFileBlameProvider = new FullFileBlameDecorationProvider(blameSource);
   const fileHistoryProvider = new FileHistoryProvider(git);
   const statusBarProvider = new StatusBarProvider(blameProvider);
   const commitGraphViewProvider = new CommitGraphViewProvider(ctx.extensionUri, git, blameSource);
   const commitDetailsViewProvider = new CommitDetailsViewProvider(ctx.extensionUri, git, languageModelClient, logger);
-  const branchComparisonViewProvider = new BranchComparisonViewProvider(ctx.extensionUri, ctx, git, logger);
+  const branchComparisonViewProvider = new BranchComparisonViewProvider(ctx.extensionUri, ctx, git, languageModelClient, logger);
   const visualFileHistoryViewProvider = new VisualFileHistoryViewProvider(ctx.extensionUri, git);
   const rebaseEditorProvider = new RebaseEditorProvider(ctx.extensionUri);
   const launchpadProvider = new LaunchpadViewProvider(ctx.extensionUri, ctx, git, logger);
-  const pullRequestDetailsViewProvider = new PullRequestDetailsViewProvider(ctx.extensionUri);
+  const pullRequestDetailsViewProvider = new PullRequestDetailsViewProvider(ctx.extensionUri, languageModelClient, logger);
+  const chatService = new ChatService(git, languageModelClient, logger);
+  const chatViewProvider = new ChatViewProvider(ctx.extensionUri, chatService);
   const repoExplorerProvider = new RepoExplorerProvider(git);
 
   ctx.subscriptions.push(
@@ -114,6 +150,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     fileHistoryProvider,
     statusBarProvider,
     staleCodeLensProvider,
+    coChangeCodeLensProvider,
     ownershipProvider,
     fullFileBlameProvider,
     commitGraphViewProvider,
@@ -127,17 +164,24 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     handleOpenGraphCommand(commitGraphViewProvider),
     handleShowVisualFileHistoryCommand(visualFileHistoryViewProvider),
     handleCompareBranchesCommand(git, branchComparisonViewProvider),
+    handleSummarizeBranchComparisonCommand(branchComparisonViewProvider),
     handleExplainCommitCommand(commitDetailsViewProvider),
     handleExplainLineCommand(lineExplanationService),
     handleGenerateCommitMessageCommand(commitMessageService, git),
+    handleGenerateChangelogCommand(changelogService, git),
     handleShowFileOwnershipCommand(blameSource),
+    handleShowCoChangedFilesCommand(),
     handleRebaseInteractivelyCommand(git),
     launchpadProvider,
     handleOpenLaunchpadCommand(launchpadProvider),
     handleShowPullRequestCommand(pullRequestDetailsViewProvider, launchpadProvider),
+    handleExplainPullRequestCommand(pullRequestDetailsViewProvider),
+    handleDraftPrReviewCommand(pullRequestDetailsViewProvider),
     repoExplorerProvider,
     handleCheckoutBranchCommand(git, repoExplorerProvider),
     handleCompareBranchCommand(git),
+    handleMergeBranchCommand(git),
+    handleRebaseOntoBranchCommand(git),
     handleOpenRemoteCommand(),
     handleApplyStashCommand(git, repoExplorerProvider),
     handleDropStashCommand(git, repoExplorerProvider),
@@ -146,6 +190,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     vscode.window.registerCustomEditorProvider(VIEWS.rebaseEditor, rebaseEditorProvider),
     vscode.languages.registerHoverProvider({ scheme: 'file' }, hoverProvider),
     vscode.languages.registerCodeLensProvider({ scheme: 'file' }, staleCodeLensProvider),
+    vscode.languages.registerCodeLensProvider({ scheme: 'file' }, coChangeCodeLensProvider),
     // Backs the "Open changes" action in the commit-details and branch-comparison panels by
     // serving a file's contents at an arbitrary ref to the native diff editor.
     vscode.workspace.registerTextDocumentContentProvider(SCHEMES.gitContent, new GitContentProvider(git)),
@@ -154,6 +199,12 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     vscode.window.registerWebviewViewProvider(VIEWS.branchComparison, branchComparisonViewProvider),
     vscode.window.registerWebviewViewProvider(VIEWS.visualFileHistory, visualFileHistoryViewProvider),
     vscode.window.registerWebviewViewProvider(VIEWS.pullRequestDetails, pullRequestDetailsViewProvider),
+    handleOpenChatCommand(chatViewProvider),
+    handleAskAboutFileCommand(chatViewProvider),
+    handleAskAboutCommitCommand(commitDetailsViewProvider, chatViewProvider),
+    handleAskAboutLineCommand(chatViewProvider),
+    handleAskAboutPullRequestCommand(pullRequestDetailsViewProvider, chatViewProvider),
+    vscode.window.registerWebviewViewProvider(VIEWS.chat, chatViewProvider),
   );
   const initialRepoPath = resolveRepoContextPath();
   if (initialRepoPath) {
@@ -176,6 +227,8 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     getCommitDetailsHtml: () => commitDetailsViewProvider.getCurrentHtmlForTest(),
     getCommitGraphHtml: () => commitGraphViewProvider.getCurrentHtmlForTest(),
     loadMoreCommitGraph: () => commitGraphViewProvider.loadMore(),
+    commitGraphActionForTest: (action, sha) => commitGraphViewProvider.handleCommitActionForTest(action, sha),
+    commitGraphStashActionForTest: (action, index) => commitGraphViewProvider.handleStashActionForTest(action, index),
     getBranchComparisonHtml: () => branchComparisonViewProvider.getCurrentHtmlForTest(),
     getVisualFileHistoryHtml: () => visualFileHistoryViewProvider.getCurrentHtmlForTest(),
     getRebaseEditorHtml: () => rebaseEditorProvider.getCurrentHtmlForTest(),
@@ -187,9 +240,17 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     pullRequestDetailsProvider: pullRequestDetailsViewProvider,
     explainCommit: () => commitDetailsViewProvider.explainCommit(),
     getAiSummaryMessagesForTest: () => commitDetailsViewProvider.getAiSummaryMessagesForTest(),
+    explainPr: () => pullRequestDetailsViewProvider.explainPr(),
+    getPrAiSummaryMessagesForTest: () => pullRequestDetailsViewProvider.getAiSummaryMessagesForTest(),
+    draftReview: () => pullRequestDetailsViewProvider.draftReview(),
+    summarizeBranchComparison: () => branchComparisonViewProvider.summarizeComparison(),
+    getBranchComparisonAiSummaryMessagesForTest: () => branchComparisonViewProvider.getAiSummaryMessagesForTest(),
     getLineExplanationStateForTest: (filePath, sha, lineContent) =>
       lineExplanationService.getState(filePath, sha, lineContent),
     getOwnershipItemsForTest: (filePath: string) => buildOwnershipQuickPickItems(blameSource, filePath),
+    getChatHtml: () => chatViewProvider.getCurrentHtmlForTest(),
+    chatProvider: chatViewProvider,
+    sendChatForTest: (text: string) => chatViewProvider.sendForTest(text),
   };
 }
 

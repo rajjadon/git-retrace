@@ -63,7 +63,11 @@ const THEME = `:root{
 --vscode-panelTitle-activeBorder:#0078d4;--vscode-inputOption-activeBackground:#2489db;
 --vscode-inputOption-activeForeground:#ffffff;--vscode-inputOption-activeBorder:#2488db;
 --vscode-diffEditor-insertedTextBackground:rgba(155,185,85,0.16);
---vscode-diffEditor-removedTextBackground:rgba(255,70,70,0.16);}`;
+--vscode-diffEditor-removedTextBackground:rgba(255,70,70,0.16);
+--vscode-menu-background:#1f1f1f;--vscode-menu-foreground:#cccccc;--vscode-menu-border:#454545;
+--vscode-menu-selectionBackground:#04395e;--vscode-menu-selectionForeground:#ffffff;
+--vscode-menu-separatorBackground:#454545;--vscode-editorHoverWidget-background:#252526;
+--vscode-editorHoverWidget-foreground:#cccccc;}`;
 
 /** A webview CSP blocks `file://` stylesheets. Irrelevant to a screenshot, so swap it for the theme. */
 function forBrowser(html: string): string {
@@ -73,6 +77,14 @@ function forBrowser(html: string): string {
 /** Expands the first file so the diff gutter — the thing worth showing — is actually visible. */
 function expandFirstFile(html: string): string {
   return html.replace('<details class="file"', '<details class="file" open');
+}
+
+/** Forces the right-click context menu open at a fixed position — there's no real click to fire against a static render. */
+function withOpenContextMenu(html: string, top: number, left: number): string {
+  return html.replace(
+    '<div id="commit-ctx-menu" class="ctx-menu" role="menu" hidden>',
+    `<div id="commit-ctx-menu" class="ctx-menu" role="menu" style="top:${top}px;left:${left}px;">`,
+  );
 }
 
 function shoot(dir: string, name: string, width: number, height: number): void {
@@ -110,16 +122,37 @@ async function main(): Promise<void> {
   // no sync buttons at all. Synthesize plausible non-zero counts for the current branch here, for
   // this screenshot only, so the pull/push buttons the feature actually has are visible.
   const branches = rawBranches.map((b) => (b.isCurrent && !b.isRemote ? { ...b, ahead: 3, behind: 5 } : b));
+  // This repo has no real stash sitting around right now — synthesize one against a real commit
+  // sha, same reasoning as the ahead/behind counts above, so the stash chip is visible.
+  const stashSha = commits[2]?.sha ?? '';
+  const stashes = stashSha ? [{ index: 0, message: 'wip: experiment', baseSha: stashSha }] : [];
   writeFileSync(
     join(dir, 'commit-graph.html'),
     forBrowser(
       renderGraphHtml(
-        { nodes: layoutGraph(commits), branches, workingChanges, selectedSha: commits[1]?.sha },
+        { nodes: layoutGraph(commits), branches, workingChanges, stashes, selectedSha: commits[1]?.sha },
         { ...base, styleUris: [cssUrl('shared.css'), cssUrl('commitGraph.css')] },
       ),
     ),
   );
   shoot(dir, 'commit-graph', 1200, 400);
+
+  // Same data, with the right-click context menu forced open — there's no real click to fire
+  // against a static render, so this fakes the open state purely to document what it looks like.
+  writeFileSync(
+    join(dir, 'commit-graph-context-menu.html'),
+    withOpenContextMenu(
+      forBrowser(
+        renderGraphHtml(
+          { nodes: layoutGraph(commits), branches, workingChanges, stashes, selectedSha: commits[2]?.sha },
+          { ...base, styleUris: [cssUrl('shared.css'), cssUrl('commitGraph.css')] },
+        ),
+      ),
+      90,
+      260,
+    ),
+  );
+  shoot(dir, 'commit-graph-context-menu', 1200, 400);
 
   // A commit small enough to read, but with more than one file so the list is worth showing.
   const sha = commits.find((c) => c.filesChanged > 1 && c.filesChanged < 6)?.sha ?? commits[1]?.sha;

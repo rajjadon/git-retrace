@@ -17,6 +17,16 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void
   }
 }
 
+async function withAiConfig<T>(enabled: boolean, fn: () => Promise<T>): Promise<T> {
+  const config = vscode.workspace.getConfiguration(CONFIG.section);
+  await config.update('ai.enabled', enabled, vscode.ConfigurationTarget.Global);
+  try {
+    return await fn();
+  } finally {
+    await config.update('ai.enabled', undefined, vscode.ConfigurationTarget.Global);
+  }
+}
+
 suite('Branch comparison webview', () => {
   let api: GitLoreTestApi;
 
@@ -197,5 +207,17 @@ suite('Branch comparison webview', () => {
 
     await api.branchComparisonViewProvider.createPullRequestForTest('Add feature line', false);
     assert.ok(!calledNetwork, 'expected no network call when Launchpad is disabled');
+  });
+
+  test('summarizeComparison: with AI disabled, resets the summary section instead of calling a model', async () => {
+    await openComparison();
+    await withAiConfig(false, () => api.summarizeBranchComparison());
+    assert.deepEqual(api.getBranchComparisonAiSummaryMessagesForTest(), [{ type: 'aiSummaryReset' }]);
+  });
+
+  test('summarizeComparison: with AI enabled and no model registered, shows the no-model hint', async () => {
+    await openComparison();
+    await withAiConfig(true, () => api.summarizeBranchComparison());
+    assert.deepEqual(api.getBranchComparisonAiSummaryMessagesForTest(), [{ type: 'aiSummaryNoModel' }]);
   });
 });

@@ -64,6 +64,16 @@ suite('Launchpad', () => {
     return withRemote('origin', url, fn);
   }
 
+  async function withAiConfig<T>(enabled: boolean, fn: () => Promise<T>): Promise<T> {
+    const config = vscode.workspace.getConfiguration(CONFIG.section);
+    await config.update('ai.enabled', enabled, vscode.ConfigurationTarget.Global);
+    try {
+      return await fn();
+    } finally {
+      await config.update('ai.enabled', undefined, vscode.ConfigurationTarget.Global);
+    }
+  }
+
   test('registers the gitLore.openLaunchpad command', async () => {
     const commands = await vscode.commands.getCommands(true);
     assert.ok(commands.includes(COMMANDS.openLaunchpad));
@@ -1029,6 +1039,210 @@ suite('Launchpad', () => {
 
         await api.pullRequestDetailsProvider.resolveThreadForTest('d1');
         assert.ok(resolveCalled, 'expected the resolve-discussion endpoint to be called');
+      }),
+    ));
+
+  test('explainPr: with AI disabled, resets the summary section instead of calling a model', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/explain-widgets.git', async () => {
+        api.launchpadProvider.setFetchImplForTest((async (url: string) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 10,
+                title: 'Explainable PR',
+                web_url: 'https://gitlab.com/acme/explain-widgets/-/merge_requests/10',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: false, approved_by: [] });
+          }
+          if (url.includes('merge_requests/10/diffs')) {
+            return jsonResponse([{ old_path: 'src/x.ts', new_path: 'src/x.ts', diff: '@@ -1 +1,2 @@\n+thing();' }]);
+          }
+          if (url.includes('merge_requests/10/discussions')) {
+            return jsonResponse([]);
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Explainable PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+        await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'gitlab:acme/explain-widgets#10');
+        await waitFor(() => (api.getPullRequestDetailsHtml() ?? '').includes('Explainable PR'));
+
+        await withAiConfig(false, () => api.explainPr());
+        assert.deepEqual(api.getPrAiSummaryMessagesForTest(), [{ type: 'aiSummaryReset' }]);
+      }),
+    ));
+
+  test('explainPr: with AI enabled and no model registered, shows the no-model hint', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/explain2-widgets.git', async () => {
+        api.launchpadProvider.setFetchImplForTest((async (url: string) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 11,
+                title: 'Explainable PR Two',
+                web_url: 'https://gitlab.com/acme/explain2-widgets/-/merge_requests/11',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: false, approved_by: [] });
+          }
+          if (url.includes('merge_requests/11/diffs')) {
+            return jsonResponse([{ old_path: 'src/x.ts', new_path: 'src/x.ts', diff: '@@ -1 +1,2 @@\n+thing();' }]);
+          }
+          if (url.includes('merge_requests/11/discussions')) {
+            return jsonResponse([]);
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Explainable PR Two'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+        await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'gitlab:acme/explain2-widgets#11');
+        await waitFor(() => (api.getPullRequestDetailsHtml() ?? '').includes('Explainable PR Two'));
+
+        await withAiConfig(true, () => api.explainPr());
+        assert.deepEqual(api.getPrAiSummaryMessagesForTest(), [{ type: 'aiSummaryNoModel' }]);
+      }),
+    ));
+
+  test('draftReview: with AI disabled, resets instead of calling a model', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/draft-widgets.git', async () => {
+        api.launchpadProvider.setFetchImplForTest((async (url: string) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 12,
+                title: 'Draftable PR',
+                web_url: 'https://gitlab.com/acme/draft-widgets/-/merge_requests/12',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: false, approved_by: [] });
+          }
+          if (url.includes('merge_requests/12/diffs')) {
+            return jsonResponse([{ old_path: 'src/x.ts', new_path: 'src/x.ts', diff: '@@ -1 +1,2 @@\n+thing();' }]);
+          }
+          if (url.includes('merge_requests/12/discussions')) {
+            return jsonResponse([]);
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Draftable PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+        await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'gitlab:acme/draft-widgets#12');
+        await waitFor(() => (api.getPullRequestDetailsHtml() ?? '').includes('Draftable PR'));
+
+        await withAiConfig(false, () => api.draftReview());
+        assert.deepEqual(api.getPrAiSummaryMessagesForTest(), [{ type: 'draftReviewReset' }]);
+      }),
+    ));
+
+  test('draftReview: with AI enabled and no model registered, shows the no-model hint', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/draft2-widgets.git', async () => {
+        api.launchpadProvider.setFetchImplForTest((async (url: string) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 13,
+                title: 'Draftable PR Two',
+                web_url: 'https://gitlab.com/acme/draft2-widgets/-/merge_requests/13',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: false, approved_by: [] });
+          }
+          if (url.includes('merge_requests/13/diffs')) {
+            return jsonResponse([{ old_path: 'src/x.ts', new_path: 'src/x.ts', diff: '@@ -1 +1,2 @@\n+thing();' }]);
+          }
+          if (url.includes('merge_requests/13/discussions')) {
+            return jsonResponse([]);
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Draftable PR Two'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+        await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'gitlab:acme/draft2-widgets#13');
+        await waitFor(() => (api.getPullRequestDetailsHtml() ?? '').includes('Draftable PR Two'));
+
+        await withAiConfig(true, () => api.draftReview());
+        assert.deepEqual(api.getPrAiSummaryMessagesForTest(), [{ type: 'draftReviewNoModel' }]);
       }),
     ));
 });

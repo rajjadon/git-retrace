@@ -316,6 +316,18 @@ body {
   color: var(--vscode-badge-foreground);
 }
 
+/* Stash chip — the only `.ref` that's actually clickable, so it gets its own cursor and a hover state. */
+.ref-stash {
+  border-color: var(--vscode-charts-purple, var(--vscode-panel-border));
+  color: var(--vscode-charts-purple, var(--vscode-foreground));
+  cursor: pointer;
+}
+
+.ref-stash:hover,
+.ref-stash:focus-visible {
+  background-color: var(--vscode-toolbar-hoverBackground);
+}
+
 /* ---------- Working-changes stats ---------- */
 
 .stat-add,
@@ -363,6 +375,45 @@ body {
 
 .row-tooltip[hidden] {
   display: none;
+}
+
+.ctx-menu {
+  position: fixed;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 4px;
+  background: var(--vscode-menu-background, var(--vscode-editorHoverWidget-background));
+  color: var(--vscode-menu-foreground, var(--vscode-editorHoverWidget-foreground));
+  border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
+  border-radius: var(--gitlore-radius-lg);
+  box-shadow: var(--gitlore-shadow-hover);
+}
+
+.ctx-menu[hidden] {
+  display: none;
+}
+
+.ctx-menu button {
+  all: unset;
+  padding: 6px 10px;
+  border-radius: var(--gitlore-radius-sm, 4px);
+  font-size: 0.95em;
+  cursor: pointer;
+}
+
+.ctx-menu button:hover,
+.ctx-menu button:focus-visible {
+  background: var(--vscode-menu-selectionBackground);
+  color: var(--vscode-menu-selectionForeground);
+}
+
+.ctx-menu hr {
+  width: 100%;
+  border: none;
+  border-top: 1px solid var(--vscode-menu-separatorBackground, var(--vscode-panel-border));
+  margin: 4px 0;
 }
 
 .row-tooltip-head {

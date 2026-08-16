@@ -35,7 +35,7 @@ code --install-extension RajpratapsinghJadon.gitlore
 **From a `.vsix`** — grab one from [Releases](https://github.com/rajjadon/gitlore/releases), then:
 
 ```bash
-code --install-extension gitlore-1.1.0.vsix
+code --install-extension gitlore-1.2.1.vsix
 ```
 
 Requires **VS Code 1.85+** and `git` on your `PATH`. Works in Cursor and other VS Code-based editors.
@@ -60,9 +60,13 @@ The hover card also has **Compare** / **File History** / **Copy SHA** quick acti
 
 ### An interactive commit graph, in the panel
 
-<img src="media/screenshots/commit-graph.png" alt="The GitLore panel showing the commit graph with branch labels, a working-changes row, pull/push badges, and commit details beside it" />
+<img src="media/screenshots/commit-graph.png" alt="The GitLore panel showing the commit graph with branch labels, a working-changes row, a stash chip, pull/push badges, and commit details beside it" />
 
-A repo-wide, branch-and-merge-aware graph — not a flat log. Branch, tag and remote-tracking labels are each styled distinctly, uncommitted work is pinned at the top as a **Working Changes** row, and the toolbar lets you scope to one branch, filter by message/author/SHA as you type, and refresh. Arrow keys move the selection; Enter opens the commit.
+A repo-wide, branch-and-merge-aware graph — not a flat log. Branch, tag and remote-tracking labels are each styled distinctly, uncommitted work is pinned at the top as a **Working Changes** row, and the toolbar lets you scope to one branch, filter by message/author/SHA as you type, and refresh. Arrow keys move the selection; Enter opens the commit. It opens scoped to whatever branch you're currently on, not every branch at once, and keeps following you across any checkout — from GitLore, a terminal, or another tool — until you pick a specific branch or **All branches** from the ref picker yourself. Any stash shows as a small chip on the row of the commit it was made from; click it to **Apply** or **Delete**.
+
+<img src="media/screenshots/commit-graph-context-menu.png" alt="Right-clicking a commit opens a menu with Checkout, Reset Branch to Here, Revert This Commit, Cherry-pick onto Current Branch, Create Branch from Commit, Tag This Commit, and Copy SHA" />
+
+Right-click any commit for **Checkout**, **Reset Branch to Here** (soft/mixed/hard), **Revert This Commit**, **Cherry-pick onto Current Branch**, **Create Branch from Commit**, **Tag This Commit**, and **Copy SHA** — no terminal needed to reset, revert, cherry-pick, branch, or tag from history you're already looking at. Reset and Checkout confirm first and can't be undone once accepted; Revert and Cherry-pick run in a real terminal since either can land a conflict you resolve yourself.
 
 Pull and push buttons sit in the toolbar too, badged with how many commits you're behind/ahead of the upstream (hidden when there's no upstream to compare against) — both run in a real terminal, so you see prompts and conflicts instead of them failing silently. The graph also auto-refreshes on any external `git pull`/push/checkout, not just its own buttons.
 
@@ -100,7 +104,7 @@ Off by default (`gitLore.launchpad.enabled`) — it's opt-in, same as AI, since 
 
 <img src="media/screenshots/sidebar-explorer.png" alt="The GitLore Explorer sidebar showing Branches, Remotes, Tags, Stashes, Worktrees, and Contributors sections" />
 
-Branches, Remotes, Tags, Stashes, Worktrees, and Contributors, each a collapsible section, always visible in its own activity bar icon — no command needed to open it. Right-click a branch to **Checkout** or **Compare with Current Branch**; right-click a remote to **Open Remote in Browser**; right-click a stash to **Apply** or **Drop** (with confirmation — it can't be undone).
+Branches, Remotes, Tags, Stashes, Worktrees, and Contributors, each a collapsible section, always visible in its own activity bar icon — no command needed to open it. Right-click a branch to **Checkout**, **Compare with Current Branch**, **Merge into Current Branch**, or **Rebase Current Branch onto This** (the last two run in a real terminal, since either can land a conflict you resolve yourself); right-click a remote to **Open Remote in Browser**; right-click a stash to **Apply** or **Drop** (with confirmation — it can't be undone).
 
 ### File History
 
@@ -126,6 +130,12 @@ Reorder, reword, edit, squash, fixup, or drop commits with a real UI instead of 
 
 A CodeLens above functions, methods, and classes untouched for longer than `gitLore.staleThresholdDays` (180 by default), reading how long it's been and who last touched it — click through straight to that commit. Nothing shows above code that's actually been touched recently, so the signal stays legible even in a large file.
 
+### Co-change detector
+
+<img src="media/screenshots/co-change-detector.png" alt="A CodeLens reading '🔗 Often changes with: checkoutFlow.test.ts' above a source file" />
+
+A CodeLens above the file naming other files that frequently change alongside it — "🔗 Often changes with: `auth.test.ts`, `session.ts`" — a "logical coupling" signal computed entirely from `git log`, no separate analysis service. Click it for a QuickPick with the exact ratio (e.g. "changed together in 4/5 commits · 80%") and pick one to open it. Nothing shows for a coincidental shared commit or two — only a real, consistent pattern. Toggle with `gitLore.coChange.enabled` (on by default).
+
 ### Author ownership heatmap
 
 <img src="media/screenshots/ownership-heatmap.png" alt="The File Ownership quick pick showing each author's recency-weighted percentage and line count, with color marks in the editor's overview ruler" />
@@ -148,6 +158,19 @@ Opt-in (`gitLore.ai.enabled`, off by default) — nothing is sent anywhere until
 
 Each degrades to an inline hint rather than erroring when no model is registered.
 
+### GitLore Chat — ask your repo's history questions directly
+
+A docked chat panel (**GitLore: Open Chat**) for free-form questions about a repo's history — "who touched this file last", "why did this get rewritten", "what changed between these two tags." The model answers by calling a fixed set of git-backed tools GitLore runs locally against your own repo (file history, line history, a commit's diff, commits between two refs, branches) — no retrieval index, no pre-guessed context, and every tool call is shown in the panel as it happens. Also reachable pre-seeded with a subject via **Ask GitLore About This File/Commit/Pull Request**, from Commit Graph, Commit Details, and Pull Request Details.
+
+Same opt-in gate and privacy contract as every other AI feature: nothing runs unless `gitLore.ai.enabled` is on, and every tool call is a local `git` read — never a network call.
+
+### More AI, reusing the same infrastructure
+
+- **Explain this PR** — an Explain button in Pull Request Details summarizes what a PR changes and flags its riskiest area to review.
+- **Branch Compare AI summary** — a Summarize button in Branch Comparison explains what the compare branch changes relative to the base.
+- **Generate Changelog with AI** — pick two refs, get a Markdown changelog (Added/Changed/Fixed) streamed into a fresh editor tab.
+- **AI PR review draft** — a Draft Review button in Pull Request Details drafts one review comment into the existing comment box, for you to edit and post — the model never posts on its own.
+
 ### Also
 
 - **Issue and PR links** — `#123` in a commit message becomes a link, auto-detected from your remote or pointed at any tracker (Jira included) via a regex and URL template. Visible inline wherever a commit message renders — no separate view of its own.
@@ -166,9 +189,12 @@ Every command is also a title-bar button in the GitLore panel.
 | `GitLore: Toggle Inline Blame` | Turn the end-of-line decoration on or off |
 | `GitLore: Copy Commit SHA` | Copy a commit's full SHA (from a commit's context menu) |
 | `GitLore: Show File Ownership` | See a file's authors ranked by recency-weighted ownership share (command palette only, no title-bar button) |
+| `GitLore: Show Files That Often Change With This One` | Open the coupled-files QuickPick (from the co-change CodeLens) |
 | `GitLore: Rebase Branch Interactively...` | Pick a target ref and start an interactive rebase, opened in GitLore's own editor |
 | `GitLore: Checkout Branch` | Check out the selected branch (from the Explorer's context menu) |
 | `GitLore: Compare with Current Branch` | Open Branch Comparison against the selected branch (from the Explorer's context menu) |
+| `GitLore: Merge into Current Branch` | Merge the selected branch into the current one, in a real terminal (from the Explorer's context menu) |
+| `GitLore: Rebase Current Branch onto This` | Rebase the current branch onto the selected one, in a real terminal (from the Explorer's context menu) |
 | `GitLore: Open Remote in Browser` | Open the selected remote's repo page (from the Explorer's context menu) |
 | `GitLore: Apply Stash` | Re-apply the selected stash without dropping it (from the Explorer's context menu) |
 | `GitLore: Drop Stash` | Permanently delete the selected stash, after confirming (from the Explorer's context menu) |
@@ -177,6 +203,14 @@ Every command is also a title-bar button in the GitLore panel.
 | `GitLore: Open Launchpad` | Open the cross-repo PR triage board (needs `gitLore.launchpad.enabled`) |
 | `GitLore: Show Pull Request Details` | Open a PR's changed files, diff, and review conversations in a docked panel (from a Launchpad card's View diff button) |
 | `GitLore: Generate Commit Message with AI` | Draft a commit message from your staged diff, into the Source Control input box (also a title-bar button there; needs `gitLore.ai.enabled`) |
+| `GitLore: Open Chat` | Open the GitLore Chat panel (also a title-bar button on Commit Graph; needs `gitLore.ai.enabled`) |
+| `GitLore: Ask GitLore About This File` | Open the chat, pre-seeded with the current file |
+| `GitLore: Ask GitLore About This Commit` | Open the chat, pre-seeded with the loaded commit (title-bar button on Commit Details) |
+| `GitLore: Ask GitLore About This Pull Request` | Open the chat, pre-seeded with the loaded PR (title-bar button on Pull Request Details) |
+| `GitLore: Explain Pull Request with AI` | Summarize the loaded PR and flag its riskiest area (button in Pull Request Details; needs `gitLore.ai.enabled`) |
+| `GitLore: Summarize Branch Comparison with AI` | Summarize what the compare branch changes relative to the base (button in Branch Comparison; needs `gitLore.ai.enabled`) |
+| `GitLore: Generate Changelog with AI` | Pick two refs and stream a Markdown changelog into a new editor tab (needs `gitLore.ai.enabled`) |
+| `GitLore: Draft PR Review Comment with AI` | Draft a review comment into the existing comment box (button in Pull Request Details; needs `gitLore.ai.enabled`) |
 
 ## Settings
 

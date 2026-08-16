@@ -2,7 +2,7 @@
   "name": "gitlore",
   "displayName": "GitLore — git blame, history & commit graph",
   "description": "The story behind every line. Free, local-first git blame, history, commit graph and branch comparison — no account, no telemetry.",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "publisher": "RajpratapsinghJadon",
   "license": "MIT",
   "engines": {
@@ -70,6 +70,21 @@
         "icon": "$(sparkle)"
       },
       {
+        "command": "gitLore.explainPullRequest",
+        "title": "GitLore: Explain Pull Request with AI",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitLore.summarizeBranchComparison",
+        "title": "GitLore: Summarize Branch Comparison with AI",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitLore.draftPrReview",
+        "title": "GitLore: Draft PR Review Comment with AI",
+        "icon": "$(sparkle)"
+      },
+      {
         "command": "gitLore.generateCommitMessage",
         "title": "GitLore: Generate Commit Message with AI",
         "icon": "$(sparkle)"
@@ -100,6 +115,16 @@
         "icon": "$(git-compare)"
       },
       {
+        "command": "gitLore.mergeBranchFromExplorer",
+        "title": "GitLore: Merge into Current Branch",
+        "icon": "$(git-merge)"
+      },
+      {
+        "command": "gitLore.rebaseOntoBranchFromExplorer",
+        "title": "GitLore: Rebase Current Branch onto This",
+        "icon": "$(git-branch)"
+      },
+      {
         "command": "gitLore.openRemote",
         "title": "GitLore: Open Remote in Browser",
         "icon": "$(link-external)"
@@ -120,6 +145,11 @@
         "icon": "$(chevron-left)"
       },
       {
+        "command": "gitLore.showCoChangedFiles",
+        "title": "GitLore: Show Files That Often Change With This One",
+        "icon": "$(references)"
+      },
+      {
         "command": "gitLore.toggleFullFileBlame",
         "title": "GitLore: Toggle Full-File Blame Heatmap",
         "icon": "$(flame)"
@@ -128,6 +158,36 @@
         "command": "gitLore.openLaunchpad",
         "title": "GitLore: Open Launchpad",
         "icon": "$(rocket)"
+      },
+      {
+        "command": "gitLore.openChat",
+        "title": "GitLore: Open Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "gitLore.askAboutFile",
+        "title": "GitLore: Ask GitLore About This File",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "gitLore.askAboutCommit",
+        "title": "GitLore: Ask GitLore About This Commit",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "gitLore.askAboutLine",
+        "title": "GitLore: Ask GitLore About This Line",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "gitLore.askAboutPullRequest",
+        "title": "GitLore: Ask GitLore About This Pull Request",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "gitLore.generateChangelog",
+        "title": "GitLore: Generate Changelog with AI",
+        "icon": "$(sparkle)"
       }
     ],
     "viewsContainers": {
@@ -189,6 +249,12 @@
           "id": "gitLore.pullRequestDetails",
           "name": "Pull Request Details",
           "visibility": "collapsed"
+        },
+        {
+          "type": "webview",
+          "id": "gitLore.chat",
+          "name": "Chat",
+          "visibility": "collapsed"
         }
       ]
     },
@@ -217,6 +283,14 @@
         },
         {
           "command": "gitLore.compareBranchFromExplorer",
+          "when": "view == gitLore.explorer && (viewItem == gitLore.branch || viewItem == gitLore.branch.remote)"
+        },
+        {
+          "command": "gitLore.mergeBranchFromExplorer",
+          "when": "view == gitLore.explorer && (viewItem == gitLore.branch || viewItem == gitLore.branch.remote)"
+        },
+        {
+          "command": "gitLore.rebaseOntoBranchFromExplorer",
           "when": "view == gitLore.explorer && (viewItem == gitLore.branch || viewItem == gitLore.branch.remote)"
         },
         {
@@ -273,6 +347,21 @@
           "group": "navigation@6"
         },
         {
+          "command": "gitLore.openChat",
+          "when": "view == gitLore.commitGraph",
+          "group": "navigation@7"
+        },
+        {
+          "command": "gitLore.askAboutCommit",
+          "when": "view == gitLore.commitDetails",
+          "group": "navigation@3"
+        },
+        {
+          "command": "gitLore.askAboutPullRequest",
+          "when": "view == gitLore.pullRequestDetails",
+          "group": "navigation@1"
+        },
+        {
           "command": "gitLore.compareBranches",
           "when": "view == gitLore.branchComparison",
           "group": "navigation@1"
@@ -315,6 +404,14 @@
           "when": "false"
         },
         {
+          "command": "gitLore.mergeBranchFromExplorer",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.rebaseOntoBranchFromExplorer",
+          "when": "false"
+        },
+        {
           "command": "gitLore.openRemote",
           "when": "false"
         },
@@ -328,6 +425,14 @@
         },
         {
           "command": "gitLore.stepLineHistory",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.showCoChangedFiles",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.askAboutLine",
           "when": "false"
         }
       ]
@@ -380,6 +485,11 @@
           "default": 180,
           "description": "Days since a function's or method's last change before it's flagged as stale."
         },
+        "gitLore.coChange.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a CodeLens above the file for other files that frequently change alongside it (a 'logical coupling' signal from git history)."
+        },
         "gitLore.ownership.enabled": {
           "type": "boolean",
           "default": false,
@@ -419,6 +529,11 @@
           "type": "number",
           "default": 8000,
           "description": "Max diff size, in characters, sent to the model for a commit summary. Longer diffs are truncated."
+        },
+        "gitLore.ai.maxToolIterations": {
+          "type": "number",
+          "default": 6,
+          "description": "Max tool-call round trips GitLore Chat makes per question before it stops and shows whatever answer the model has produced so far."
         },
         "gitLore.rebaseEditor.enabled": {
           "type": "boolean",
