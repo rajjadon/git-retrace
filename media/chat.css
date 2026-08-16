@@ -85,6 +85,7 @@ body {
 
 .chat-input {
   display: flex;
+  align-items: center;
   gap: 8px;
   padding: 8px 12px;
   border-top: 1px solid var(--vscode-panel-border);
@@ -93,6 +94,9 @@ body {
 #chat-text {
   flex: 1;
   resize: none;
+  box-sizing: border-box;
+  max-height: 120px;
+  overflow-y: auto;
   background: var(--vscode-input-background);
   color: var(--vscode-input-foreground);
   border: 1px solid var(--vscode-input-border);

@@ -36,7 +36,7 @@ ${subject}
 <p class="chat-hint" id="chat-hint" role="status" hidden></p>
 <div class="chat-tool-status" id="chat-tool-status" role="status" hidden></div>
 <form class="chat-input" id="chat-form">
-<textarea id="chat-text" placeholder="Ask about this repo's history…" aria-label="Ask GitLore" rows="2"></textarea>
+<textarea id="chat-text" placeholder="Ask about this repo's history…" aria-label="Ask GitLore" rows="1"></textarea>
 <button class="btn btn-accent" id="chat-send" type="submit">${AI_ICON}Ask</button>
 </form>
 <script nonce="${opts.nonce}">
@@ -58,6 +58,20 @@ function addBubble(role, text) {
   return bubble;
 }
 
+function autoGrow() {
+  textEl.style.height = 'auto';
+  textEl.style.height = Math.min(textEl.scrollHeight, 120) + 'px';
+}
+
+textEl.addEventListener('input', autoGrow);
+
+textEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    form.requestSubmit();
+  }
+});
+
 form.addEventListener('submit', (e) => {
   e.preventDefault();
   const text = textEl.value.trim();
@@ -66,6 +80,7 @@ form.addEventListener('submit', (e) => {
   }
   addBubble('user', text);
   textEl.value = '';
+  autoGrow();
   sendBtn.disabled = true;
   hintEl.hidden = true;
   currentAssistantBubble = null;
