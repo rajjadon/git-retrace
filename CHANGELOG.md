@@ -6,7 +6,7 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
-## [1.2.1] - 2026-08-17
+## [1.2.2] - 2026-08-17
 
 ### Added
 
@@ -22,7 +22,7 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **Sidebar Explorer: Merge and Rebase from a branch's right-click menu** — "Merge into Current Branch" and "Rebase Current Branch onto This" on any branch or remote-tracking branch row, so a merge or rebase no longer requires dropping into a terminal to type the command yourself. Runs in the shared **GitLore: Git Sync** terminal, since either can conflict.
 - **Co-change detector** — a new CodeLens above the file naming other files that frequently change alongside it, computed from `git log` (no AI, no separate analysis service). Click for a QuickPick with the exact co-occurrence ratio; pick one to open it. New setting `gitLore.coChange.enabled` (default `true`).
 
-## [1.2.0] - 2026-08-15
+## [1.2.0-1.2.1] - 2026-08-15
 
 ### Added
 
