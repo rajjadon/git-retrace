@@ -31,6 +31,15 @@ export const COMMANDS = {
   toggleFullFileBlame: 'gitLore.toggleFullFileBlame',
   openLaunchpad: 'gitLore.openLaunchpad',
   showPullRequest: 'gitLore.showPullRequest',
+  openChat: 'gitLore.openChat',
+  askAboutFile: 'gitLore.askAboutFile',
+  askAboutCommit: 'gitLore.askAboutCommit',
+  askAboutLine: 'gitLore.askAboutLine',
+  askAboutPullRequest: 'gitLore.askAboutPullRequest',
+  explainPullRequest: 'gitLore.explainPullRequest',
+  summarizeBranchComparison: 'gitLore.summarizeBranchComparison',
+  generateChangelog: 'gitLore.generateChangelog',
+  draftPrReview: 'gitLore.draftPrReview',
 } as const;
 
 export const CONFIG = {
@@ -52,6 +61,7 @@ export const CONFIG = {
   aiEnabled: 'ai.enabled',
   aiModelFamily: 'ai.modelFamily',
   aiMaxDiffChars: 'ai.maxDiffChars',
+  aiMaxToolIterations: 'ai.maxToolIterations',
   rebaseEditorEnabled: 'rebaseEditor.enabled',
   launchpadEnabled: 'launchpad.enabled',
   launchpadCustomHosts: 'launchpad.customHosts',
@@ -66,6 +76,7 @@ export const VIEWS = {
   rebaseEditor: 'gitLore.rebaseEditor',
   explorer: 'gitLore.explorer',
   pullRequestDetails: 'gitLore.pullRequestDetails',
+  chat: 'gitLore.chat',
   /** Not registered via `contributes.views` — created imperatively with `createWebviewPanel` (a full editor-area tab, like Rebase Editor, not a docked panel), so this id is only ever used internally. */
   launchpad: 'gitLore.launchpad',
 } as const;
@@ -81,6 +92,7 @@ export const MEDIA = {
   commitGraph: 'commitGraph.css',
   commitDetails: 'commitDetails.css',
   pullRequestDetails: 'pullRequestDetails.css',
+  chat: 'chat.css',
   branchComparison: 'branchComparison.css',
   visualFileHistory: 'visualFileHistory.css',
   rebaseEditor: 'rebaseEditor.css',
