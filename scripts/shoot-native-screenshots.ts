@@ -174,6 +174,14 @@ async function main(): Promise<void> {
       await page.waitForTimeout(1000);
       await shootElement(page, '.editor-instance', 'stale-code');
 
+      // The co-change lens sits at line 0 — no goToLine needed, it's visible the moment the file
+      // opens. Longer wait than the other lenses: this is the first file in the session whose
+      // co-change data isn't already warm (userProfile.ts/authService.ts have no coupling, so
+      // opening them earlier never triggered the underlying git log call this file's lens needs).
+      await openFile(page, 'checkoutFlow.ts');
+      await page.waitForTimeout(3000);
+      await shootElement(page, '.editor-instance', 'co-change-detector');
+
       const activityIcon = page.locator('.activitybar a[aria-label="GitLore"]').first();
       await activityIcon.click();
       await page.waitForTimeout(1200);

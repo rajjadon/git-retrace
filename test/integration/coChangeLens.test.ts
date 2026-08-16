@@ -1,4 +1,5 @@
 import * as assert from 'node:assert/strict';
+import { realpathSync } from 'node:fs';
 import * as vscode from 'vscode';
 import { buildCoChangeFixtureRepo, type CoChangeFixtureManifest } from '../fixtures/build-fixture-repo';
 import type { GitLoreTestApi } from '../../src/extension';
@@ -81,6 +82,9 @@ suite('Co-change CodeLens', () => {
       (vscode.window as unknown as { showQuickPick: unknown }).showQuickPick = original;
     }
 
-    assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath, manifest.coupledFile);
+    // Realpath both sides before comparing: the command opens the file via a repo root git itself
+    // canonicalized (macOS resolves `/var/folders` -> `/private/var/folders`), while the fixture's
+    // own path is the raw, non-canonicalized form — same file, two equally correct spellings.
+    assert.equal(realpathSync(vscode.window.activeTextEditor?.document.uri.fsPath ?? ''), realpathSync(manifest.coupledFile));
   });
 });

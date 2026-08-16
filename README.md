@@ -35,7 +35,7 @@ code --install-extension RajpratapsinghJadon.gitlore
 **From a `.vsix`** — grab one from [Releases](https://github.com/rajjadon/gitlore/releases), then:
 
 ```bash
-code --install-extension gitlore-1.1.0.vsix
+code --install-extension gitlore-1.2.1.vsix
 ```
 
 Requires **VS Code 1.85+** and `git` on your `PATH`. Works in Cursor and other VS Code-based editors.
@@ -60,9 +60,11 @@ The hover card also has **Compare** / **File History** / **Copy SHA** quick acti
 
 ### An interactive commit graph, in the panel
 
-<img src="media/screenshots/commit-graph.png" alt="The GitLore panel showing the commit graph with branch labels, a working-changes row, pull/push badges, and commit details beside it" />
+<img src="media/screenshots/commit-graph.png" alt="The GitLore panel showing the commit graph with branch labels, a working-changes row, a stash chip, pull/push badges, and commit details beside it" />
 
 A repo-wide, branch-and-merge-aware graph — not a flat log. Branch, tag and remote-tracking labels are each styled distinctly, uncommitted work is pinned at the top as a **Working Changes** row, and the toolbar lets you scope to one branch, filter by message/author/SHA as you type, and refresh. Arrow keys move the selection; Enter opens the commit. It opens scoped to whatever branch you're currently on, not every branch at once, and keeps following you across any checkout — from GitLore, a terminal, or another tool — until you pick a specific branch or **All branches** from the ref picker yourself. Any stash shows as a small chip on the row of the commit it was made from; click it to **Apply** or **Delete**.
+
+<img src="media/screenshots/commit-graph-context-menu.png" alt="Right-clicking a commit opens a menu with Checkout, Reset Branch to Here, Revert This Commit, Cherry-pick onto Current Branch, Create Branch from Commit, Tag This Commit, and Copy SHA" />
 
 Right-click any commit for **Checkout**, **Reset Branch to Here** (soft/mixed/hard), **Revert This Commit**, **Cherry-pick onto Current Branch**, **Create Branch from Commit**, **Tag This Commit**, and **Copy SHA** — no terminal needed to reset, revert, cherry-pick, branch, or tag from history you're already looking at. Reset and Checkout confirm first and can't be undone once accepted; Revert and Cherry-pick run in a real terminal since either can land a conflict you resolve yourself.
 
@@ -129,6 +131,8 @@ Reorder, reword, edit, squash, fixup, or drop commits with a real UI instead of 
 A CodeLens above functions, methods, and classes untouched for longer than `gitLore.staleThresholdDays` (180 by default), reading how long it's been and who last touched it — click through straight to that commit. Nothing shows above code that's actually been touched recently, so the signal stays legible even in a large file.
 
 ### Co-change detector
+
+<img src="media/screenshots/co-change-detector.png" alt="A CodeLens reading '🔗 Often changes with: checkoutFlow.test.ts' above a source file" />
 
 A CodeLens above the file naming other files that frequently change alongside it — "🔗 Often changes with: `auth.test.ts`, `session.ts`" — a "logical coupling" signal computed entirely from `git log`, no separate analysis service. Click it for a QuickPick with the exact ratio (e.g. "changed together in 4/5 commits · 80%") and pick one to open it. Nothing shows for a coincidental shared commit or two — only a real, consistent pattern. Toggle with `gitLore.coChange.enabled` (on by default).
 

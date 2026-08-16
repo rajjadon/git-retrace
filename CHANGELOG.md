@@ -6,6 +6,8 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-08-17
+
 ### Added
 
 - **GitLore Chat** — a docked chat panel (**GitLore: Open Chat**) for asking free-form questions about a repo's history ("who touched this file last", "why did this get rewritten", "what changed between these two tags"). The model answers by calling git-backed tools GitLore runs locally against your own repo — no retrieval index, no guessed context — and every tool call is shown in the panel as it happens. Also reachable pre-seeded with a subject via **Ask GitLore About This File/Commit/Pull Request** from Commit Graph, Commit Details, and Pull Request Details. Same privacy contract as every other AI feature: nothing runs unless `gitLore.ai.enabled` is on, and every tool call is a local `git` read, never a network call.

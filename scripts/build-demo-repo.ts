@@ -15,6 +15,7 @@ export interface DemoRepoManifest {
   repoRoot: string;
   authServiceFile: string;
   userProfileFile: string;
+  checkoutFlowFile: string;
   currentBranch: string;
   featureBranch: string;
   tagName: string;
@@ -126,6 +127,47 @@ const USER_PROFILE_V4 = USER_PROFILE_V3.replace(
   'return profile.displayName.trim();',
 );
 
+// checkoutFlow.ts + its test change together in 2 of the 3 commits that touch checkoutFlow.ts
+// (~67% coupling) — real signal for the co-change detector, not present anywhere else in this
+// repo's history (every other file here only ever changes alone).
+const CHECKOUT_FLOW_V1 = `export function calculateTotal(items: number[]): number {
+  return items.reduce((sum, price) => sum + price, 0);
+}
+`;
+
+const CHECKOUT_FLOW_V2 = `export function calculateTotal(items: number[]): number {
+  return items.reduce((sum, price) => sum + price, 0);
+}
+
+export function applyDiscount(total: number, percent: number): number {
+  return total * (1 - percent / 100);
+}
+`;
+
+const CHECKOUT_FLOW_V3 = `${CHECKOUT_FLOW_V2}
+export function formatCurrency(amount: number): string {
+  return \`$\${amount.toFixed(2)}\`;
+}
+`;
+
+const CHECKOUT_FLOW_TEST_V1 = `import { calculateTotal } from './checkoutFlow';
+
+test('sums item prices', () => {
+  expect(calculateTotal([10, 20, 30])).toBe(60);
+});
+`;
+
+const CHECKOUT_FLOW_TEST_V2 = `import { calculateTotal, applyDiscount } from './checkoutFlow';
+
+test('sums item prices', () => {
+  expect(calculateTotal([10, 20, 30])).toBe(60);
+});
+
+test('applies a percentage discount', () => {
+  expect(applyDiscount(100, 10)).toBe(90);
+});
+`;
+
 export function buildDemoRepo(): DemoRepoManifest {
   const repoRoot = mkdtempSync(join(tmpdir(), 'gitlore-demo-'));
   const srcDir = join(repoRoot, 'src');
@@ -175,13 +217,30 @@ export function buildDemoRepo(): DemoRepoManifest {
   git(repoRoot, ['add', 'src/authService.ts']);
   git(repoRoot, ['commit', '-q', '-m', 'Add token refresh'], SAM(daysAgo(0)));
 
+  const checkoutFlowFile = join(srcDir, 'checkoutFlow.ts');
+  const checkoutFlowTestFile = join(srcDir, 'checkoutFlow.test.ts');
+
+  writeFileSync(checkoutFlowFile, CHECKOUT_FLOW_V1);
+  writeFileSync(checkoutFlowTestFile, CHECKOUT_FLOW_TEST_V1);
+  git(repoRoot, ['add', 'src/checkoutFlow.ts', 'src/checkoutFlow.test.ts']);
+  git(repoRoot, ['commit', '-q', '-m', 'Add checkout total calculation'], DIEGO(daysAgo(45)));
+
+  writeFileSync(checkoutFlowFile, CHECKOUT_FLOW_V2);
+  writeFileSync(checkoutFlowTestFile, CHECKOUT_FLOW_TEST_V2);
+  git(repoRoot, ['add', 'src/checkoutFlow.ts', 'src/checkoutFlow.test.ts']);
+  git(repoRoot, ['commit', '-q', '-m', 'Add percentage discount support'], DIEGO(daysAgo(20)));
+
+  writeFileSync(checkoutFlowFile, CHECKOUT_FLOW_V3);
+  git(repoRoot, ['add', 'src/checkoutFlow.ts']);
+  git(repoRoot, ['commit', '-q', '-m', 'Add currency formatting helper'], MAYA(daysAgo(1)));
+
   git(repoRoot, ['remote', 'add', 'origin', 'https://github.com/acme/storefront.git']);
 
   // A real, uncommitted change for the Sidebar Explorer's Stashes section.
   writeFileSync(authServiceFile, `${AUTH_SERVICE_V2}\n// TODO: rate-limit refreshToken\n`);
   git(repoRoot, ['stash', 'push', '-q', '-m', 'wip: rate limiting for token refresh']);
 
-  return { repoRoot, authServiceFile, userProfileFile, currentBranch: 'main', featureBranch, tagName };
+  return { repoRoot, authServiceFile, userProfileFile, checkoutFlowFile, currentBranch: 'main', featureBranch, tagName };
 }
 
 if (require.main === module) {
