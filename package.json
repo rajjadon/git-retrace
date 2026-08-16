@@ -70,6 +70,21 @@
         "icon": "$(sparkle)"
       },
       {
+        "command": "gitLore.explainPullRequest",
+        "title": "GitLore: Explain Pull Request with AI",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitLore.summarizeBranchComparison",
+        "title": "GitLore: Summarize Branch Comparison with AI",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "gitLore.draftPrReview",
+        "title": "GitLore: Draft PR Review Comment with AI",
+        "icon": "$(sparkle)"
+      },
+      {
         "command": "gitLore.generateCommitMessage",
         "title": "GitLore: Generate Commit Message with AI",
         "icon": "$(sparkle)"
@@ -128,6 +143,36 @@
         "command": "gitLore.openLaunchpad",
         "title": "GitLore: Open Launchpad",
         "icon": "$(rocket)"
+      },
+      {
+        "command": "gitLore.openChat",
+        "title": "GitLore: Open Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "gitLore.askAboutFile",
+        "title": "GitLore: Ask GitLore About This File",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "gitLore.askAboutCommit",
+        "title": "GitLore: Ask GitLore About This Commit",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "gitLore.askAboutLine",
+        "title": "GitLore: Ask GitLore About This Line",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "gitLore.askAboutPullRequest",
+        "title": "GitLore: Ask GitLore About This Pull Request",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "gitLore.generateChangelog",
+        "title": "GitLore: Generate Changelog with AI",
+        "icon": "$(sparkle)"
       }
     ],
     "viewsContainers": {
@@ -188,6 +233,12 @@
           "type": "webview",
           "id": "gitLore.pullRequestDetails",
           "name": "Pull Request Details",
+          "visibility": "collapsed"
+        },
+        {
+          "type": "webview",
+          "id": "gitLore.chat",
+          "name": "Chat",
           "visibility": "collapsed"
         }
       ]
@@ -273,6 +324,21 @@
           "group": "navigation@6"
         },
         {
+          "command": "gitLore.openChat",
+          "when": "view == gitLore.commitGraph",
+          "group": "navigation@7"
+        },
+        {
+          "command": "gitLore.askAboutCommit",
+          "when": "view == gitLore.commitDetails",
+          "group": "navigation@3"
+        },
+        {
+          "command": "gitLore.askAboutPullRequest",
+          "when": "view == gitLore.pullRequestDetails",
+          "group": "navigation@1"
+        },
+        {
           "command": "gitLore.compareBranches",
           "when": "view == gitLore.branchComparison",
           "group": "navigation@1"
@@ -328,6 +394,10 @@
         },
         {
           "command": "gitLore.stepLineHistory",
+          "when": "false"
+        },
+        {
+          "command": "gitLore.askAboutLine",
           "when": "false"
         }
       ]
@@ -419,6 +489,11 @@
           "type": "number",
           "default": 8000,
           "description": "Max diff size, in characters, sent to the model for a commit summary. Longer diffs are truncated."
+        },
+        "gitLore.ai.maxToolIterations": {
+          "type": "number",
+          "default": 6,
+          "description": "Max tool-call round trips GitLore Chat makes per question before it stops and shows whatever answer the model has produced so far."
         },
         "gitLore.rebaseEditor.enabled": {
           "type": "boolean",

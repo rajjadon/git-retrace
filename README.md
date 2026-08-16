@@ -148,6 +148,19 @@ Opt-in (`gitLore.ai.enabled`, off by default) — nothing is sent anywhere until
 
 Each degrades to an inline hint rather than erroring when no model is registered.
 
+### GitLore Chat — ask your repo's history questions directly
+
+A docked chat panel (**GitLore: Open Chat**) for free-form questions about a repo's history — "who touched this file last", "why did this get rewritten", "what changed between these two tags." The model answers by calling a fixed set of git-backed tools GitLore runs locally against your own repo (file history, line history, a commit's diff, commits between two refs, branches) — no retrieval index, no pre-guessed context, and every tool call is shown in the panel as it happens. Also reachable pre-seeded with a subject via **Ask GitLore About This File/Commit/Pull Request**, from Commit Graph, Commit Details, and Pull Request Details.
+
+Same opt-in gate and privacy contract as every other AI feature: nothing runs unless `gitLore.ai.enabled` is on, and every tool call is a local `git` read — never a network call.
+
+### More AI, reusing the same infrastructure
+
+- **Explain this PR** — an Explain button in Pull Request Details summarizes what a PR changes and flags its riskiest area to review.
+- **Branch Compare AI summary** — a Summarize button in Branch Comparison explains what the compare branch changes relative to the base.
+- **Generate Changelog with AI** — pick two refs, get a Markdown changelog (Added/Changed/Fixed) streamed into a fresh editor tab.
+- **AI PR review draft** — a Draft Review button in Pull Request Details drafts one review comment into the existing comment box, for you to edit and post — the model never posts on its own.
+
 ### Also
 
 - **Issue and PR links** — `#123` in a commit message becomes a link, auto-detected from your remote or pointed at any tracker (Jira included) via a regex and URL template. Visible inline wherever a commit message renders — no separate view of its own.
@@ -177,6 +190,14 @@ Every command is also a title-bar button in the GitLore panel.
 | `GitLore: Open Launchpad` | Open the cross-repo PR triage board (needs `gitLore.launchpad.enabled`) |
 | `GitLore: Show Pull Request Details` | Open a PR's changed files, diff, and review conversations in a docked panel (from a Launchpad card's View diff button) |
 | `GitLore: Generate Commit Message with AI` | Draft a commit message from your staged diff, into the Source Control input box (also a title-bar button there; needs `gitLore.ai.enabled`) |
+| `GitLore: Open Chat` | Open the GitLore Chat panel (also a title-bar button on Commit Graph; needs `gitLore.ai.enabled`) |
+| `GitLore: Ask GitLore About This File` | Open the chat, pre-seeded with the current file |
+| `GitLore: Ask GitLore About This Commit` | Open the chat, pre-seeded with the loaded commit (title-bar button on Commit Details) |
+| `GitLore: Ask GitLore About This Pull Request` | Open the chat, pre-seeded with the loaded PR (title-bar button on Pull Request Details) |
+| `GitLore: Explain Pull Request with AI` | Summarize the loaded PR and flag its riskiest area (button in Pull Request Details; needs `gitLore.ai.enabled`) |
+| `GitLore: Summarize Branch Comparison with AI` | Summarize what the compare branch changes relative to the base (button in Branch Comparison; needs `gitLore.ai.enabled`) |
+| `GitLore: Generate Changelog with AI` | Pick two refs and stream a Markdown changelog into a new editor tab (needs `gitLore.ai.enabled`) |
+| `GitLore: Draft PR Review Comment with AI` | Draft a review comment into the existing comment box (button in Pull Request Details; needs `gitLore.ai.enabled`) |
 
 ## Settings
 

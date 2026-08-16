@@ -4,6 +4,17 @@ All notable changes to GitLore are documented here. Format follows [Keep a Chang
 
 The VS Code Marketplace shows this file on GitLore's extension page, so entries describe what changed for someone *using* GitLore. Why a change was made the way it was belongs in the commit message and in code comments, next to the code it explains.
 
+## [Unreleased]
+
+### Added
+
+- **GitLore Chat** — a docked chat panel (**GitLore: Open Chat**) for asking free-form questions about a repo's history ("who touched this file last", "why did this get rewritten", "what changed between these two tags"). The model answers by calling git-backed tools GitLore runs locally against your own repo — no retrieval index, no guessed context — and every tool call is shown in the panel as it happens. Also reachable pre-seeded with a subject via **Ask GitLore About This File/Commit/Pull Request** from Commit Graph, Commit Details, and Pull Request Details. Same privacy contract as every other AI feature: nothing runs unless `gitLore.ai.enabled` is on, and every tool call is a local `git` read, never a network call.
+- **Explain this PR** — an Explain button in Pull Request Details summarizes what a PR changes and calls out its riskiest area, the same way Commit Details' AI summary already does.
+- **Branch Compare AI summary** — a Summarize button in Branch Comparison explains what the compare branch changes relative to the base, in plain English.
+- **Generate Changelog with AI** — a new command picks two refs and streams a Markdown changelog (grouped into Added/Changed/Fixed) into a fresh editor tab.
+- **AI PR review draft** — a Draft Review button in Pull Request Details drafts one review comment into the existing comment box, for you to edit and post yourself — the model never posts on its own.
+- New setting: `gitLore.ai.maxToolIterations` (default `6`) caps how many tool-call round trips GitLore Chat makes per question before showing whatever answer the model has produced so far.
+
 ## [1.2.0] - 2026-08-15
 
 ### Added

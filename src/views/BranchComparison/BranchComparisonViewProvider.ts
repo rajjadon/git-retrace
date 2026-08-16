@@ -14,6 +14,10 @@ import { DRAFT_SUPPORTED_HOSTS, type ForgeRepoRef } from '../../core/forge/types
 import { azureDevOpsCredentialScheme, resolveForgeToken } from '../../providers/forgeCredentials';
 import { remoteHostLabel } from '../../utils/remoteLinks';
 import type { FileChange, RemoteInfo } from '../../core/git/types';
+import { LruCache } from '../../core/cache/LruCache';
+import type { LanguageModelClient } from '../../ai/LanguageModelClient';
+import { runCommitSummaryFlow } from '../../core/ai/commitSummaryFlow';
+import { buildBranchCompareSummaryPrompt } from '../../core/ai/prompts';
 
 /** Above this, "Open all changes" confirms first — opening dozens of diff editors in one click is more likely a misclick than the intent. */
 const OPEN_ALL_CONFIRM_THRESHOLD = 20;
@@ -39,6 +43,9 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
   // Guards against a superseded `load()` (e.g. a fast ref-picker change) overwriting a newer
   // one's rendered HTML with stale data once it resolves — same idiom as CommitGraphViewProvider.
   private loadGeneration = 0;
+  private aiSummaryCache = new LruCache<string, string>(50);
+  private aiAbortController: AbortController | undefined;
+  private aiMessagesForTest: unknown[] = [];
 
   /** Overridable only for tests — a real network call has no place in an automated suite. Defaults to the real global `fetch`. */
   private fetchImpl: typeof fetch;
@@ -47,6 +54,7 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
     private readonly extensionUri: vscode.Uri,
     private readonly context: vscode.ExtensionContext,
     private readonly git: GitService,
+    private readonly languageModelClient: LanguageModelClient,
     private readonly logger?: GitLogger,
     fetchImpl: typeof fetch = fetch,
   ) {
@@ -61,6 +69,10 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
   /** Test-only introspection seam — VS Code's public API doesn't expose a webview's rendered HTML. */
   getCurrentHtmlForTest(): string | undefined {
     return this.view?.webview.html;
+  }
+
+  getAiSummaryMessagesForTest(): unknown[] {
+    return this.aiMessagesForTest;
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -111,6 +123,8 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
     this.currentFilePath = filePath;
     this.currentBase = base;
     this.currentCompare = compare;
+    this.aiAbortController?.abort();
+    this.aiMessagesForTest = [];
     this.view.title = `${base}...${compare}`;
     const styleUris = [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.branchComparison)];
     this.view.webview.html = renderPlaceholderHtml('Loading comparison…', {
@@ -216,6 +230,11 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
     }
     if (type === 'openAllChanges' && filePath && this.currentBase && this.currentCompare) {
       await this.openAllChanges(filePath, this.currentBase, this.currentCompare);
+      return;
+    }
+    if (type === 'summarizeComparison') {
+      await this.summarizeComparison();
+      return;
     }
   }
 
@@ -326,6 +345,79 @@ export class BranchComparisonViewProvider implements vscode.WebviewViewProvider 
     }
     const client = buildForgeClient(detected.flavor, detected.apiBaseUrl, repo.identity, token, azureDevOpsCredentialScheme(detected), this.fetchImpl);
     await client.createPullRequest(repo, { title, base: this.currentBase, compare: this.currentCompare, draft });
+  }
+
+  async summarizeComparison(): Promise<void> {
+    if (!this.view || !this.currentFilePath || !this.currentBase || !this.currentCompare) {
+      return;
+    }
+    this.aiAbortController?.abort();
+    const controller = new AbortController();
+    this.aiAbortController = controller;
+
+    const filePath = this.currentFilePath;
+    const base = this.currentBase;
+    const compare = this.currentCompare;
+    const config = vscode.workspace.getConfiguration(CONFIG.section);
+    const enabled = config.get<boolean>(CONFIG.aiEnabled, false);
+    const modelFamily = config.get<string>(CONFIG.aiModelFamily, 'gpt-4o');
+    const maxDiffChars = config.get<number>(CONFIG.aiMaxDiffChars, 8000);
+
+    const repoRoot = await this.git.getRepoRoot(filePath);
+    const cacheKey = `${repoRoot ?? filePath}:${base}...${compare}`;
+    const cached = this.aiSummaryCache.get(cacheKey);
+
+    // Same guard as PullRequestDetailsViewProvider.explainPr(): `enabled` must be checked before
+    // any git call, not just before the model call. runCommitSummaryFlow's own 'disabled' branch
+    // fires too late to stop the diff fetch below — a real `git diff` subprocess spawn — from
+    // running on every disabled-AI click.
+    const diff = enabled && cached === undefined ? await this.git.getDiffBetweenRefs(filePath, base, compare) : '';
+
+    const flow = runCommitSummaryFlow({
+      enabled,
+      cached,
+      signal: controller.signal,
+      selectModel: () => this.languageModelClient.selectModel(modelFamily),
+      buildPrompt: () => buildBranchCompareSummaryPrompt(base, compare, diff, maxDiffChars),
+    });
+
+    for await (const event of flow) {
+      if (controller.signal.aborted) {
+        return;
+      }
+      switch (event.type) {
+        case 'disabled':
+          void vscode.window.showInformationMessage('GitLore: AI features are disabled.', 'Open Settings').then((choice) => {
+            if (choice) {
+              void vscode.commands.executeCommand('workbench.action.openSettings', `${CONFIG.section}.${CONFIG.aiEnabled}`);
+            }
+          });
+          this.postAiMessage({ type: 'aiSummaryReset' });
+          break;
+        case 'cached':
+          this.postAiMessage({ type: 'aiSummaryCached', text: event.text });
+          break;
+        case 'noModel':
+          this.postAiMessage({ type: 'aiSummaryNoModel' });
+          break;
+        case 'chunk':
+          this.postAiMessage({ type: 'aiSummaryChunk', text: event.text });
+          break;
+        case 'done':
+          this.aiSummaryCache.set(cacheKey, event.text);
+          this.postAiMessage({ type: 'aiSummaryDone' });
+          break;
+        case 'error':
+          this.logger?.error('AI branch comparison summary failed', event.message);
+          this.postAiMessage({ type: 'aiSummaryError', message: event.message });
+          break;
+      }
+    }
+  }
+
+  private postAiMessage(message: { type: string; text?: string; message?: string }): void {
+    this.aiMessagesForTest.push(message);
+    void this.view?.webview.postMessage(message);
   }
 
   private async openAllChanges(filePath: string, base: string, compare: string): Promise<void> {

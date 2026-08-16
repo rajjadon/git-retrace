@@ -2,7 +2,7 @@ import type { ConversationThread, PullRequestSummary } from '../../core/forge/ty
 import type { FileChange } from '../../core/git/types';
 import { escapeHtml } from '../escapeHtml';
 import { renderFileSections } from '../diffRender';
-import { APPROVE_ICON, EXTERNAL_ICON, FILES_ICON, MESSAGE_ICON, REFRESH_ICON, SEARCH_ICON, WRAP_ICON } from '../icons';
+import { AI_ICON, APPROVE_ICON, EXTERNAL_ICON, FILES_ICON, MESSAGE_ICON, REFRESH_ICON, SEARCH_ICON, WRAP_ICON } from '../icons';
 
 export interface RenderPullRequestDetailsOptions {
   nonce: string;
@@ -73,6 +73,16 @@ ${styles}
 <div class="actions">
 <button class="btn" id="open-remote" type="button" title="${escapeHtml(pr.url)}">${EXTERNAL_ICON}Open on ${escapeHtml(pr.repo.host)}</button>
 <button class="icon-btn" id="refresh-pr" type="button" title="Refresh — picks up changes made elsewhere (e.g. a review submitted from Launchpad)" aria-label="Refresh this pull request's details">${REFRESH_ICON}</button>
+<button class="btn btn-accent" id="explain-pr" type="button" title="Explain this PR with AI">${AI_ICON}Explain</button>
+<button class="btn" id="draft-review" type="button" title="Draft a review comment with AI">${AI_ICON}Draft Review</button>
+</div>
+<div class="ai-summary">
+<p class="ai-summary-text" id="ai-summary-text" aria-live="polite" hidden></p>
+<p class="ai-summary-hint" id="ai-summary-hint" role="status" hidden></p>
+<div class="skeleton" id="ai-summary-skeleton" role="status" aria-live="polite" aria-busy="true" aria-label="Generating…" hidden>
+<div class="skeleton-row" style="width: 92%"></div>
+<div class="skeleton-row" style="width: 68%"></div>
+</div>
 </div>
 <div class="section-head">
 ${FILES_ICON}<span class="section-title">Files changed</span><span class="badge">${files.length}</span>
@@ -109,6 +119,24 @@ document.getElementById('open-remote').addEventListener('click', () => {
 
 document.getElementById('refresh-pr').addEventListener('click', () => {
   vscode.postMessage({ type: 'refresh' });
+});
+
+const explainBtn = document.getElementById('explain-pr');
+const summaryText = document.getElementById('ai-summary-text');
+const summaryHint = document.getElementById('ai-summary-hint');
+const summarySkeleton = document.getElementById('ai-summary-skeleton');
+explainBtn.addEventListener('click', () => {
+  explainBtn.disabled = true;
+  summaryText.hidden = true;
+  summaryText.textContent = '';
+  summaryHint.hidden = true;
+  summarySkeleton.hidden = false;
+  vscode.postMessage({ type: 'explainPr' });
+});
+
+document.getElementById('draft-review').addEventListener('click', () => {
+  document.getElementById('draft-review').disabled = true;
+  vscode.postMessage({ type: 'draftReview' });
 });
 
 const commentBody = document.getElementById('comment-body');
@@ -149,6 +177,47 @@ window.addEventListener('message', (e) => {
     if (btn) {
       btn.disabled = false;
     }
+  } else if (msg.type === 'aiSummaryChunk') {
+    summaryText.hidden = false;
+    summaryText.textContent += msg.text;
+    summarySkeleton.hidden = true;
+  } else if (msg.type === 'aiSummaryCached') {
+    summaryText.hidden = false;
+    summaryText.textContent = msg.text;
+    summarySkeleton.hidden = true;
+    explainBtn.disabled = false;
+  } else if (msg.type === 'aiSummaryDone') {
+    summarySkeleton.hidden = true;
+    explainBtn.disabled = false;
+  } else if (msg.type === 'aiSummaryReset') {
+    explainBtn.disabled = false;
+    summaryText.hidden = true;
+    summaryHint.hidden = true;
+    summarySkeleton.hidden = true;
+  } else if (msg.type === 'aiSummaryNoModel') {
+    summaryText.hidden = true;
+    summarySkeleton.hidden = true;
+    summaryHint.hidden = false;
+    summaryHint.textContent = 'No language model available. Enable a language model (e.g. GitHub Copilot Chat) to use this feature.';
+    explainBtn.disabled = false;
+  } else if (msg.type === 'aiSummaryError') {
+    summaryText.hidden = true;
+    summarySkeleton.hidden = true;
+    summaryHint.hidden = false;
+    summaryHint.textContent = 'Failed to generate summary: ' + msg.message;
+    explainBtn.disabled = false;
+  } else if (msg.type === 'draftReviewChunk') {
+    commentBody.value += msg.text;
+  } else if (msg.type === 'draftReviewDone' || msg.type === 'draftReviewReset' || msg.type === 'draftReviewNoModel') {
+    document.getElementById('draft-review').disabled = false;
+    if (msg.type === 'draftReviewNoModel') {
+      commentStatus.hidden = false;
+      commentStatus.textContent = 'No language model available. Enable a language model (e.g. GitHub Copilot Chat) to use this feature.';
+    }
+  } else if (msg.type === 'draftReviewError') {
+    document.getElementById('draft-review').disabled = false;
+    commentStatus.hidden = false;
+    commentStatus.textContent = 'Failed to draft a review: ' + msg.message;
   }
 });
 
