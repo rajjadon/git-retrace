@@ -9,6 +9,7 @@ import { FileHistoryProvider } from './providers/FileHistoryProvider';
 import { StatusBarProvider } from './providers/StatusBarProvider';
 import { GitContentProvider } from './providers/GitContentProvider';
 import { StaleCodeLensProvider } from './providers/CodeLensProvider';
+import { CoChangeCodeLensProvider } from './providers/CoChangeCodeLensProvider';
 import { OwnershipDecorationProvider } from './providers/OwnershipDecorationProvider';
 import { FullFileBlameDecorationProvider } from './providers/FullFileBlameDecorationProvider';
 import { warnIfGitUnavailable } from './providers/GitAvailabilityCheck';
@@ -41,6 +42,7 @@ import {
   handleAskAboutPullRequestCommand,
 } from './commands/chatCommands';
 import { handleShowFileOwnershipCommand, buildOwnershipQuickPickItems } from './commands/ownershipCommands';
+import { handleShowCoChangedFilesCommand } from './commands/coChangeCommands';
 import { handleRebaseInteractivelyCommand } from './commands/rebaseCommands';
 import {
   handleCheckoutBranchCommand,
@@ -126,6 +128,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
   const blameProvider = new BlameDecorationProvider(blameSource);
   const hoverProvider = new BlameHoverProvider(blameSource, git, lineExplanationStore, lineHistoryNavStore);
   const staleCodeLensProvider = new StaleCodeLensProvider(blameSource);
+  const coChangeCodeLensProvider = new CoChangeCodeLensProvider(git, blameSource);
   const ownershipProvider = new OwnershipDecorationProvider(blameSource);
   const fullFileBlameProvider = new FullFileBlameDecorationProvider(blameSource);
   const fileHistoryProvider = new FileHistoryProvider(git);
@@ -147,6 +150,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     fileHistoryProvider,
     statusBarProvider,
     staleCodeLensProvider,
+    coChangeCodeLensProvider,
     ownershipProvider,
     fullFileBlameProvider,
     commitGraphViewProvider,
@@ -166,6 +170,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     handleGenerateCommitMessageCommand(commitMessageService, git),
     handleGenerateChangelogCommand(changelogService, git),
     handleShowFileOwnershipCommand(blameSource),
+    handleShowCoChangedFilesCommand(),
     handleRebaseInteractivelyCommand(git),
     launchpadProvider,
     handleOpenLaunchpadCommand(launchpadProvider),
@@ -185,6 +190,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     vscode.window.registerCustomEditorProvider(VIEWS.rebaseEditor, rebaseEditorProvider),
     vscode.languages.registerHoverProvider({ scheme: 'file' }, hoverProvider),
     vscode.languages.registerCodeLensProvider({ scheme: 'file' }, staleCodeLensProvider),
+    vscode.languages.registerCodeLensProvider({ scheme: 'file' }, coChangeCodeLensProvider),
     // Backs the "Open changes" action in the commit-details and branch-comparison panels by
     // serving a file's contents at an arbitrary ref to the native diff editor.
     vscode.workspace.registerTextDocumentContentProvider(SCHEMES.gitContent, new GitContentProvider(git)),

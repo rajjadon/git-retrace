@@ -42,6 +42,7 @@ export const COMMANDS = {
   draftPrReview: 'gitLore.draftPrReview',
   mergeBranchFromExplorer: 'gitLore.mergeBranchFromExplorer',
   rebaseOntoBranchFromExplorer: 'gitLore.rebaseOntoBranchFromExplorer',
+  showCoChangedFiles: 'gitLore.showCoChangedFiles',
 } as const;
 
 export const CONFIG = {
@@ -55,6 +56,7 @@ export const CONFIG = {
   maxGraphItems: 'maxGraphItems',
   staleCodeEnabled: 'staleCode.enabled',
   staleThresholdDays: 'staleThresholdDays',
+  coChangeEnabled: 'coChange.enabled',
   ownershipEnabled: 'ownership.enabled',
   fullFileBlameEnabled: 'fullFileBlame.enabled',
   issueLinkingEnabled: 'issueLinking.enabled',

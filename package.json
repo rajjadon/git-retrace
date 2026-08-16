@@ -145,6 +145,11 @@
         "icon": "$(chevron-left)"
       },
       {
+        "command": "gitLore.showCoChangedFiles",
+        "title": "GitLore: Show Files That Often Change With This One",
+        "icon": "$(references)"
+      },
+      {
         "command": "gitLore.toggleFullFileBlame",
         "title": "GitLore: Toggle Full-File Blame Heatmap",
         "icon": "$(flame)"
@@ -423,6 +428,10 @@
           "when": "false"
         },
         {
+          "command": "gitLore.showCoChangedFiles",
+          "when": "false"
+        },
+        {
           "command": "gitLore.askAboutLine",
           "when": "false"
         }
@@ -475,6 +484,11 @@
           "type": "number",
           "default": 180,
           "description": "Days since a function's or method's last change before it's flagged as stale."
+        },
+        "gitLore.coChange.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a CodeLens above the file for other files that frequently change alongside it (a 'logical coupling' signal from git history)."
         },
         "gitLore.ownership.enabled": {
           "type": "boolean",

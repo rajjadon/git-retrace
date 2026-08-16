@@ -18,17 +18,20 @@ import {
   parseRemoteUrl,
   parseStatusPorcelain,
   parseLineHistoryLog,
+  parseCoChangeLog,
   LOG_FORMAT,
   COMMIT_DETAIL_FORMAT,
   GRAPH_LOG_FORMAT,
   BRANCH_FORMAT,
   LINE_HISTORY_FORMAT,
+  CO_CHANGE_LOG_FORMAT,
 } from './parsers';
 import type {
   BlameLine,
   BranchInfo,
   Commit,
   CommitDetail,
+  CommitFileList,
   ContributorInfo,
   FileChange,
   FileHistoryEntry,
@@ -501,6 +504,25 @@ export class GitService {
       return parseContributors(raw);
     } catch {
       // An empty repo (no commits yet) fails `shortlog --all` — no contributors, not an error.
+      return [];
+    }
+  }
+
+  /**
+   * Every commit's changed-file list within the last `maxCount` commits repo-wide (not scoped to
+   * any one file) — the raw material for co-change detection. One bounded call regardless of which
+   * file is asking, so a caller computing this for several files in a session doesn't re-fetch it.
+   */
+  async getCoChangeCommits(filePath: string, maxCount: number): Promise<CommitFileList[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    try {
+      const raw = await this.gitFor(repoRoot).raw(['log', '-n', String(maxCount), '--name-only', `--pretty=${CO_CHANGE_LOG_FORMAT}`]);
+      return parseCoChangeLog(raw);
+    } catch {
+      // An empty repo (no commits yet) — no history to analyze, not an error.
       return [];
     }
   }

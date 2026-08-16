@@ -128,6 +128,10 @@ Reorder, reword, edit, squash, fixup, or drop commits with a real UI instead of 
 
 A CodeLens above functions, methods, and classes untouched for longer than `gitLore.staleThresholdDays` (180 by default), reading how long it's been and who last touched it — click through straight to that commit. Nothing shows above code that's actually been touched recently, so the signal stays legible even in a large file.
 
+### Co-change detector
+
+A CodeLens above the file naming other files that frequently change alongside it — "🔗 Often changes with: `auth.test.ts`, `session.ts`" — a "logical coupling" signal computed entirely from `git log`, no separate analysis service. Click it for a QuickPick with the exact ratio (e.g. "changed together in 4/5 commits · 80%") and pick one to open it. Nothing shows for a coincidental shared commit or two — only a real, consistent pattern. Toggle with `gitLore.coChange.enabled` (on by default).
+
 ### Author ownership heatmap
 
 <img src="media/screenshots/ownership-heatmap.png" alt="The File Ownership quick pick showing each author's recency-weighted percentage and line count, with color marks in the editor's overview ruler" />
@@ -181,6 +185,7 @@ Every command is also a title-bar button in the GitLore panel.
 | `GitLore: Toggle Inline Blame` | Turn the end-of-line decoration on or off |
 | `GitLore: Copy Commit SHA` | Copy a commit's full SHA (from a commit's context menu) |
 | `GitLore: Show File Ownership` | See a file's authors ranked by recency-weighted ownership share (command palette only, no title-bar button) |
+| `GitLore: Show Files That Often Change With This One` | Open the coupled-files QuickPick (from the co-change CodeLens) |
 | `GitLore: Rebase Branch Interactively...` | Pick a target ref and start an interactive rebase, opened in GitLore's own editor |
 | `GitLore: Checkout Branch` | Check out the selected branch (from the Explorer's context menu) |
 | `GitLore: Compare with Current Branch` | Open Branch Comparison against the selected branch (from the Explorer's context menu) |

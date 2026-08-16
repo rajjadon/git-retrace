@@ -117,3 +117,21 @@ export interface ContributorInfo {
   email: string;
   commitCount: number;
 }
+
+/** One commit's changed-file list (repo-relative paths), the raw material for co-change detection. */
+export interface CommitFileList {
+  sha: string;
+  files: string[];
+}
+
+/** A file that frequently changes alongside another — the commit graph's co-change CodeLens. */
+export interface CoChangedFile {
+  /** Repo-relative path. */
+  path: string;
+  /** Commits, within the analyzed window, where both files changed together. */
+  coChanges: number;
+  /** Commits, within the analyzed window, where the target file changed at all. */
+  totalCommits: number;
+  /** `coChanges / totalCommits` — how often the other file comes along when the target file changes. */
+  coupling: number;
+}

@@ -18,6 +18,7 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **Commit graph: scoped to your current branch by default** — the graph now opens showing just the branch you're on, instead of every branch at once, and keeps following you across any checkout (from GitLore, a terminal, or another tool) until you pick a specific branch or "All branches" from the ref picker yourself.
 - **Commit graph: stash chip** — any stash shows as a small chip on the row of the commit it was made from; click it to Apply or Delete.
 - **Sidebar Explorer: Merge and Rebase from a branch's right-click menu** — "Merge into Current Branch" and "Rebase Current Branch onto This" on any branch or remote-tracking branch row, so a merge or rebase no longer requires dropping into a terminal to type the command yourself. Runs in the shared **GitLore: Git Sync** terminal, since either can conflict.
+- **Co-change detector** — a new CodeLens above the file naming other files that frequently change alongside it, computed from `git log` (no AI, no separate analysis service). Click for a QuickPick with the exact co-occurrence ratio; pick one to open it. New setting `gitLore.coChange.enabled` (default `true`).
 
 ## [1.2.0] - 2026-08-15
 
