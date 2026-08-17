@@ -43,6 +43,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, so Sonar can attribute issues by blame
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21' # sonar-scanner-cli now requires 21+; the runner's default JAVA_HOME is 17
+
       - name: Analyze with SonarCloud
 
         # You can pin the exact commit or the version.
