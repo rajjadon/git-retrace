@@ -20,6 +20,9 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # skeleton.render.test.ts drives a real headless Chromium via Playwright — `npm ci` only
+      # installs the JS bindings, not the browser binary itself.
+      - run: npx playwright install --with-deps chromium
       - run: npm run lint
       - run: npm run test:unit
 
