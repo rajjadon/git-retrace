@@ -16,7 +16,7 @@ import {
   type PullRequestSummary,
   type ReviewSubmission,
 } from '../../core/forge/types';
-import { azureDevOpsCredentialScheme, clearForgeToken, resolveForgeToken } from '../../providers/forgeCredentials';
+import { azureDevOpsCredentialScheme, clearForgeToken, resolveForgeToken, signOutOfForgeHost } from '../../providers/forgeCredentials';
 import { renderLaunchpadHtml, type LaunchpadRepoError, type LaunchpadRepoRow } from './render';
 import { renderPlaceholderHtml } from '../placeholder';
 import { COMMANDS, CONFIG, MEDIA, VIEWS } from '../../constants';
@@ -57,6 +57,9 @@ export class LaunchpadViewProvider implements vscode.Disposable {
   private prsByKey = new Map<string, PullRequestSummary>();
   /** Rebuilt on every refresh — lets Push/Pull find the right local working copy from a repo row's stable key. Populated regardless of forge auth outcome: push/pull is a local git operation that doesn't need a host credential at all. */
   private repoRootByKey = new Map<string, string>();
+  /** Rebuilt on every refresh — lets "Sign Out" reset the right host's credential from just a repo row's stable key, regardless of whether that repo's auth currently succeeds or is broken. */
+  private detectedByRepoKey = new Map<string, DetectedForgeHost>();
+  private repoLabelByKey = new Map<string, string>();
   /** Rebuilt on every refresh — the signed-in login per repo, so `submitReview` can catch "you're reviewing your own PR" before ever calling the host's API. Every host we support rejects a self-review one way or another; catching it here turns that into one clear message instead of a different opaque API error per host. */
   private loginByRepoKey = new Map<string, string>();
 
@@ -140,11 +143,15 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     this.prsByKey = new Map();
     this.repoRootByKey = new Map();
     this.loginByRepoKey = new Map();
+    this.detectedByRepoKey = new Map();
+    this.repoLabelByKey = new Map();
     const repoRows: LaunchpadRepoRow[] = [];
 
     for (const { repo, detected, repoRoot } of repos) {
       const repoKey = `${repo.host}:${repo.identity}`;
       this.repoRootByKey.set(repoKey, repoRoot);
+      this.detectedByRepoKey.set(repoKey, detected);
+      this.repoLabelByKey.set(repoKey, repo.label);
       repoRows.push({ key: repoKey, label: repo.label });
       try {
         const token = await resolveForgeToken(this.context.secrets, detected);
@@ -323,9 +330,55 @@ export class LaunchpadViewProvider implements vscode.Disposable {
       this.syncRepo(key, type);
       return;
     }
+    if (type === 'signOut' && typeof key === 'string') {
+      await this.signOut(key);
+      return;
+    }
     if (type === 'refresh') {
       await this.refresh();
     }
+  }
+
+  /**
+   * Resets the credential for one repo's host — the fix for "I signed in as the wrong account and
+   * there's no way to change it": before this, a bad credential only ever got cleared internally
+   * on an API failure, and never at all for a built-in session (github.com/dev.azure.com), which
+   * `clearForgeToken` deliberately never touches. `signOutOfForgeHost` handles both cases; the
+   * refresh right after immediately re-triggers `resolveForgeToken`'s prompt, same as any other
+   * "not signed in" repo.
+   */
+  private async signOut(key: string): Promise<void> {
+    const detected = this.detectedByRepoKey.get(key);
+    if (!detected) {
+      return;
+    }
+    const label = this.repoLabelByKey.get(key) ?? detected.displayHost;
+    const confirmed = await vscode.window.showWarningMessage(
+      `Sign out of ${label}? Launchpad will ask you to sign in again on the next refresh.`,
+      { modal: true },
+      'Sign Out',
+    );
+    if (confirmed !== 'Sign Out') {
+      return;
+    }
+    try {
+      await signOutOfForgeHost(this.context.secrets, detected);
+      await this.refresh(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`Launchpad failed to sign out of ${detected.displayHost}`, err);
+      void vscode.window.showErrorMessage(`GitLore: couldn't sign out — ${message}`);
+    }
+  }
+
+  /** Test-only introspection seam — a webview button click (and the real confirmation modal it triggers) can't be driven from an integration test, so this calls the sign-out flow directly, skipping only the modal. */
+  async signOutForTest(key: string): Promise<void> {
+    const detected = this.detectedByRepoKey.get(key);
+    if (!detected) {
+      return;
+    }
+    await signOutOfForgeHost(this.context.secrets, detected);
+    await this.refresh(false);
   }
 
   /**

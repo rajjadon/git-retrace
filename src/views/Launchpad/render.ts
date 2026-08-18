@@ -13,6 +13,7 @@ import {
   REFRESH_ICON,
   REOPEN_ICON,
   REQUEST_CHANGES_ICON,
+  SIGN_OUT_ICON,
   SNOOZE_ICON,
 } from '../icons';
 
@@ -101,7 +102,16 @@ ${actions}
 </div>`;
 }
 
-/** One row per workspace repo, with push/pull buttons — a local git operation, so these render regardless of whether that repo's forge auth succeeded. No ahead/behind badge yet (would need a `GitService.getBranches()` call per repo on every refresh); add one later if the repo list turns out sparse enough that it's worth the extra latency. */
+/**
+ * One row per workspace repo, with push/pull buttons — a local git operation, so these render
+ * regardless of whether that repo's forge auth succeeded. No ahead/behind badge yet (would need a
+ * `GitService.getBranches()` call per repo on every refresh); add one later if the repo list turns
+ * out sparse enough that it's worth the extra latency.
+ *
+ * Sign Out renders here too, and regardless of auth outcome — the fix for "I signed in as the
+ * wrong account and there's no way to change it": before this, a bad credential only ever cleared
+ * itself automatically on an API failure, with no user-facing way to reset it proactively.
+ */
 function renderRepoRow(repo: LaunchpadRepoRow): string {
   const key = escapeHtml(repo.key);
   const label = escapeHtml(repo.label);
@@ -109,6 +119,7 @@ function renderRepoRow(repo: LaunchpadRepoRow): string {
 <span class="repo-row-label">${label}</span>
 <button class="repo-pull icon-btn" type="button" data-key="${key}" data-tooltip="Pull" aria-label="Pull ${label}">${ARROW_DOWN_ICON}</button>
 <button class="repo-push icon-btn" type="button" data-key="${key}" data-tooltip="Push" aria-label="Push ${label}">${ARROW_UP_ICON}</button>
+<button class="repo-signout icon-btn" type="button" data-key="${key}" data-title="${label}" data-tooltip="Sign Out" aria-label="Sign out of ${label}">${SIGN_OUT_ICON}</button>
 </div>`;
 }
 
@@ -249,6 +260,14 @@ for (const btn of document.querySelectorAll('.repo-pull')) {
 for (const btn of document.querySelectorAll('.repo-push')) {
   btn.addEventListener('click', () => {
     vscode.postMessage({ type: 'push', key: btn.dataset.key });
+  });
+}
+
+for (const btn of document.querySelectorAll('.repo-signout')) {
+  btn.addEventListener('click', () => {
+    // Confirmation happens on the extension side (a real modal, not this webview's own UI) —
+    // this only ever sends the request to sign out.
+    vscode.postMessage({ type: 'signOut', key: btn.dataset.key });
   });
 }
 

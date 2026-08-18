@@ -135,3 +135,10 @@ export const MERGE_ICON = icon(
   'action-icon',
   12,
 );
+
+/** Sign out of a forge host — a door frame with an arrow pointing out. */
+export const SIGN_OUT_ICON = icon(
+  '<path d="M6.5 2.5H4a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h2.5" /><path d="M9.3 5.3 13 8l-3.7 2.7" /><path d="M13 8H6" />',
+  'toolbar-icon',
+  13,
+);
