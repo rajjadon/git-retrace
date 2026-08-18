@@ -6,6 +6,8 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-08-18
+
 ### Fixed
 
 - **Launchpad: sign out of a host** — each repo row now has a Sign Out action, so authenticating as the wrong account (or wanting to switch) no longer requires editing VS Code's secret storage by hand. For a Personal Access Token host this clears the stored token so the next refresh re-prompts for one; for a built-in session host (github.com, Azure DevOps Services) it clears GitLore's remembered account preference so the next sign-in offers an account picker instead of silently reusing the same session.
