@@ -6,6 +6,11 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+### Fixed
+
+- **Launchpad: sign out of a host** — each repo row now has a Sign Out action, so authenticating as the wrong account (or wanting to switch) no longer requires editing VS Code's secret storage by hand. For a Personal Access Token host this clears the stored token so the next refresh re-prompts for one; for a built-in session host (github.com, Azure DevOps Services) it clears GitLore's remembered account preference so the next sign-in offers an account picker instead of silently reusing the same session.
+- **Pull Request Details: Explain and Draft Review no longer hang** — if fetching the PR's diff failed partway through (an expired credential, a rate limit, a network blip), the button stayed disabled and the loading skeleton spun forever with no error shown. Both actions now surface the failure the same way every other error in this panel already does.
+
 ## [1.2.2] - 2026-08-17
 
 ### Added

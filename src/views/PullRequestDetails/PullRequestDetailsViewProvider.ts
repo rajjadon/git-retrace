@@ -226,8 +226,20 @@ export class PullRequestDetailsViewProvider implements vscode.WebviewViewProvide
     // the network only to throw the result away.
     let diff = '';
     if (enabled && !cached && this.currentClient) {
-      const { diff: fetchedDiff } = await this.currentClient.getPullRequestDiff(pr.repo, pr.number);
-      diff = fetchedDiff;
+      try {
+        const { diff: fetchedDiff } = await this.currentClient.getPullRequestDiff(pr.repo, pr.number);
+        diff = fetchedDiff;
+      } catch (err) {
+        // Unlike the model-streaming loop below, this fetch happens before runCommitSummaryFlow
+        // ever starts — left unguarded, a rejection here (expired/wrong-account credential, a
+        // rate limit, a network blip) throws out of explainPr() entirely with no message ever
+        // posted back to the webview, so the Explain button stays disabled and the skeleton spins
+        // forever with no feedback.
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error('AI PR explanation failed to fetch the diff', err);
+        this.postAiMessage({ type: 'aiSummaryError', message });
+        return;
+      }
     }
 
     const flow = runCommitSummaryFlow({
@@ -293,12 +305,22 @@ export class PullRequestDetailsViewProvider implements vscode.WebviewViewProvide
     let diff = '';
     let threads: ConversationThread[] = [];
     if (enabled) {
-      const [diffResult, threadsResult] = await Promise.all([
-        client.getPullRequestDiff(pr.repo, pr.number),
-        client.listConversationThreads(pr.repo, pr.number),
-      ]);
-      diff = diffResult.diff;
-      threads = threadsResult;
+      try {
+        const [diffResult, threadsResult] = await Promise.all([
+          client.getPullRequestDiff(pr.repo, pr.number),
+          client.listConversationThreads(pr.repo, pr.number),
+        ]);
+        diff = diffResult.diff;
+        threads = threadsResult;
+      } catch (err) {
+        // Same failure mode as explainPr()'s diff fetch: unguarded, a rejection here throws out of
+        // draftReview() before runCommitSummaryFlow ever starts, leaving Draft Review disabled
+        // forever with no feedback.
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.error('AI PR review draft failed to fetch the diff/threads', err);
+        this.postAiMessage({ type: 'draftReviewError', message });
+        return;
+      }
     }
 
     const flow = runCommitSummaryFlow({

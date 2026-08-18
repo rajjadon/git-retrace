@@ -84,3 +84,24 @@ export async function clearForgeToken(secrets: vscode.SecretStorage, detected: D
   }
   await secrets.delete(secretKeyFor(detected.displayHost));
 }
+
+/**
+ * Lets the user proactively reset credentials for a host — e.g. after realizing Launchpad
+ * authenticated as the wrong account — instead of only ever clearing on an API failure
+ * (`clearForgeToken`, used internally when a request rejects). For a PAT host this deletes the
+ * stored secret so the next refresh re-prompts for one. GitLore can't sign the user out of a
+ * built-in session (that session belongs to VS Code, shared with every other extension) — instead
+ * it clears *this extension's* remembered account preference via `clearSessionPreference`, so the
+ * next `getSession(..., { createIfNone: true })` call in `resolveForgeToken` offers an account
+ * picker (if more than one is signed into VS Code) or re-authenticates instead of silently reusing
+ * whichever session/account was picked before.
+ */
+export async function signOutOfForgeHost(secrets: vscode.SecretStorage, detected: DetectedForgeHost): Promise<void> {
+  if (usesBuiltInSession(detected)) {
+    const providerId = detected.flavor === 'github' ? 'github' : 'microsoft';
+    const scopes = detected.flavor === 'github' ? ['repo'] : AZURE_DEVOPS_AAD_SCOPES;
+    await vscode.authentication.getSession(providerId, scopes, { clearSessionPreference: true, createIfNone: false });
+    return;
+  }
+  await clearForgeToken(secrets, detected);
+}

@@ -251,6 +251,7 @@ test('renderLaunchpadHtml: renders a push/pull row per repo, keyed to that repo'
   assert.match(html, /class="repo-row-label">acme\/widgets</);
   assert.match(html, /class="repo-pull icon-btn" type="button" data-key="github:acme\/widgets"/);
   assert.match(html, /class="repo-push icon-btn" type="button" data-key="github:acme\/widgets"/);
+  assert.match(html, /class="repo-signout icon-btn" type="button" data-key="github:acme\/widgets"/);
 });
 
 test('renderLaunchpadHtml: no repo list rendered when there are no repos', () => {
@@ -265,6 +266,7 @@ test('renderLaunchpadHtml: repo push/pull buttons post keyed push/pull messages'
   );
   assert.match(html, /querySelectorAll\('\.repo-pull'\)[\s\S]*?vscode\.postMessage\(\{ type: 'pull', key: btn\.dataset\.key \}\);/);
   assert.match(html, /querySelectorAll\('\.repo-push'\)[\s\S]*?vscode\.postMessage\(\{ type: 'push', key: btn\.dataset\.key \}\);/);
+  assert.match(html, /querySelectorAll\('\.repo-signout'\)[\s\S]*?vscode\.postMessage\(\{ type: 'signOut', key: btn\.dataset\.key \}\);/);
 });
 
 test('renderLaunchpadHtml: escapes HTML special characters in repo row fields', () => {

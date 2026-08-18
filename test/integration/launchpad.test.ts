@@ -846,6 +846,56 @@ suite('Launchpad', () => {
       }),
     ));
 
+  test('signOutForTest clears the stored PAT so the next refresh re-prompts and uses the new one', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/signout-widgets.git', async () => {
+        const seenTokens: string[] = [];
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          seenTokens.push((init?.headers as Record<string, string> | undefined)?.['PRIVATE-TOKEN'] ?? '');
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened') || url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'stale-pat') as typeof vscode.window.showInputBox;
+        try {
+          // Populates detectedByRepoKey/repoLabelByKey for this repo — whether or not gitlab.com's
+          // PAT was already cached from an earlier test in this suite (the secret is keyed per
+          // *host*, not per repo) doesn't matter: what's under test is what happens after an
+          // explicit sign-out, not whether this particular refresh itself prompts.
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('class="repo-row"'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        let promptCalls = 0;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () => {
+          promptCalls++;
+          return 'fresh-pat-after-signout';
+        }) as typeof vscode.window.showInputBox;
+        try {
+          // The bug this covers: before `signOutOfForgeHost`, a bad/wrong stored credential had no
+          // user-facing way to be reset — it only ever cleared itself automatically on an API
+          // failure, and never at all for a built-in session host. This proves sign-out actually
+          // clears the stored secret (not just cosmetically) by checking the *next* request uses
+          // the newly entered PAT, not the stale cached one.
+          await api.launchpadProvider.signOutForTest('gitlab:acme/signout-widgets');
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        assert.equal(promptCalls, 1, 'signing out should clear the stored PAT so the very next refresh re-prompts for one');
+        assert.equal(seenTokens.at(-1), 'fresh-pat-after-signout', 'requests after sign-out should use the newly entered PAT, not the stale one');
+      }),
+    ));
+
   test('syncRepoForTest: an unrecognized repo key is a silent no-op (no terminal created)', async () => {
     const before = vscode.window.terminals.length;
     api.launchpadProvider.syncRepoForTest('not-a-real-repo-key', 'pull');
@@ -1144,6 +1194,72 @@ suite('Launchpad', () => {
       }),
     ));
 
+  test('explainPr: a diff-fetch failure posts an error instead of hanging with no feedback', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/explain-fail-widgets.git', async () => {
+        let diffCallCount = 0;
+        api.launchpadProvider.setFetchImplForTest((async (url: string) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 14,
+                title: 'Explain-fail PR',
+                web_url: 'https://gitlab.com/acme/explain-fail-widgets/-/merge_requests/14',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: false, approved_by: [] });
+          }
+          if (url.includes('merge_requests/14/diffs')) {
+            diffCallCount++;
+            // The panel's own initial load succeeds (1st call); Explain's own diff fetch (2nd
+            // call, from explainPr() itself) fails — e.g. the credential expired or a rate limit
+            // hit between opening the panel and clicking Explain.
+            if (diffCallCount > 1) {
+              throw new Error('simulated network failure');
+            }
+            return jsonResponse([{ old_path: 'src/x.ts', new_path: 'src/x.ts', diff: '@@ -1 +1,2 @@\n+thing();' }]);
+          }
+          if (url.includes('merge_requests/14/discussions')) {
+            return jsonResponse([]);
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Explain-fail PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+        await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'gitlab:acme/explain-fail-widgets#14');
+        await waitFor(() => (api.getPullRequestDetailsHtml() ?? '').includes('Explain-fail PR'));
+
+        // Before the fix, this diff-fetch rejection threw out of explainPr() with no message ever
+        // posted back to the webview — this `await` resolving at all (instead of hanging or
+        // rejecting) is itself part of what's under test.
+        await withAiConfig(true, () => api.explainPr());
+
+        const messages = api.getPrAiSummaryMessagesForTest();
+        assert.equal(messages.length, 1);
+        assert.equal((messages[0] as { type: string }).type, 'aiSummaryError');
+        assert.match((messages[0] as { message: string }).message, /couldn't reach gitlab\.com: simulated network failure/);
+      }),
+    ));
+
   test('draftReview: with AI disabled, resets instead of calling a model', async () =>
     withLaunchpadEnabled(() =>
       withOriginRemote('https://gitlab.com/acme/draft-widgets.git', async () => {
@@ -1243,6 +1359,68 @@ suite('Launchpad', () => {
 
         await withAiConfig(true, () => api.draftReview());
         assert.deepEqual(api.getPrAiSummaryMessagesForTest(), [{ type: 'draftReviewNoModel' }]);
+      }),
+    ));
+
+  test('draftReview: a diff/thread-fetch failure posts an error instead of hanging with no feedback', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/draft-fail-widgets.git', async () => {
+        let diffCallCount = 0;
+        api.launchpadProvider.setFetchImplForTest((async (url: string) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 15,
+                title: 'Draft-fail PR',
+                web_url: 'https://gitlab.com/acme/draft-fail-widgets/-/merge_requests/15',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: false, approved_by: [] });
+          }
+          if (url.includes('merge_requests/15/diffs')) {
+            diffCallCount++;
+            // Same shape as the explainPr test above: the panel's own initial load succeeds (1st
+            // call), Draft Review's own diff fetch (2nd call) fails.
+            if (diffCallCount > 1) {
+              throw new Error('simulated network failure');
+            }
+            return jsonResponse([{ old_path: 'src/x.ts', new_path: 'src/x.ts', diff: '@@ -1 +1,2 @@\n+thing();' }]);
+          }
+          if (url.includes('merge_requests/15/discussions')) {
+            return jsonResponse([]);
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Draft-fail PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+        await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'gitlab:acme/draft-fail-widgets#15');
+        await waitFor(() => (api.getPullRequestDetailsHtml() ?? '').includes('Draft-fail PR'));
+
+        await withAiConfig(true, () => api.draftReview());
+
+        const messages = api.getPrAiSummaryMessagesForTest();
+        assert.equal(messages.length, 1);
+        assert.equal((messages[0] as { type: string }).type, 'draftReviewError');
+        assert.match((messages[0] as { message: string }).message, /couldn't reach gitlab\.com: simulated network failure/);
       }),
     ));
 });
