@@ -326,7 +326,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
       await vscode.commands.executeCommand(COMMANDS.showPullRequest, key);
       return;
     }
-    if ((type === 'pull' || type === 'push') && typeof key === 'string') {
+    if ((type === 'pull' || type === 'push' || type === 'fetch') && typeof key === 'string') {
       this.syncRepo(key, type);
       return;
     }
@@ -388,16 +388,17 @@ export class LaunchpadViewProvider implements vscode.Disposable {
    * Graph's sync buttons (`CommitGraphViewProvider.ts`) — Launchpad doesn't track "did it finish"
    * either; the user sees the result in the terminal and can refresh the board themselves.
    */
-  private syncRepo(repoKey: string, direction: 'pull' | 'push'): void {
+  private syncRepo(repoKey: string, direction: 'pull' | 'push' | 'fetch'): void {
     const repoRoot = this.repoRootByKey.get(repoKey);
     if (!repoRoot) {
       return;
     }
-    runInGitSyncTerminal(repoRoot, direction === 'pull' ? 'git pull' : 'git push');
+    const command = direction === 'pull' ? 'git pull' : direction === 'push' ? 'git push' : 'git fetch';
+    runInGitSyncTerminal(repoRoot, command);
   }
 
-  /** Test-only introspection seam — a webview button click can't be simulated in an integration test, so this drives the same lookup-then-terminal flow the push/pull message handler does. */
-  syncRepoForTest(repoKey: string, direction: 'pull' | 'push'): void {
+  /** Test-only introspection seam — a webview button click can't be simulated in an integration test, so this drives the same lookup-then-terminal flow the push/pull/fetch message handler does. */
+  syncRepoForTest(repoKey: string, direction: 'pull' | 'push' | 'fetch'): void {
     this.syncRepo(repoKey, direction);
   }
 

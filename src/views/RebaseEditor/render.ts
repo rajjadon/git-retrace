@@ -26,7 +26,7 @@ function renderRow(entry: RebaseEntry, index: number, lastIndex: number): string
     (action) => `<option value="${action}"${action === entry.command ? ' selected' : ''}>${action}</option>`,
   ).join('');
 
-  return `<div class="rb-row rb-row-${escapeHtml(entry.command)}" role="listitem" draggable="true" data-index="${index}">
+  return `<div class="rb-row rb-row-${escapeHtml(entry.command)}" role="listitem" draggable="true" data-index="${index}" data-sha="${escapeHtml(entry.sha)}">
 <span class="rb-drag-handle" aria-hidden="true">${DRAG_HANDLE_ICON}</span>
 <span class="rb-move">
 <button class="icon-btn rb-move-up" type="button" data-index="${index}"${index === 0 ? ' disabled' : ''} aria-label="Move up">${CHEVRON_UP_ICON}</button>
@@ -68,6 +68,33 @@ ${rows}
 const vscode = acquireVsCodeApi();
 const rowsEl = document.getElementById('rows');
 
+// Every drag-drop reorder sends a document edit, which re-renders this whole webview.html from
+// scratch — tearing down all in-memory JS state. vscode.setState()/getState() is the only channel
+// that survives that, so the pre-move row positions captured in the 'drop' handler below are
+// bridged through it to this fresh script instance, which applies the FLIP transform on load.
+const previousState = vscode.getState();
+if (previousState?.flipPositions) {
+  for (const row of rowsEl.querySelectorAll('.rb-row[data-sha]')) {
+    const before = previousState.flipPositions[row.dataset.sha];
+    if (before === undefined) {
+      continue;
+    }
+    const after = row.getBoundingClientRect().top;
+    const delta = before - after;
+    if (delta === 0) {
+      continue;
+    }
+    row.style.transition = 'none';
+    row.style.transform = \`translateY(\${delta}px)\`;
+    // Force a layout flush so the browser registers the starting transform before the
+    // transition below is applied — otherwise it would just jump straight to the end state.
+    row.getBoundingClientRect();
+    row.style.transition = 'transform var(--gitlore-motion)';
+    row.style.transform = '';
+  }
+  vscode.setState({});
+}
+
 function reorder(from, to) {
   vscode.postMessage({ type: 'reorder', from, to });
 }
@@ -101,6 +128,13 @@ for (const row of rowsEl.querySelectorAll('.rb-row[draggable="true"]')) {
     e.preventDefault();
     const to = Number(row.dataset.index);
     if (draggedIndex !== null && draggedIndex !== to) {
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const positions = {};
+        for (const r of rowsEl.querySelectorAll('.rb-row[data-sha]')) {
+          positions[r.dataset.sha] = r.getBoundingClientRect().top;
+        }
+        vscode.setState({ flipPositions: positions });
+      }
       reorder(draggedIndex, to);
     }
     draggedIndex = null;

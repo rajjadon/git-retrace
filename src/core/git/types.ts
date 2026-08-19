@@ -112,6 +112,17 @@ export interface WorktreeInfo {
   isMain: boolean;
 }
 
+/** One entry from `git reflog` — where HEAD (or a branch) pointed at some past moment, for recovering a lost commit or branch. */
+export interface ReflogEntry {
+  sha: string;
+  /** e.g. `HEAD@{0}` — what `git branch <name> <selector>` needs to recreate a branch at this point. */
+  selector: string;
+  /** The reflog subject, e.g. "commit: fix bug" or "reset: moving to HEAD~1". */
+  message: string;
+  /** ISO 8601 timestamp. */
+  date: string;
+}
+
 export interface ContributorInfo {
   name: string;
   email: string;

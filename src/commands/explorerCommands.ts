@@ -7,7 +7,7 @@ import { buildRepoUrl } from '../utils/remoteLinks';
 import { resolveRepoContextPath } from '../views/CommitGraph/CommitGraphViewProvider';
 import { runInGitSyncTerminal } from '../views/gitSyncTerminal';
 import type { RepoExplorerProvider } from '../providers/RepoExplorerProvider';
-import type { ExplorerLeafNode } from '../core/explorer/buildExplorerTree';
+import type { ExplorerLeafNode, ExplorerNode } from '../core/explorer/buildExplorerTree';
 
 function errorMessage(err: unknown): string {
   return err instanceof GitCommandError ? err.stderr : err instanceof Error ? err.message : String(err);
@@ -157,6 +157,177 @@ export function handleDropStashCommand(git: GitService, explorer: RepoExplorerPr
       await explorer.refreshCurrent();
     } catch (err) {
       void vscode.window.showErrorMessage(`GitLore: couldn't drop stash — ${errorMessage(err)}`);
+    }
+  });
+}
+
+export function handleRenameBranchCommand(git: GitService, explorer: RepoExplorerProvider): vscode.Disposable {
+  return vscode.commands.registerCommand(COMMANDS.renameBranchFromExplorer, async (node?: ExplorerLeafNode) => {
+    if (node?.kind !== 'branch' || node.branch.isRemote) {
+      return;
+    }
+    const newName = await vscode.window.showInputBox({
+      prompt: `New name for '${node.branch.name}'`,
+      value: node.branch.name,
+    });
+    if (!newName || newName === node.branch.name) {
+      return;
+    }
+    const filePath = resolveRepoContextPath();
+    if (!filePath) {
+      return;
+    }
+    try {
+      await git.renameBranch(filePath, node.branch.name, newName);
+      await explorer.refreshCurrent();
+    } catch (err) {
+      void vscode.window.showErrorMessage(`GitLore: couldn't rename '${node.branch.name}' — ${errorMessage(err)}`);
+    }
+  });
+}
+
+export function handleDeleteBranchCommand(git: GitService, explorer: RepoExplorerProvider): vscode.Disposable {
+  return vscode.commands.registerCommand(COMMANDS.deleteBranchFromExplorer, async (node?: ExplorerLeafNode) => {
+    if (node?.kind !== 'branch' || node.branch.isRemote || node.branch.isCurrent) {
+      return;
+    }
+    const confirmed = await vscode.window.showWarningMessage(
+      `Delete local branch '${node.branch.name}'? This can't be undone.`,
+      { modal: true },
+      'Delete',
+    );
+    if (confirmed !== 'Delete') {
+      return;
+    }
+    const filePath = resolveRepoContextPath();
+    if (!filePath) {
+      return;
+    }
+    try {
+      await git.deleteBranch(filePath, node.branch.name, false);
+      await explorer.refreshCurrent();
+    } catch (err) {
+      // `-d` refuses an unmerged branch — the user already confirmed a destructive, unrecoverable
+      // delete above, so retrying with `-D` here doesn't ask them to confirm the same thing twice.
+      if (err instanceof GitCommandError && /not fully merged/i.test(err.stderr)) {
+        try {
+          await git.deleteBranch(filePath, node.branch.name, true);
+          await explorer.refreshCurrent();
+          return;
+        } catch (forceErr) {
+          void vscode.window.showErrorMessage(`GitLore: couldn't delete '${node.branch.name}' — ${errorMessage(forceErr)}`);
+          return;
+        }
+      }
+      void vscode.window.showErrorMessage(`GitLore: couldn't delete '${node.branch.name}' — ${errorMessage(err)}`);
+    }
+  });
+}
+
+export function handleDeleteTagCommand(git: GitService, explorer: RepoExplorerProvider): vscode.Disposable {
+  return vscode.commands.registerCommand(COMMANDS.deleteTagFromExplorer, async (node?: ExplorerLeafNode) => {
+    if (node?.kind !== 'tag') {
+      return;
+    }
+    const confirmed = await vscode.window.showWarningMessage(
+      `Delete tag '${node.tag.name}'? This can't be undone.`,
+      { modal: true },
+      'Delete',
+    );
+    if (confirmed !== 'Delete') {
+      return;
+    }
+    const filePath = resolveRepoContextPath();
+    if (!filePath) {
+      return;
+    }
+    try {
+      await git.deleteTag(filePath, node.tag.name);
+      await explorer.refreshCurrent();
+    } catch (err) {
+      void vscode.window.showErrorMessage(`GitLore: couldn't delete tag '${node.tag.name}' — ${errorMessage(err)}`);
+    }
+  });
+}
+
+export function handleAddWorktreeCommand(git: GitService, explorer: RepoExplorerProvider): vscode.Disposable {
+  return vscode.commands.registerCommand(COMMANDS.addWorktreeFromExplorer, async (node?: ExplorerNode) => {
+    if (node?.kind !== 'section' || node.id !== 'worktrees') {
+      return;
+    }
+    const worktreePath = await vscode.window.showInputBox({
+      prompt: 'Path for the new worktree',
+      placeHolder: '/path/to/new-worktree',
+    });
+    if (!worktreePath) {
+      return;
+    }
+    const branch = await vscode.window.showInputBox({
+      prompt: 'Branch to check out in the new worktree',
+      placeHolder: 'feature/my-branch',
+    });
+    if (!branch) {
+      return;
+    }
+    const filePath = resolveRepoContextPath();
+    if (!filePath) {
+      return;
+    }
+    try {
+      await git.addWorktree(filePath, worktreePath, branch);
+      await explorer.refreshCurrent();
+    } catch (err) {
+      void vscode.window.showErrorMessage(`GitLore: couldn't add worktree at '${worktreePath}' — ${errorMessage(err)}`);
+    }
+  });
+}
+
+export function handleRemoveWorktreeCommand(git: GitService, explorer: RepoExplorerProvider): vscode.Disposable {
+  return vscode.commands.registerCommand(COMMANDS.removeWorktreeFromExplorer, async (node?: ExplorerLeafNode) => {
+    if (node?.kind !== 'worktree' || node.worktree.isMain) {
+      return;
+    }
+    const confirmed = await vscode.window.showWarningMessage(
+      `Remove worktree at '${node.worktree.path}'? This can't be undone.`,
+      { modal: true },
+      'Remove',
+    );
+    if (confirmed !== 'Remove') {
+      return;
+    }
+    const filePath = resolveRepoContextPath();
+    if (!filePath) {
+      return;
+    }
+    try {
+      await git.removeWorktree(filePath, node.worktree.path);
+      await explorer.refreshCurrent();
+    } catch (err) {
+      void vscode.window.showErrorMessage(`GitLore: couldn't remove worktree at '${node.worktree.path}' — ${errorMessage(err)}`);
+    }
+  });
+}
+
+export function handleCreateStashCommand(git: GitService, explorer: RepoExplorerProvider): vscode.Disposable {
+  return vscode.commands.registerCommand(COMMANDS.createStashFromExplorer, async (node?: ExplorerNode) => {
+    if (node?.kind !== 'section' || node.id !== 'stashes') {
+      return;
+    }
+    const message = await vscode.window.showInputBox({
+      prompt: 'Stash message (optional)',
+      placeHolder: 'WIP: describe your changes',
+    });
+    // An empty string and a dismissed input box both come back falsy from showInputBox — either
+    // way, `message || undefined` below falls back to a plain `git stash push` with no -m.
+    const filePath = resolveRepoContextPath();
+    if (!filePath) {
+      return;
+    }
+    try {
+      await git.createStash(filePath, message || undefined);
+      await explorer.refreshCurrent();
+    } catch (err) {
+      void vscode.window.showErrorMessage(`GitLore: couldn't create stash — ${errorMessage(err)}`);
     }
   });
 }

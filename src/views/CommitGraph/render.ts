@@ -10,6 +10,7 @@ import {
   AUTHOR_ICON,
   BRANCH_ICON,
   CLOCK_ICON,
+  FETCH_ICON,
   FILE_COUNT_ICON,
   HASH_ICON,
   PENDING_ICON,
@@ -41,6 +42,11 @@ export interface GraphData {
   selectedSha?: string;
   /** True when the last load returned exactly `maxGraphItems` commits — there may be more past the cap. */
   hasMore?: boolean;
+  /** Index (into `nodes`) of the first row that's new since the last paint — only rows from here
+   * onward get the entrance animation. Omit on first paint, where every row is new. Commit Graph
+   * fully replaces `webview.html` on every "Load More" (re-fetching the whole list, not just the
+   * delta), so without this threshold every already-visible row would replay the animation too. */
+  newRowsFrom?: number;
   now?: Date;
 }
 
@@ -196,7 +202,8 @@ function renderSyncButtons(branches: BranchInfo[]): string {
   const pushBadge = ahead > 0 ? `<span class="sync-badge">${ahead}</span>` : '';
   const pullLabel = behind > 0 ? `Pull ${behind} ${behind === 1 ? 'commit' : 'commits'}` : 'Pull — up to date';
   const pushLabel = ahead > 0 ? `Push ${ahead} ${ahead === 1 ? 'commit' : 'commits'}` : 'Push — nothing to push';
-  return `<button id="pull" class="icon-btn" type="button" title="${escapeHtml(pullLabel)}" aria-label="${escapeHtml(pullLabel)}">${ARROW_DOWN_ICON}${pullBadge}</button>
+  return `<button id="fetch" class="icon-btn" type="button" title="Fetch" aria-label="Fetch">${FETCH_ICON}</button>
+<button id="pull" class="icon-btn" type="button" title="${escapeHtml(pullLabel)}" aria-label="${escapeHtml(pullLabel)}">${ARROW_DOWN_ICON}${pullBadge}</button>
 <button id="push" class="icon-btn" type="button" title="${escapeHtml(pushLabel)}" aria-label="${escapeHtml(pushLabel)}">${ARROW_UP_ICON}${pushBadge}</button>`;
 }
 
@@ -252,7 +259,7 @@ export function renderGraphHtml(data: GraphData, opts: RenderGraphOptions): stri
   const tabStopSha = selectedNode?.commit.sha ?? (wipTabbable ? undefined : nodes[0]?.commit.sha);
 
   const rows = nodes
-    .map((node) => {
+    .map((node, index) => {
       const { commit } = node;
       const date = new Date(commit.date);
       const age = formatAge(date, now);
@@ -268,7 +275,8 @@ export function renderGraphHtml(data: GraphData, opts: RenderGraphOptions): stri
       // Lowercased haystack for the toolbar filter — cheaper than re-reading each row's text.
       const filter = `${commit.message} ${commit.author} ${commit.sha}`.toLowerCase();
       const stashChips = (stashesByBase.get(commit.sha) ?? []).map(renderStashChip).join('');
-      return `<div class="row commit${isSelected ? ' selected' : ''}" role="row" tabindex="${commit.sha === tabStopSha ? '0' : '-1'}" aria-selected="${isSelected}" data-sha="${escapeHtml(commit.sha)}" data-filter="${escapeHtml(filter)}">
+      const isNew = data.newRowsFrom === undefined || index >= data.newRowsFrom;
+      return `<div class="row commit${isSelected ? ' selected' : ''}${isNew ? ' gitlore-enter' : ''}" role="row" tabindex="${commit.sha === tabStopSha ? '0' : '-1'}" aria-selected="${isSelected}" data-sha="${escapeHtml(commit.sha)}" data-filter="${escapeHtml(filter)}">
 <span class="cell cell-refs" role="gridcell">${renderRefs(commit.refs)}${stashChips}</span>
 <span class="cell cell-graph" role="gridcell">${renderRowGraphics(node, svgWidth, avatarUrl)}</span>
 <span class="cell cell-message" role="gridcell" data-full-message="${escapeHtml(commit.message)}">${escapeHtml(commit.message)}</span>
@@ -549,6 +557,9 @@ document.getElementById('refresh').addEventListener('click', () => {
   vscode.postMessage({ type: 'refresh' });
 });
 
+document.getElementById('fetch')?.addEventListener('click', () => {
+  vscode.postMessage({ type: 'fetch' });
+});
 document.getElementById('pull')?.addEventListener('click', () => {
   vscode.postMessage({ type: 'pull' });
 });

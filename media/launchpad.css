@@ -103,6 +103,26 @@ body {
   font-weight: 600;
 }
 
+/* A colored left edge per bucket, purely supplementary to the existing text label (never the
+   only way to tell buckets apart) — all four colors are VS Code's own semantic chart palette,
+   so they stay legible and correctly-contrasted on light, dark, and high-contrast themes alike,
+   the same convention CHART_THEME_COLOR_IDS already uses for the commit graph's lane coloring. */
+.column[data-bucket='needsReview'] .column-head {
+  border-left: 3px solid var(--vscode-charts-blue);
+}
+
+.column[data-bucket='readyToMerge'] .column-head {
+  border-left: 3px solid var(--vscode-charts-green);
+}
+
+.column[data-bucket='blocked'] .column-head {
+  border-left: 3px solid var(--vscode-charts-red);
+}
+
+.column[data-bucket='waiting'] .column-head {
+  border-left: 3px solid var(--vscode-charts-yellow);
+}
+
 .column-body {
   flex: 1 1 auto;
   overflow: auto;

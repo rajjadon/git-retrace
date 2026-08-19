@@ -281,7 +281,7 @@ function renderBubble(point: FileHistoryPoint, now: Date, offset: Offset): strin
   const age = formatAge(new Date(entry.date), now);
   const absolute = formatAbsolute(new Date(entry.date), 'yyyy-MM-dd HH:mm');
 
-  return `<g class="fh-point" tabindex="0" role="button" data-sha="${escapeHtml(entry.sha)}" data-author="${escapeHtml(entry.author)}" data-message="${escapeHtml(entry.message)}" data-age="${escapeHtml(age)}" data-absolute="${escapeHtml(absolute)}" data-avatar="${escapeHtml(avatarUrl)}" data-insertions="${entry.insertions}" data-deletions="${entry.deletions}" aria-label="${escapeHtml(entry.message)} by ${escapeHtml(entry.author)}, ${age}">
+  return `<g class="fh-point gitlore-enter" tabindex="0" role="button" data-sha="${escapeHtml(entry.sha)}" data-author="${escapeHtml(entry.author)}" data-message="${escapeHtml(entry.message)}" data-age="${escapeHtml(age)}" data-absolute="${escapeHtml(absolute)}" data-avatar="${escapeHtml(avatarUrl)}" data-insertions="${entry.insertions}" data-deletions="${entry.deletions}" aria-label="${escapeHtml(entry.message)} by ${escapeHtml(entry.author)}, ${age}">
 <circle class="fh-bubble" cx="${cx}" cy="${cy}" r="${r}" fill="${chartCssVarForIndex(point.lane)}" />
 </g>`;
 }

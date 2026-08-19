@@ -6,6 +6,20 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+### Added
+
+- **Commit Graph: newly-loaded rows fade/slide in** — "Load More" now animates only the newly-revealed rows (reusing the same entrance animation Launchpad and PR Details already use), instead of the whole list snapping in unchanged.
+- **Visual File History: points fade/slide in** — each commit bubble now uses the same entrance animation already used elsewhere, instead of appearing instantly.
+- **Interactive Rebase Editor: rows slide into place on reorder** — dragging a commit to a new position now animates the rows it displaced, instead of them snapping instantly. Respects `prefers-reduced-motion` (rows still reorder correctly, just without the animated slide).
+- **Launchpad: per-bucket column accent** — Needs Review, Ready to Merge, Blocked, and Waiting each get a small colored left edge (VS Code's own semantic theme colors, so it's correct in light/dark/high-contrast), so the board scans faster at a glance. Purely supplementary to the existing column title — never the only signal.
+- **Sidebar Explorer: rename and delete a local branch** — right-click a branch for **Rename Branch** (also available on the current branch) and **Delete Branch** (confirms first; git itself blocks deleting the branch you have checked out).
+- **Sidebar Explorer: delete a tag** — right-click any tag for **Delete Tag** (confirms first).
+- **Sidebar Explorer: create and remove worktrees** — an inline **+** on the Worktrees section header prompts for a path and branch; right-click any linked worktree (not the main checkout) for **Remove Worktree** (confirms first).
+- **Sidebar Explorer: create a stash** — an inline **+** on the Stashes section header prompts for an optional message and stashes the working tree.
+- **Recover Lost Commit or Branch** — a new command (`GitLore: Recover Lost Commit or Branch`) lists recent reflog entries and creates a branch at whichever one you pick, for recovering from a hard reset, force push, or accidental branch delete before git garbage-collects it.
+- **Inline blame respects `.git-blame-ignore-revs`** — if your repo has one (git's own standard convention for mass-reformat/lint commits you don't want blame attributing to), GitLore's blame now skips those commits automatically. No setting — same as plain `git blame`, GitLore just detects the file.
+- **Fetch button** — Commit Graph's toolbar and Launchpad's per-repo row now have a Fetch button next to Pull/Push, same shared Git Sync terminal.
+
 ## [1.2.3] - 2026-08-18
 
 ### Fixed

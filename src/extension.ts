@@ -52,7 +52,14 @@ import {
   handleOpenRemoteCommand,
   handleApplyStashCommand,
   handleDropStashCommand,
+  handleDeleteBranchCommand,
+  handleRenameBranchCommand,
+  handleDeleteTagCommand,
+  handleAddWorktreeCommand,
+  handleRemoveWorktreeCommand,
+  handleCreateStashCommand,
 } from './commands/explorerCommands';
+import { handleRecoverFromReflogCommand } from './commands/reflogCommands';
 import { CommitDetailsViewProvider } from './views/CommitDetails/CommitDetailsViewProvider';
 import { CommitGraphViewProvider, resolveRepoContextPath } from './views/CommitGraph/CommitGraphViewProvider';
 import { BranchComparisonViewProvider } from './views/BranchComparison/BranchComparisonViewProvider';
@@ -185,6 +192,13 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     handleOpenRemoteCommand(),
     handleApplyStashCommand(git, repoExplorerProvider),
     handleDropStashCommand(git, repoExplorerProvider),
+    handleDeleteBranchCommand(git, repoExplorerProvider),
+    handleRenameBranchCommand(git, repoExplorerProvider),
+    handleDeleteTagCommand(git, repoExplorerProvider),
+    handleAddWorktreeCommand(git, repoExplorerProvider),
+    handleRemoveWorktreeCommand(git, repoExplorerProvider),
+    handleCreateStashCommand(git, repoExplorerProvider),
+    handleRecoverFromReflogCommand(git, repoExplorerProvider),
     repoExplorerProvider.watchActiveEditor(),
     vscode.window.registerTreeDataProvider(VIEWS.explorer, repoExplorerProvider),
     vscode.window.registerCustomEditorProvider(VIEWS.rebaseEditor, rebaseEditorProvider),

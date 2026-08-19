@@ -10,6 +10,7 @@ import type {
   GitRemote,
   GraphCommit,
   Ref,
+  ReflogEntry,
   RemoteInfo,
   StashInfo,
   TagInfo,
@@ -508,6 +509,21 @@ export function parseWorktrees(raw: string): WorktreeInfo[] {
   }
   flush();
   return worktrees;
+}
+
+/** Parses `git reflog show --date=iso-strict --format=%H<FIELD>%gd<FIELD>%gs<FIELD>%cd` output. Pure — no I/O. */
+export function parseReflog(raw: string): ReflogEntry[] {
+  const entries: ReflogEntry[] = [];
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) {
+      continue;
+    }
+    const [sha, selector, message, date] = line.split(LOG_FIELD_SEP);
+    if (sha && selector) {
+      entries.push({ sha, selector, message: message ?? '', date: date ?? '' });
+    }
+  }
+  return entries;
 }
 
 /** Parses `git shortlog -sne HEAD` output: `<count>\t<name> <email>` per line. Pure — no I/O. */

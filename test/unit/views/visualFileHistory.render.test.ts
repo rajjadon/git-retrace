@@ -151,6 +151,15 @@ test("renderFileHistoryHtml: a jittered bubble's edge never crosses into the nei
   }
 });
 
+test('renderFileHistoryHtml: each history point gets the shared entrance animation', () => {
+  const points = layoutFileHistory(
+    [entry('A', 'Raj Jadon', 'raj@example.com', '2024-01-01T00:00:00Z', 3, 1)],
+    now,
+  );
+  const html = renderFileHistoryHtml({ points, now }, opts);
+  assert.match(html, /<g class="fh-point gitlore-enter" tabindex="0"/);
+});
+
 test('renderFileHistoryHtml: draws a baseline separating the author lanes from the change-bar band', () => {
   const points = layoutFileHistory(
     [entry('A', 'Raj Jadon', 'raj@example.com', '2024-01-01T00:00:00Z', 3, 1)],

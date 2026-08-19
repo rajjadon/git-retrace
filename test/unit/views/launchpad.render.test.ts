@@ -277,3 +277,19 @@ test('renderLaunchpadHtml: escapes HTML special characters in repo row fields', 
   assert.ok(!html.includes('<script>alert(1)</script>'));
   assert.ok(!html.includes('<img src=x onerror=alert(1)>'));
 });
+
+test('renderLaunchpadHtml: renders a Fetch button per repo, keyed to that repo, next to Pull/Push', () => {
+  const html = renderLaunchpadHtml(
+    { categorized: [], errors: [], repoRows: [{ key: 'github:acme/widgets', label: 'acme/widgets' }], now },
+    opts,
+  );
+  assert.match(html, /class="repo-fetch icon-btn" type="button" data-key="github:acme\/widgets"/);
+});
+
+test('renderLaunchpadHtml: repo Fetch button posts a keyed fetch message', () => {
+  const html = renderLaunchpadHtml(
+    { categorized: [], errors: [], repoRows: [{ key: 'github:acme/widgets', label: 'acme/widgets' }], now },
+    opts,
+  );
+  assert.match(html, /querySelectorAll\('\.repo-fetch'\)[\s\S]*?vscode\.postMessage\(\{ type: 'fetch', key: btn\.dataset\.key \}\);/);
+});

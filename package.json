@@ -140,6 +140,40 @@
         "icon": "$(trash)"
       },
       {
+        "command": "gitLore.renameBranchFromExplorer",
+        "title": "GitLore: Rename Branch",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "gitLore.deleteBranchFromExplorer",
+        "title": "GitLore: Delete Branch",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "gitLore.deleteTagFromExplorer",
+        "title": "GitLore: Delete Tag",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "gitLore.addWorktreeFromExplorer",
+        "title": "GitLore: Add Worktree",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitLore.removeWorktreeFromExplorer",
+        "title": "GitLore: Remove Worktree",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "gitLore.createStashFromExplorer",
+        "title": "GitLore: New Stash",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitLore.recoverFromReflog",
+        "title": "GitLore: Recover Lost Commit or Branch"
+      },
+      {
         "command": "gitLore.stepLineHistory",
         "title": "GitLore: Step Through This Line's History",
         "icon": "$(chevron-left)"
@@ -294,6 +328,14 @@
           "when": "view == gitLore.explorer && (viewItem == gitLore.branch || viewItem == gitLore.branch.remote)"
         },
         {
+          "command": "gitLore.renameBranchFromExplorer",
+          "when": "view == gitLore.explorer && (viewItem == gitLore.branch || viewItem == gitLore.branch.current)"
+        },
+        {
+          "command": "gitLore.deleteBranchFromExplorer",
+          "when": "view == gitLore.explorer && viewItem == gitLore.branch"
+        },
+        {
           "command": "gitLore.openRemote",
           "when": "view == gitLore.explorer && viewItem == gitLore.remote",
           "group": "inline"
@@ -306,6 +348,24 @@
         {
           "command": "gitLore.dropStash",
           "when": "view == gitLore.explorer && viewItem == gitLore.stash"
+        },
+        {
+          "command": "gitLore.deleteTagFromExplorer",
+          "when": "view == gitLore.explorer && viewItem == gitLore.tag"
+        },
+        {
+          "command": "gitLore.addWorktreeFromExplorer",
+          "when": "view == gitLore.explorer && viewItem == gitLore.section.worktrees",
+          "group": "inline"
+        },
+        {
+          "command": "gitLore.removeWorktreeFromExplorer",
+          "when": "view == gitLore.explorer && viewItem == gitLore.worktree"
+        },
+        {
+          "command": "gitLore.createStashFromExplorer",
+          "when": "view == gitLore.explorer && viewItem == gitLore.section.stashes",
+          "group": "inline"
         }
       ],
       "scm/title": [

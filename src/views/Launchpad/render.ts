@@ -8,6 +8,7 @@ import {
   ARROW_UP_ICON,
   AUTHOR_ICON,
   CLOSE_ICON,
+  FETCH_ICON,
   MERGE_ICON,
   OPEN_CHANGES_ICON,
   REFRESH_ICON,
@@ -117,6 +118,7 @@ function renderRepoRow(repo: LaunchpadRepoRow): string {
   const label = escapeHtml(repo.label);
   return `<div class="repo-row" data-key="${key}">
 <span class="repo-row-label">${label}</span>
+<button class="repo-fetch icon-btn" type="button" data-key="${key}" data-tooltip="Fetch" aria-label="Fetch ${label}">${FETCH_ICON}</button>
 <button class="repo-pull icon-btn" type="button" data-key="${key}" data-tooltip="Pull" aria-label="Pull ${label}">${ARROW_DOWN_ICON}</button>
 <button class="repo-push icon-btn" type="button" data-key="${key}" data-tooltip="Push" aria-label="Push ${label}">${ARROW_UP_ICON}</button>
 <button class="repo-signout icon-btn" type="button" data-key="${key}" data-title="${label}" data-tooltip="Sign Out" aria-label="Sign out of ${label}">${SIGN_OUT_ICON}</button>
@@ -248,6 +250,12 @@ for (const btn of document.querySelectorAll('.pr-card-details')) {
     e.preventDefault();
     e.stopPropagation();
     vscode.postMessage({ type: 'showPullRequestDetails', key: btn.dataset.key });
+  });
+}
+
+for (const btn of document.querySelectorAll('.repo-fetch')) {
+  btn.addEventListener('click', () => {
+    vscode.postMessage({ type: 'fetch', key: btn.dataset.key });
   });
 }
 

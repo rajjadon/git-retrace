@@ -54,7 +54,7 @@ Requires **VS Code 1.85+** and `git` on your `PATH`. Works in Cursor and other V
 
 <img src="media/screenshots/inline-blame.png" width="470" alt="Inline blame decoration at the end of the current line, with the hover card open showing author, message and dates" />
 
-The current line's author and age, as a muted end-of-line decoration. It updates when you change lines — not on every cursor move — and the hover card adds the full message, relative *and* absolute dates, that commit's diff stat for this file, and the short SHA. Customise the text with `gitLore.blame.format`, or turn it off entirely.
+The current line's author and age, as a muted end-of-line decoration. It updates when you change lines — not on every cursor move — and the hover card adds the full message, relative *and* absolute dates, that commit's diff stat for this file, and the short SHA. Customise the text with `gitLore.blame.format`, or turn it off entirely. If the repo has a `.git-blame-ignore-revs` file (git's own convention for mass-reformat/lint commits you don't want blame attributing to), GitLore detects and respects it automatically — no setting, same as plain `git blame`.
 
 The hover card also has **Compare** / **File History** / **Copy SHA** quick actions, and an **Older** link that steps backward through that exact line's own history (real per-line tracking, not just "commits that touched this file") — ◀ prev / next ▶ through every revision that changed the line, without leaving the hover.
 
@@ -104,7 +104,7 @@ Off by default (`gitLore.launchpad.enabled`) — it's opt-in, same as AI, since 
 
 <img src="media/screenshots/sidebar-explorer.png" alt="The GitLore Explorer sidebar showing Branches, Remotes, Tags, Stashes, Worktrees, and Contributors sections" />
 
-Branches, Remotes, Tags, Stashes, Worktrees, and Contributors, each a collapsible section, always visible in its own activity bar icon — no command needed to open it. Right-click a branch to **Checkout**, **Compare with Current Branch**, **Merge into Current Branch**, or **Rebase Current Branch onto This** (the last two run in a real terminal, since either can land a conflict you resolve yourself); right-click a remote to **Open Remote in Browser**; right-click a stash to **Apply** or **Drop** (with confirmation — it can't be undone).
+Branches, Remotes, Tags, Stashes, Worktrees, and Contributors, each a collapsible section, always visible in its own activity bar icon — no command needed to open it. Right-click a branch to **Checkout**, **Compare with Current Branch**, **Merge into Current Branch**, **Rebase Current Branch onto This** (the last two run in a real terminal, since either can land a conflict you resolve yourself), **Rename Branch**, or **Delete Branch** (confirms first; git itself blocks deleting the branch you have checked out); right-click a remote to **Open Remote in Browser**; right-click a tag for **Delete Tag** (confirms first); right-click a stash to **Apply** or **Drop** (with confirmation — it can't be undone); an inline **+** on the Worktrees and Stashes section headers adds a worktree (path + branch) or a new stash (optional message). **GitLore: Recover Lost Commit or Branch** (Command Palette) lists recent reflog entries and creates a branch at whichever one you pick — for recovering from a hard reset, force push, or accidental branch delete before git garbage-collects it.
 
 ### File History
 

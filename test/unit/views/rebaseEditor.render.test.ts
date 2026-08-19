@@ -71,6 +71,11 @@ test('renderRebaseEditorHtml: sets a strict CSP with no unsafe-inline', () => {
   assert.match(html, /Content-Security-Policy/);
 });
 
+test('renderRebaseEditorHtml: each editable row carries a stable data-sha for FLIP tracking across reorders', () => {
+  const html = renderRebaseEditorHtml({ entries: [entry({ sha: 'abc1234', message: 'fix bug' })] }, opts);
+  assert.match(html, /<div class="rb-row rb-row-pick" role="listitem" draggable="true" data-index="0" data-sha="abc1234">/);
+});
+
 test('renderRebaseEditorHtml: an empty entry list still renders a usable shell (Abort works on nothing to rebase)', () => {
   const html = renderRebaseEditorHtml({ entries: [] }, opts);
   assert.match(html, /id="abort-rebase"/);

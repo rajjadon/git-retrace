@@ -899,6 +899,8 @@ suite('Launchpad', () => {
   test('syncRepoForTest: an unrecognized repo key is a silent no-op (no terminal created)', async () => {
     const before = vscode.window.terminals.length;
     api.launchpadProvider.syncRepoForTest('not-a-real-repo-key', 'pull');
+    api.launchpadProvider.syncRepoForTest('not-a-real-repo-key', 'push');
+    api.launchpadProvider.syncRepoForTest('not-a-real-repo-key', 'fetch');
     assert.equal(vscode.window.terminals.length, before);
   });
 
