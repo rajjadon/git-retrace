@@ -10,6 +10,7 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 - **Commit Graph: newly-loaded rows fade/slide in** — "Load More" now animates only the newly-revealed rows (reusing the same entrance animation Launchpad and PR Details already use), instead of the whole list snapping in unchanged.
 - **Visual File History: points fade/slide in** — each commit bubble now uses the same entrance animation already used elsewhere, instead of appearing instantly.
+- **Visual File History follows the active editor** — once opened, the panel now reloads automatically as you switch files, instead of only updating when you re-run **GitLore: Show Visual File History**.
 - **Interactive Rebase Editor: rows slide into place on reorder** — dragging a commit to a new position now animates the rows it displaced, instead of them snapping instantly. Respects `prefers-reduced-motion` (rows still reorder correctly, just without the animated slide).
 - **Launchpad: per-bucket column accent** — Needs Review, Ready to Merge, Blocked, and Waiting each get a small colored left edge (VS Code's own semantic theme colors, so it's correct in light/dark/high-contrast), so the board scans faster at a glance. Purely supplementary to the existing column title — never the only signal.
 - **Sidebar Explorer: rename and delete a local branch** — right-click a branch for **Rename Branch** (also available on the current branch) and **Delete Branch** (confirms first; git itself blocks deleting the branch you have checked out).

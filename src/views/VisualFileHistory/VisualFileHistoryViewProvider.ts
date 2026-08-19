@@ -4,7 +4,9 @@ import { layoutFileHistory } from '../../core/graph/fileHistoryLayout';
 import { renderFileHistoryHtml } from './render';
 import { renderPlaceholderHtml } from '../placeholder';
 import { waitForWebviewView } from '../waitForWebviewView';
-import { COMMANDS, MEDIA, VIEWS } from '../../constants';
+import { COMMANDS, CONFIG, MEDIA, VIEWS } from '../../constants';
+
+const DEFAULT_MAX_HISTORY_ITEMS = 200;
 
 function createNonce(): string {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -16,14 +18,26 @@ function createNonce(): string {
 }
 
 /** Docks the Visual File History bubble timeline in the bottom panel, alongside Commit Graph/Details/Branch Comparison. */
-export class VisualFileHistoryViewProvider implements vscode.WebviewViewProvider {
+export class VisualFileHistoryViewProvider implements vscode.WebviewViewProvider, vscode.Disposable {
+  private readonly disposables: vscode.Disposable[] = [];
   private view: vscode.WebviewView | undefined;
   private currentFilePath: string | undefined;
+  private tracking = false;
+  // Guards against a superseded load (rapid tab-switching) overwriting the panel with a stale
+  // file's history once an earlier lookup resolves after a later one — same technique
+  // FileHistoryProvider.loadForPath already uses for the same race.
+  private loadGeneration = 0;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly git: GitService,
   ) {}
+
+  dispose(): void {
+    for (const d of this.disposables) {
+      d.dispose();
+    }
+  }
 
   /** Test-only introspection seam — VS Code's public API doesn't expose a webview's rendered HTML. */
   getCurrentHtmlForTest(): string | undefined {
@@ -52,17 +66,35 @@ export class VisualFileHistoryViewProvider implements vscode.WebviewViewProvider
     }
   }
 
-  /** Called by the "Show Visual File History" command — reveals the panel tab and (re)loads from the given file. */
+  /** Called by the "Show Visual File History" command — reveals the panel tab, (re)loads from the given file, and starts following the active editor from then on (same pattern as FileHistoryProvider.show). */
   async show(filePath: string, maxCount: number): Promise<void> {
     await vscode.commands.executeCommand(`${VIEWS.visualFileHistory}.focus`);
     await waitForWebviewView(() => this.view);
+    if (!this.tracking) {
+      this.tracking = true;
+      this.disposables.push(
+        vscode.window.onDidChangeActiveTextEditor((editor) => {
+          void this.loadForEditor(editor);
+        }),
+      );
+    }
     await this.load(filePath, maxCount);
+  }
+
+  /** Reacts to an editor switch once auto-follow is active — a no-op while the panel tab isn't visible, so flipping through unrelated tabs doesn't spawn a `git log` nobody's looking at. */
+  private async loadForEditor(editor: vscode.TextEditor | undefined): Promise<void> {
+    if (!this.view?.visible || !editor || editor.document.uri.scheme !== 'file') {
+      return;
+    }
+    const maxCount = vscode.workspace.getConfiguration(CONFIG.section).get<number>(CONFIG.maxHistoryItems, DEFAULT_MAX_HISTORY_ITEMS);
+    await this.load(editor.document.uri.fsPath, maxCount);
   }
 
   private async load(filePath: string, maxCount: number): Promise<void> {
     if (!this.view) {
       return;
     }
+    const generation = ++this.loadGeneration;
     this.currentFilePath = filePath;
     const styleUris = [this.mediaUri(MEDIA.shared), this.mediaUri(MEDIA.visualFileHistory)];
     this.view.webview.html = renderPlaceholderHtml('Loading file history…', {
@@ -74,6 +106,9 @@ export class VisualFileHistoryViewProvider implements vscode.WebviewViewProvider
 
     try {
       const entries = await this.git.getFileHistoryStats(filePath, maxCount);
+      if (generation !== this.loadGeneration || !this.view) {
+        return;
+      }
       const points = layoutFileHistory(entries, new Date());
       this.view.webview.html = renderFileHistoryHtml(
         { points },
@@ -84,6 +119,9 @@ export class VisualFileHistoryViewProvider implements vscode.WebviewViewProvider
         },
       );
     } catch (err) {
+      if (generation !== this.loadGeneration || !this.view) {
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       this.view.webview.html = renderPlaceholderHtml(`GitLore: failed to load file history — ${message}`, {
         nonce: createNonce(),

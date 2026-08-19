@@ -170,6 +170,7 @@ export function activate(ctx: vscode.ExtensionContext): GitLoreTestApi {
     handleShowCommitCommand(commitDetailsViewProvider),
     handleOpenGraphCommand(commitGraphViewProvider),
     handleShowVisualFileHistoryCommand(visualFileHistoryViewProvider),
+    visualFileHistoryViewProvider,
     handleCompareBranchesCommand(git, branchComparisonViewProvider),
     handleSummarizeBranchComparisonCommand(branchComparisonViewProvider),
     handleExplainCommitCommand(commitDetailsViewProvider),
