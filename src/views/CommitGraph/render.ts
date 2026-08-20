@@ -4,6 +4,7 @@ import { formatAge, formatAbsolute } from '../../utils/date';
 import { escapeHtml } from '../escapeHtml';
 import { buildGravatarUrl } from '../../utils/gravatar';
 import { chartCssVarForIndex } from '../../utils/colors';
+import { renderTooltipScript } from '../tooltipScript';
 import {
   ARROW_DOWN_ICON,
   ARROW_UP_ICON,
@@ -202,9 +203,9 @@ function renderSyncButtons(branches: BranchInfo[]): string {
   const pushBadge = ahead > 0 ? `<span class="sync-badge">${ahead}</span>` : '';
   const pullLabel = behind > 0 ? `Pull ${behind} ${behind === 1 ? 'commit' : 'commits'}` : 'Pull — up to date';
   const pushLabel = ahead > 0 ? `Push ${ahead} ${ahead === 1 ? 'commit' : 'commits'}` : 'Push — nothing to push';
-  return `<button id="fetch" class="icon-btn" type="button" title="Fetch" aria-label="Fetch">${FETCH_ICON}</button>
-<button id="pull" class="icon-btn" type="button" title="${escapeHtml(pullLabel)}" aria-label="${escapeHtml(pullLabel)}">${ARROW_DOWN_ICON}${pullBadge}</button>
-<button id="push" class="icon-btn" type="button" title="${escapeHtml(pushLabel)}" aria-label="${escapeHtml(pushLabel)}">${ARROW_UP_ICON}${pushBadge}</button>`;
+  return `<button id="fetch" class="icon-btn" type="button" data-tooltip="Fetch" aria-label="Fetch">${FETCH_ICON}</button>
+<button id="pull" class="icon-btn" type="button" data-tooltip="${escapeHtml(pullLabel)}" aria-label="${escapeHtml(pullLabel)}">${ARROW_DOWN_ICON}${pullBadge}</button>
+<button id="push" class="icon-btn" type="button" data-tooltip="${escapeHtml(pushLabel)}" aria-label="${escapeHtml(pushLabel)}">${ARROW_UP_ICON}${pushBadge}</button>`;
 }
 
 /** The `+added ~modified -deleted` badge — counted by file, so the three numbers sum to the file count. */
@@ -305,7 +306,7 @@ ${renderRefPicker(branches, currentRef)}
 <span class="search">${SEARCH_ICON}<input id="search" type="search" placeholder="Filter by message, author, or SHA" aria-label="Filter commits by message, author, or SHA" autocomplete="off" spellcheck="false" /></span>
 <span class="count" id="count" aria-live="polite">${nodes.length} ${nodes.length === 1 ? 'commit' : 'commits'}</span>
 ${renderSyncButtons(branches)}
-<button id="refresh" class="icon-btn" type="button" title="Refresh" aria-label="Refresh the commit graph">${REFRESH_ICON}</button>
+<button id="refresh" class="icon-btn" type="button" data-tooltip="Refresh" aria-label="Refresh the commit graph">${REFRESH_ICON}</button>
 </div>
 <div class="grid" role="grid" aria-label="Commit graph" aria-rowcount="${nodes.length + (hasWip ? 1 : 0)}">
 <div class="row header" role="row">
@@ -569,6 +570,7 @@ document.getElementById('push')?.addEventListener('click', () => {
 document.getElementById('load-more')?.addEventListener('click', () => {
   vscode.postMessage({ type: 'loadMore' });
 });
+${renderTooltipScript()}
 </script>
 </body>
 </html>`;

@@ -620,6 +620,31 @@ body.wrap .dc {
   animation: gitlore-enter 180ms ease-out;
 }
 
+/* ---------- Shared tooltip ---------- */
+
+/* A single shared, JS-positioned tooltip for every icon-only button across every webview (see
+   tooltipScript.ts) — native title="" bubbling turned out unreliable for some buttons in a row,
+   so this is unconditionally under our control instead. Pair with `data-tooltip="..."` on the
+   element, not `title`. */
+.gitlore-tooltip {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  max-width: 240px;
+  padding: 0.3rem 0.5rem;
+  border-radius: var(--gitlore-radius-md);
+  font-size: 0.85em;
+  line-height: 1.3;
+  color: var(--gl-text);
+  background-color: var(--gl-surface);
+  border: 1px solid var(--gl-border);
+  pointer-events: none;
+}
+
+.gitlore-tooltip.visible {
+  display: block;
+}
+
 /* ---------- AI summary ---------- */
 
 .ai-summary {

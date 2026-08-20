@@ -1094,6 +1094,291 @@ suite('Launchpad', () => {
       }),
     ));
 
+  test('closePullRequestForTest: closes the PR currently loaded in the Details panel', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/close-details-widgets.git', async () => {
+        let closeCalled = false;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 11,
+                title: 'Closeable-from-details PR',
+                web_url: 'https://gitlab.com/acme/close-details-widgets/-/merge_requests/11',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: false, approved_by: [] });
+          }
+          if (url.includes('merge_requests/11/diffs')) {
+            return jsonResponse([]);
+          }
+          if (url.includes('merge_requests/11/discussions')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/merge_requests/11') && init?.method === 'PUT') {
+            closeCalled = true;
+            assert.equal(init.body, JSON.stringify({ state_event: 'close' }));
+            return jsonResponse({});
+          }
+          // The plain GET refetch `getPullRequest` performs after the close PATCH/PUT — GitLab's
+          // single-MR endpoint, matched last so it doesn't shadow the write call above (both hit
+          // the same URL, distinguished only by `init.method`).
+          if (url.endsWith('/merge_requests/11')) {
+            return jsonResponse({
+              iid: 11,
+              title: 'Closeable-from-details PR',
+              web_url: 'https://gitlab.com/acme/close-details-widgets/-/merge_requests/11',
+              author: { username: 'raj' },
+              created_at: '2024-01-01T00:00:00Z',
+              updated_at: '2024-01-01T00:00:00Z',
+            });
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Closeable-from-details PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'gitlab:acme/close-details-widgets#11');
+        await waitFor(() => (api.getPullRequestDetailsHtml() ?? '').includes('Closeable-from-details PR'));
+
+        await api.pullRequestDetailsProvider.closePullRequestForTest();
+        assert.ok(closeCalled, 'expected the close endpoint to be called');
+      }),
+    ));
+
+  test('reopenPullRequestForTest: reopens the closed (not merged) PR currently loaded in the Details panel', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/reopen-details-widgets.git', async () => {
+        let reopenCalled = false;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened') || url.includes('merge_requests?state=merged')) {
+            return jsonResponse([]);
+          }
+          if (url.includes('merge_requests?state=closed')) {
+            return jsonResponse([
+              {
+                iid: 12,
+                title: 'Reopenable-from-details PR',
+                web_url: 'https://gitlab.com/acme/reopen-details-widgets/-/merge_requests/12',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-04T00:00:00Z',
+              },
+            ]);
+          }
+          if (url.includes('merge_requests/12/diffs')) {
+            return jsonResponse([]);
+          }
+          if (url.includes('merge_requests/12/discussions')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/merge_requests/12') && init?.method === 'PUT') {
+            reopenCalled = true;
+            assert.equal(init.body, JSON.stringify({ state_event: 'reopen' }));
+            return jsonResponse({});
+          }
+          if (url.endsWith('/merge_requests/12')) {
+            return jsonResponse({
+              iid: 12,
+              title: 'Reopenable-from-details PR',
+              web_url: 'https://gitlab.com/acme/reopen-details-widgets/-/merge_requests/12',
+              author: { username: 'raj' },
+              created_at: '2024-01-01T00:00:00Z',
+              updated_at: '2024-01-04T00:00:00Z',
+            });
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Reopenable-from-details PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'gitlab:acme/reopen-details-widgets#12');
+        await waitFor(() => (api.getPullRequestDetailsHtml() ?? '').includes('Reopenable-from-details PR'));
+
+        await api.pullRequestDetailsProvider.reopenPullRequestForTest();
+        assert.ok(reopenCalled, 'expected the reopen endpoint to be called');
+      }),
+    ));
+
+  test('mergePullRequestForTest: merges the "ready to merge" PR currently loaded in the Details panel with the chosen strategy', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://gitlab.com/acme/merge-details-widgets.git', async () => {
+        let mergeCalled = false;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'raj' });
+          }
+          if (url.includes('merge_requests?state=opened')) {
+            return jsonResponse([
+              {
+                iid: 13,
+                title: 'Mergeable-from-details PR',
+                web_url: 'https://gitlab.com/acme/merge-details-widgets/-/merge_requests/13',
+                author: { username: 'raj' },
+                created_at: '2024-01-01T00:00:00Z',
+                updated_at: '2024-01-01T00:00:00Z',
+                head_pipeline: { status: 'success' },
+              },
+            ]);
+          }
+          if (url.includes('merge_requests?state=merged') || url.includes('merge_requests?state=closed')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/approvals')) {
+            return jsonResponse({ approved: true, approved_by: [{ user: { username: 'raj' } }] });
+          }
+          if (url.includes('merge_requests/13/diffs')) {
+            return jsonResponse([]);
+          }
+          if (url.includes('merge_requests/13/discussions')) {
+            return jsonResponse([]);
+          }
+          if (url.endsWith('/merge_requests/13/merge') && init?.method === 'PUT') {
+            mergeCalled = true;
+            assert.equal(init.body, JSON.stringify({ squash: true, should_remove_source_branch: true }));
+            return jsonResponse({});
+          }
+          if (url.endsWith('/merge_requests/13')) {
+            return jsonResponse({
+              iid: 13,
+              title: 'Mergeable-from-details PR',
+              web_url: 'https://gitlab.com/acme/merge-details-widgets/-/merge_requests/13',
+              author: { username: 'raj' },
+              created_at: '2024-01-01T00:00:00Z',
+              updated_at: '2024-01-01T00:00:00Z',
+              head_pipeline: { status: 'success' },
+            });
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Mergeable-from-details PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'gitlab:acme/merge-details-widgets#13');
+        await waitFor(() => (api.getPullRequestDetailsHtml() ?? '').includes('Mergeable-from-details PR'));
+
+        await api.pullRequestDetailsProvider.mergePullRequestForTest('squash', true);
+        assert.ok(mergeCalled, 'expected the merge endpoint to be called');
+      }),
+    ));
+
+  test('submitReviewForTest: approves the PR currently loaded in the Details panel (Bitbucket)', async () =>
+    withLaunchpadEnabled(() =>
+      withOriginRemote('https://bitbucket.org/acme/review-details-widgets.git', async () => {
+        let approveCalled = false;
+        api.launchpadProvider.setFetchImplForTest((async (url: string, init?: RequestInit) => {
+          if (url.endsWith('/user')) {
+            return jsonResponse({ username: 'other-dev' });
+          }
+          if (url.includes('pullrequests?state=OPEN')) {
+            return jsonResponse({
+              values: [
+                {
+                  id: 14,
+                  title: 'Reviewable-from-details PR',
+                  links: { html: { href: 'https://bitbucket.org/acme/review-details-widgets/pull-requests/14' } },
+                  author: { username: 'someone-else' },
+                  created_on: '2024-01-01T00:00:00Z',
+                  updated_on: '2024-01-01T00:00:00Z',
+                  source: { commit: { hash: 'sha14' } },
+                  // `categorizePullRequests` only surfaces a PR authored, reviewed, or
+                  // still-owed-a-review-by the current user — 'other-dev' has to be a requested
+                  // REVIEWER participant, or this PR never reaches the board at all.
+                  participants: [{ role: 'REVIEWER', approved: false, user: { username: 'other-dev' } }],
+                },
+              ],
+            });
+          }
+          if (url.includes('pullrequests?state=MERGED') || url.includes('pullrequests?state=DECLINED')) {
+            return jsonResponse({ values: [] });
+          }
+          if (url.endsWith('/statuses')) {
+            return jsonResponse({ values: [] });
+          }
+          if (url.endsWith('/pullrequests/14/diff')) {
+            return { ok: true, text: async () => '' } as unknown as Response;
+          }
+          if (url.endsWith('/pullrequests/14/diffstat')) {
+            return jsonResponse({ values: [] });
+          }
+          if (url.endsWith('/pullrequests/14/comments')) {
+            return jsonResponse({ values: [] });
+          }
+          if (url.endsWith('/pullrequests/14/approve') && init?.method === 'POST') {
+            approveCalled = true;
+            return jsonResponse({});
+          }
+          if (url.endsWith('/pullrequests/14')) {
+            return jsonResponse({
+              id: 14,
+              title: 'Reviewable-from-details PR',
+              links: { html: { href: 'https://bitbucket.org/acme/review-details-widgets/pull-requests/14' } },
+              author: { username: 'someone-else' },
+              created_on: '2024-01-01T00:00:00Z',
+              updated_on: '2024-01-01T00:00:00Z',
+              source: { commit: { hash: 'sha14' } },
+              participants: [{ role: 'REVIEWER', approved: true, user: { username: 'other-dev' } }],
+            });
+          }
+          throw new Error(`unmocked request in test: ${url}`);
+        }) as unknown as typeof fetch);
+
+        const originalInput = vscode.window.showInputBox;
+        (vscode.window as { showInputBox: typeof vscode.window.showInputBox }).showInputBox = (async () =>
+          'fake-pat') as typeof vscode.window.showInputBox;
+        try {
+          await vscode.commands.executeCommand(COMMANDS.openLaunchpad);
+          await waitFor(() => (api.getLaunchpadHtml() ?? '').includes('Reviewable-from-details PR'));
+        } finally {
+          vscode.window.showInputBox = originalInput;
+        }
+
+        await vscode.commands.executeCommand(COMMANDS.showPullRequest, 'bitbucket:acme/review-details-widgets#14');
+        await waitFor(() => (api.getPullRequestDetailsHtml() ?? '').includes('Reviewable-from-details PR'));
+
+        await api.pullRequestDetailsProvider.submitReviewForTest('approve');
+        assert.ok(approveCalled, 'expected the approve endpoint to be called');
+      }),
+    ));
+
   test('explainPr: with AI disabled, resets the summary section instead of calling a model', async () =>
     withLaunchpadEnabled(() =>
       withOriginRemote('https://gitlab.com/acme/explain-widgets.git', async () => {

@@ -2,6 +2,7 @@ import { LAUNCHPAD_BUCKETS, pullRequestKey } from '../../core/forge/types';
 import type { CategorizedPullRequest, ForgeRepoRef, LaunchpadBucket, PullRequestSummary } from '../../core/forge/types';
 import { formatAge, formatAbsolute } from '../../utils/date';
 import { escapeHtml } from '../escapeHtml';
+import { renderTooltipScript } from '../tooltipScript';
 import {
   APPROVE_ICON,
   ARROW_DOWN_ICON,
@@ -283,44 +284,7 @@ document.getElementById('refresh').addEventListener('click', () => {
   vscode.postMessage({ type: 'refresh' });
 });
 
-// Native title="" tooltips have proven unreliable on some of these icon-only buttons in practice —
-// this renders one shared tooltip element GitLore fully controls instead, so it never depends on
-// whatever the host's native hover-bubbling happens to do.
-const tooltip = document.createElement('div');
-tooltip.className = 'gitlore-tooltip';
-tooltip.setAttribute('role', 'tooltip');
-document.body.appendChild(tooltip);
-
-function positionTooltip(target) {
-  const rect = target.getBoundingClientRect();
-  const tipRect = tooltip.getBoundingClientRect();
-  let top = rect.top - tipRect.height - 6;
-  if (top < 4) top = rect.bottom + 6;
-  let left = rect.left + rect.width / 2 - tipRect.width / 2;
-  left = Math.max(4, Math.min(left, window.innerWidth - tipRect.width - 4));
-  tooltip.style.top = top + 'px';
-  tooltip.style.left = left + 'px';
-}
-
-function showTooltip(target) {
-  const text = target.dataset.tooltip;
-  if (!text) return;
-  tooltip.textContent = text;
-  tooltip.classList.add('visible');
-  positionTooltip(target);
-}
-
-function hideTooltip() {
-  tooltip.classList.remove('visible');
-}
-
-for (const el of document.querySelectorAll('[data-tooltip]')) {
-  el.addEventListener('mouseenter', () => showTooltip(el));
-  el.addEventListener('focus', () => showTooltip(el));
-  el.addEventListener('mouseleave', hideTooltip);
-  el.addEventListener('blur', hideTooltip);
-  el.addEventListener('click', hideTooltip);
-}
+${renderTooltipScript()}
 </script>
 </body>
 </html>`;

@@ -40,6 +40,12 @@ test('renderRebaseEditorHtml: the first row\'s move-up and the last row\'s move-
   assert.match(rows[2] ?? '', /rb-move-down"[^>]*disabled/);
 });
 
+test('renderRebaseEditorHtml: move-up and move-down carry a visible tooltip, not just an aria-label', () => {
+  const html = renderRebaseEditorHtml({ entries: [entry()] }, opts);
+  assert.match(html, /rb-move-up"[^>]*data-tooltip="Move up"/);
+  assert.match(html, /rb-move-down"[^>]*data-tooltip="Move down"/);
+});
+
 test('renderRebaseEditorHtml: offers Start Rebase and Abort actions', () => {
   const html = renderRebaseEditorHtml({ entries: [entry()] }, opts);
   assert.match(html, /id="start-rebase"/);

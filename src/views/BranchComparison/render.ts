@@ -3,6 +3,7 @@ import { formatAge, formatAbsolute } from '../../utils/date';
 import { escapeHtml } from '../escapeHtml';
 import { renderFileSections } from '../diffRender';
 import { buildGravatarUrl } from '../../utils/gravatar';
+import { renderTooltipScript } from '../tooltipScript';
 import {
   AI_ICON,
   BRANCH_ICON,
@@ -114,7 +115,7 @@ export function renderBranchComparisonHtml(
   // as "done" when the user hasn't done anything yet.
   const openAllBtn =
     files.length > 0
-      ? `<button class="icon-btn" id="open-all" type="button" title="Open all changes, diffed against the common base" aria-label="Open all changes, diffed against the common base">${OPEN_CHANGES_ICON}</button>`
+      ? `<button class="icon-btn" id="open-all" type="button" data-tooltip="Open all changes, diffed against the common base" aria-label="Open all changes, diffed against the common base">${OPEN_CHANGES_ICON}</button>`
       : '';
 
   const filesBody = sameRef
@@ -124,7 +125,7 @@ ${FILES_ICON}<span class="section-title">Files changed</span><span class="badge"
 <span class="totals"><span class="stat-add">+${insertions}</span><span class="stat-del">&minus;${deletions}</span></span>
 <span class="search">${SEARCH_ICON}<input id="file-filter" type="search" placeholder="Filter files…" aria-label="Filter changed files by path" autocomplete="off" spellcheck="false" /></span>
 ${openAllBtn}
-<button class="icon-btn" id="wrap" type="button" aria-pressed="false" title="Wrap long lines" aria-label="Wrap long lines">${WRAP_ICON}</button>
+<button class="icon-btn" id="wrap" type="button" aria-pressed="false" data-tooltip="Wrap long lines" aria-label="Wrap long lines">${WRAP_ICON}</button>
 </div>
 <div class="files" id="files">
 ${renderFileSections(files, diff)}
@@ -132,7 +133,7 @@ ${renderFileSections(files, diff)}
 <p class="empty" id="no-match" hidden>No files match that filter.</p>`;
 
   const createPrBtn = opts.createPr
-    ? `<button class="icon-btn" id="create-pr" type="button" title="Create a PR on ${escapeHtml(opts.createPr.label)}" aria-label="Create a PR on ${escapeHtml(opts.createPr.label)}">${EXTERNAL_ICON}</button>`
+    ? `<button class="icon-btn" id="create-pr" type="button" data-tooltip="Create a PR on ${escapeHtml(opts.createPr.label)}" aria-label="Create a PR on ${escapeHtml(opts.createPr.label)}">${EXTERNAL_ICON}</button>`
     : '';
 
   return `<!DOCTYPE html>
@@ -147,12 +148,12 @@ ${styles}
 <body>
 <div class="refbar">
 ${renderRefPicker('base', base, branches, 'Base ref — the side changes are measured from')}
-<button class="icon-btn" id="swap" type="button" title="Swap base and compare" aria-label="Swap base and compare">${SWAP_ICON}</button>
+<button class="icon-btn" id="swap" type="button" data-tooltip="Swap base and compare" aria-label="Swap base and compare">${SWAP_ICON}</button>
 ${renderRefPicker('compare', compare, branches, 'Compare ref — the side changes are measured to')}
 <span class="refbar-spacer"></span>
 <button class="btn btn-accent" id="summarize-comparison" type="button" title="Summarize this comparison with AI">${AI_ICON}Summarize</button>
 ${createPrBtn}
-<button class="icon-btn" id="refresh" type="button" title="Refresh" aria-label="Refresh the comparison">${REFRESH_ICON}</button>
+<button class="icon-btn" id="refresh" type="button" data-tooltip="Refresh" aria-label="Refresh the comparison">${REFRESH_ICON}</button>
 </div>
 <div class="ai-summary">
 <p class="ai-summary-text" id="ai-summary-text" aria-live="polite" hidden></p>
@@ -320,6 +321,7 @@ if (filterEl) {
     noMatchEl.hidden = shown > 0 || fileEls.length === 0;
   });
 }
+${renderTooltipScript()}
 </script>
 </body>
 </html>`;

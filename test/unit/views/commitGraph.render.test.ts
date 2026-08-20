@@ -290,8 +290,8 @@ test('renderGraphHtml: escapes a branch name injected through the ref picker', (
 test('renderGraphHtml: pull/push buttons show ahead/behind badges for the current branch', () => {
   const branches: BranchInfo[] = [{ name: 'main', isRemote: false, isCurrent: true, ahead: 6, behind: 5 }];
   const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), branches, now }, opts);
-  assert.match(html, /id="pull"[^>]*title="Pull 5 commits"/);
-  assert.match(html, /id="push"[^>]*title="Push 6 commits"/);
+  assert.match(html, /id="pull"[^>]*data-tooltip="Pull 5 commits"/);
+  assert.match(html, /id="push"[^>]*data-tooltip="Push 6 commits"/);
   assert.match(html, /id="pull"[\s\S]*?class="sync-badge">5</);
   assert.match(html, /id="push"[\s\S]*?class="sync-badge">6</);
 });
@@ -302,8 +302,8 @@ test('renderGraphHtml: no badge (but the button stays) when ahead/behind is 0', 
   assert.match(html, /id="pull"/);
   assert.match(html, /id="push"/);
   assert.ok(!html.includes('sync-badge'));
-  assert.match(html, /id="pull"[^>]*title="Pull — up to date"/);
-  assert.match(html, /id="push"[^>]*title="Push — nothing to push"/);
+  assert.match(html, /id="pull"[^>]*data-tooltip="Pull — up to date"/);
+  assert.match(html, /id="push"[^>]*data-tooltip="Push — nothing to push"/);
 });
 
 test('renderGraphHtml: no pull/push buttons at all when the current branch has no upstream', () => {
@@ -316,7 +316,7 @@ test('renderGraphHtml: no pull/push buttons at all when the current branch has n
 test('renderGraphHtml: a Fetch button renders alongside Pull/Push, and is hidden with them when there is no upstream', () => {
   const withUpstream: BranchInfo[] = [{ name: 'main', isRemote: false, isCurrent: true, ahead: 6, behind: 5 }];
   const htmlWithUpstream = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), branches: withUpstream, now }, opts);
-  assert.match(htmlWithUpstream, /id="fetch"[^>]*title="Fetch"/);
+  assert.match(htmlWithUpstream, /id="fetch"[^>]*data-tooltip="Fetch"/);
 
   const withoutUpstream: BranchInfo[] = [{ name: 'main', isRemote: false, isCurrent: true }];
   const htmlWithoutUpstream = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), branches: withoutUpstream, now }, opts);

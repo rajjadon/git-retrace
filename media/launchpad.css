@@ -217,27 +217,7 @@ body {
   gap: 0.25rem;
 }
 
-/* A single shared, JS-positioned tooltip for every icon-only button (see render.ts) — native
-   title="" bubbling turned out unreliable for some buttons in a row, so this is unconditionally
-   under our control instead. */
-.gitlore-tooltip {
-  display: none;
-  position: fixed;
-  z-index: 1000;
-  max-width: 240px;
-  padding: 0.3rem 0.5rem;
-  border-radius: var(--gitlore-radius-md);
-  font-size: 0.85em;
-  line-height: 1.3;
-  color: var(--gl-text);
-  background-color: var(--gl-surface);
-  border: 1px solid var(--gl-border);
-  pointer-events: none;
-}
-
-.gitlore-tooltip.visible {
-  display: block;
-}
+/* .gitlore-tooltip now lives in shared.css — every webview uses this same tooltip, not just Launchpad. */
 
 @media (prefers-reduced-motion: reduce) {
   * {

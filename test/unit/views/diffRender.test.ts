@@ -180,6 +180,6 @@ test('renderFileSections: a binary file gets no diffstat bar', () => {
 
 test('renderFileSections: each file row offers an Open changes button carrying its path', () => {
   const html = renderFileSections([file('src/a.ts')], twoFileDiff);
-  assert.match(html, /class="row-btn" type="button" data-path="src\/a\.ts" title="Open changes"/);
+  assert.match(html, /class="row-btn" type="button" data-path="src\/a\.ts" data-tooltip="Open changes"/);
   assert.match(html, /aria-label="Open changes in src\/a\.ts"/);
 });

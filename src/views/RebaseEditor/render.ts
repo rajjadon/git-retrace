@@ -1,6 +1,7 @@
 import type { RebaseEntry } from '../../core/git/rebaseTodo';
 import { escapeHtml } from '../escapeHtml';
 import { CHECK_ICON, CHEVRON_DOWN_ICON, CHEVRON_UP_ICON, DRAG_HANDLE_ICON } from '../icons';
+import { renderTooltipScript } from '../tooltipScript';
 
 export interface RenderRebaseEditorOptions {
   nonce: string;
@@ -29,8 +30,8 @@ function renderRow(entry: RebaseEntry, index: number, lastIndex: number): string
   return `<div class="rb-row rb-row-${escapeHtml(entry.command)}" role="listitem" draggable="true" data-index="${index}" data-sha="${escapeHtml(entry.sha)}">
 <span class="rb-drag-handle" aria-hidden="true">${DRAG_HANDLE_ICON}</span>
 <span class="rb-move">
-<button class="icon-btn rb-move-up" type="button" data-index="${index}"${index === 0 ? ' disabled' : ''} aria-label="Move up">${CHEVRON_UP_ICON}</button>
-<button class="icon-btn rb-move-down" type="button" data-index="${index}"${index === lastIndex ? ' disabled' : ''} aria-label="Move down">${CHEVRON_DOWN_ICON}</button>
+<button class="icon-btn rb-move-up" type="button" data-index="${index}"${index === 0 ? ' disabled' : ''} data-tooltip="Move up" aria-label="Move up">${CHEVRON_UP_ICON}</button>
+<button class="icon-btn rb-move-down" type="button" data-index="${index}"${index === lastIndex ? ' disabled' : ''} data-tooltip="Move down" aria-label="Move down">${CHEVRON_DOWN_ICON}</button>
 </span>
 <select class="rb-action" data-index="${index}" aria-label="Action for ${escapeHtml(entry.sha)}">${options}</select>
 <code class="rb-sha">${escapeHtml(entry.sha)}</code>
@@ -147,6 +148,7 @@ document.getElementById('start-rebase').addEventListener('click', () => {
 document.getElementById('abort-rebase').addEventListener('click', () => {
   vscode.postMessage({ type: 'abortRebase' });
 });
+${renderTooltipScript()}
 </script>
 </body>
 </html>`;

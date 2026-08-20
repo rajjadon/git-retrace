@@ -1,5 +1,6 @@
 import { escapeHtml } from '../escapeHtml';
 import { AI_ICON } from '../icons';
+import { renderTooltipScript } from '../tooltipScript';
 
 export interface RenderChatOptions {
   nonce: string;
@@ -29,7 +30,7 @@ ${styles}
 <body>
 <div class="chat-head">
 <span class="chat-title">GitLore Chat</span>
-<button class="icon-btn" id="new-chat" type="button" title="New chat" aria-label="Start a new chat">${AI_ICON}</button>
+<button class="icon-btn" id="new-chat" type="button" data-tooltip="New chat" aria-label="Start a new chat">${AI_ICON}</button>
 </div>
 ${subject}
 <div class="chat-messages" id="chat-messages" role="log" aria-live="polite"></div>
@@ -126,6 +127,7 @@ window.addEventListener('message', (e) => {
     sendBtn.disabled = false;
   }
 });
+${renderTooltipScript()}
 </script>
 </body>
 </html>`;

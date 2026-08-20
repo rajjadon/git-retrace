@@ -5,6 +5,7 @@ import { renderFileSections } from '../diffRender';
 import { linkifyIssues, type IssueLinkOptions } from '../../utils/issueLinks';
 import { buildGravatarUrl } from '../../utils/gravatar';
 import { AI_ICON, COPY_ICON, EXTERNAL_ICON, FILES_ICON, MESSAGE_ICON, SEARCH_ICON, WRAP_ICON } from '../icons';
+import { renderTooltipScript } from '../tooltipScript';
 
 /** Where "Open on <host>" should send the user, when the repo has a remote we know the URL shape for. */
 export interface RemoteTarget {
@@ -114,7 +115,7 @@ ${bodyRest ? `<pre class="commit-body">${linkifyHtml(bodyRest, opts.issueLinking
 ${FILES_ICON}<span class="section-title">Files changed</span><span class="badge">${files.length}</span>
 ${renderTotals(files)}
 <span class="search">${SEARCH_ICON}<input id="file-filter" type="search" placeholder="Filter files…" aria-label="Filter changed files by path" autocomplete="off" spellcheck="false" /></span>
-<button class="icon-btn" id="wrap" type="button" aria-pressed="false" title="Wrap long lines" aria-label="Wrap long lines">${WRAP_ICON}</button>
+<button class="icon-btn" id="wrap" type="button" aria-pressed="false" data-tooltip="Wrap long lines" aria-label="Wrap long lines">${WRAP_ICON}</button>
 </div>
 <div class="files" id="files">
 ${renderFileSections(files, diff)}
@@ -211,6 +212,7 @@ filterEl.addEventListener('input', () => {
   }
   noMatchEl.hidden = shown > 0 || fileEls.length === 0;
 });
+${renderTooltipScript()}
 </script>
 </body>
 </html>`;
