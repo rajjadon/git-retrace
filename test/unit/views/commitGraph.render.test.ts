@@ -175,7 +175,7 @@ test('renderGraphHtml: draws an avatar node per commit, with curves for lane-cha
 test('renderGraphHtml: rings each avatar node in its lane color', () => {
   const nodes = layoutGraph([commit('A', [])]);
   const html = renderGraphHtml({ nodes, now }, opts);
-  assert.match(html, /<circle cx="\d+" cy="\d+" r="6" fill="none" stroke="var\(--vscode-charts-blue\)"/);
+  assert.match(html, /<circle cx="\d+" cy="\d+" r="6" fill="none" stroke="var\(--gl-cat-1\)"/);
 });
 
 test('renderGraphHtml: pins a Working Changes row with per-status file counts when the tree is dirty', () => {

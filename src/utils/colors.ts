@@ -19,9 +19,24 @@ function idForIndex(index: number): string {
   return CHART_THEME_COLOR_IDS[index % CHART_THEME_COLOR_IDS.length] ?? CHART_THEME_COLOR_IDS[0] ?? 'charts.foreground';
 }
 
-/** CSS custom property reference for a webview stylesheet, e.g. `var(--vscode-charts-blue)`. */
+/**
+ * Fixed categorical palette for webview-rendered lane/author coloring (Commit Graph lanes, Visual
+ * File History author lanes) — distinct from `CHART_THEME_COLOR_IDS` below, which feeds *native
+ * editor decorations* (the ownership ruler) and must stay theme-derived. This one is fixed because
+ * these eight webview panels no longer derive color from the user's VS Code theme at all.
+ */
+const WEBVIEW_CATEGORICAL_COLOR_VARS = [
+  'var(--gl-cat-1)',
+  'var(--gl-cat-2)',
+  'var(--gl-cat-3)',
+  'var(--gl-cat-4)',
+  'var(--gl-cat-5)',
+  'var(--gl-cat-6)',
+];
+
+/** CSS custom property reference for a webview stylesheet — cycles through GitLore's own fixed categorical palette. */
 export function chartCssVarForIndex(index: number): string {
-  return `var(--vscode-${idForIndex(index).replace('.', '-')})`;
+  return WEBVIEW_CATEGORICAL_COLOR_VARS[index % WEBVIEW_CATEGORICAL_COLOR_VARS.length] ?? WEBVIEW_CATEGORICAL_COLOR_VARS[0] ?? 'var(--gl-cat-1)';
 }
 
 /**

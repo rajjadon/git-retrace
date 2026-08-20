@@ -113,6 +113,8 @@ Never let a `vscode` import leak into `core/`. If you're tempted, the logic belo
 
 **Ask Raj before adding any runtime dependency.** No React/Vue/Svelte in the extension host. Webviews are vanilla TS + CSS unless a view grows complex enough to justify a framework, and then it stays isolated inside its own `views/` subfolder with its own build step.
 
+`media/fonts/` bundles IBM Plex Sans and JetBrains Mono (both SIL Open Font License) as static assets — not an npm dependency, but worth noting as a new bundled-asset category.
+
 ---
 
 ## 7. Feature roadmap (build in this order)
@@ -413,9 +415,11 @@ Press **F5** to launch the Extension Development Host with the extension loaded.
 ## 18. Accessibility & UX
 
 - Blame decorations must meet contrast in both light and dark themes — derive colors from `ThemeColor`, never hardcode hex.
+- This rule governs editor decorations, hover cards, tree items, and the status bar (native VS Code UI GitLore doesn't control the rendering of). It does **not** govern the eight webview panels (Commit Graph, Commit Details, Branch Comparison, PR Details, Rebase Editor, Visual File History, Launchpad, Chat) — those use GitLore's own fixed design-token palette (`media/shared.css`'s `:root`), not `ThemeColor`, as of the 2026-08-20 design system change. See `docs/superpowers/specs/2026-08-20-gitlore-webview-design-system.md`.
 - All Webviews: proper heading structure, `aria-label` on icon-only buttons, keyboard-navigable, respect `prefers-reduced-motion`.
 - Never rely on color alone to convey meaning (staleness, ownership) — pair with text or icon.
 - Honor the user's `editor.fontFamily` inside webviews where it reads as editor content.
+- "Reads as editor content" is the operative scope: a diff hunk, a file path, a commit's full patch — literal file/diff content — still honors `editor.fontFamily`/`editor.fontSize`. UI chrome and code-*shaped identifiers* (a SHA, a branch/tag/repo name) use GitLore's own `--gl-font-ui`/`--gl-font-mono` instead, regardless of the user's editor font.
 - Enforce a strict Content Security Policy on every Webview; use a nonce for scripts, no inline event handlers, no remote script loads.
 
 ---

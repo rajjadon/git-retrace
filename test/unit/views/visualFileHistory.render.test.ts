@@ -75,7 +75,7 @@ test('renderFileHistoryHtml: bubbles are flat author-colored circles, not avatar
   );
   const html = renderFileHistoryHtml({ points, now }, opts);
   assert.ok(!html.includes('<image'), 'expected no <image> elements — bubbles should be flat fills');
-  assert.match(html, /class="fh-bubble" cx="[0-9.]+" cy="[0-9.]+" r="[0-9.]+" fill="var\(--vscode-charts-blue\)"/);
+  assert.match(html, /class="fh-bubble" cx="[0-9.]+" cy="[0-9.]+" r="[0-9.]+" fill="var\(--gl-cat-1\)"/);
 });
 
 test('renderFileHistoryHtml: carries structured, escaped tooltip data for the client to build a real card (avatar row, message, meta, stat)', () => {

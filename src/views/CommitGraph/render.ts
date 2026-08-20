@@ -294,7 +294,7 @@ export function renderGraphHtml(data: GraphData, opts: RenderGraphOptions): stri
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource} 'nonce-${opts.nonce}'; img-src https: ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource} 'nonce-${opts.nonce}'; img-src https: ${opts.cspSource}; font-src ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
 ${styles}
 <style nonce="${opts.nonce}">:root { --graph-svg-width: ${svgWidth}px; --graph-row-height: ${ROW_HEIGHT}px; }</style>
 <title>Commit Graph</title>

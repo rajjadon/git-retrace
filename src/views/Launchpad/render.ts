@@ -163,7 +163,7 @@ export function renderLaunchpadHtml(data: LaunchpadData, opts: RenderLaunchpadOp
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource} 'nonce-${opts.nonce}'; img-src https: ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource} 'nonce-${opts.nonce}'; img-src https: ${opts.cspSource}; font-src ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
 ${styles}
 <title>GitLore Launchpad</title>
 </head>
