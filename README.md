@@ -22,7 +22,7 @@ It does that without leaving your editor, without signing in, and without sendin
 
 If you've used similar VS Code git extensions, GitLore covers the same core ground — inline blame, a commit graph, commit details, branch comparison — with every feature free and a deliberately smaller surface area. See [How it compares](#how-it-compares).
 
-> **Status: 1.1, stable.** Everything below works and is covered by tests — 605 unit tests and 112 integration tests against a real VS Code instance. Bug reports are very welcome.
+> **Status: 1.2, stable.** Everything below works and is covered by tests — 743 unit tests and 163 integration tests against a real VS Code instance. Bug reports are very welcome.
 
 ## Install
 
@@ -35,7 +35,7 @@ code --install-extension RajpratapsinghJadon.gitlore
 **From a `.vsix`** — grab one from [Releases](https://github.com/rajjadon/gitlore/releases), then:
 
 ```bash
-code --install-extension gitlore-1.2.3.vsix
+code --install-extension gitlore-1.2.4.vsix
 ```
 
 Requires **VS Code 1.85+** and `git` on your `PATH`. Works in Cursor and other VS Code-based editors.
@@ -68,7 +68,9 @@ A repo-wide, branch-and-merge-aware graph — not a flat log. Branch, tag and re
 
 Right-click any commit for **Checkout**, **Reset Branch to Here** (soft/mixed/hard), **Revert This Commit**, **Cherry-pick onto Current Branch**, **Create Branch from Commit**, **Tag This Commit**, and **Copy SHA** — no terminal needed to reset, revert, cherry-pick, branch, or tag from history you're already looking at. Reset and Checkout confirm first and can't be undone once accepted; Revert and Cherry-pick run in a real terminal since either can land a conflict you resolve yourself.
 
-Pull and push buttons sit in the toolbar too, badged with how many commits you're behind/ahead of the upstream (hidden when there's no upstream to compare against) — both run in a real terminal, so you see prompts and conflicts instead of them failing silently. The graph also auto-refreshes on any external `git pull`/push/checkout, not just its own buttons.
+Fetch, pull, and push buttons sit in the toolbar too — pull/push badged with how many commits you're behind/ahead of the upstream (hidden when there's no upstream to compare against) — all three run in a real terminal, so you see prompts and conflicts instead of them failing silently. The graph also auto-refreshes on any external `git pull`/push/checkout, not just its own buttons.
+
+Commit Graph and Launchpad have their own visual identity — dark by default, a teal-to-cyan accent, and their own typeface — instead of just inheriting whatever your editor theme happens to be.
 
 ### Commit details you can act on
 
@@ -90,9 +92,9 @@ Two ref pickers with a swap button, and **Ahead / Behind / All Files** tabs with
 
 <img src="media/screenshots/launchpad.png" alt="Launchpad showing an eight-column board: Needs Review, Ready to Merge, Waiting, Blocked, Drafts, Snoozed, Merged, and Closed, each with pull request cards, and a repo row above with Pull/Push buttons" />
 
-The only GitLore feature that reaches beyond your local `.git` — everything else above works fully offline. **GitLore: Open Launchpad** opens a 9-column board (Needs Review, Reviewed, Ready to Merge, Waiting, Blocked, Drafts, Snoozed, Merged, Closed) pooling PRs across every recognized remote in your workspace, so triaging what needs your attention — and seeing what you've recently shipped — doesn't mean tab-switching between repos and a browser. Once you've approved or requested changes on a PR you don't own, it moves to **Reviewed** and stays there regardless of what happens to it afterward (CI turns red, a conflict appears, another reviewer requests changes) — unless the host puts you back in as a requested reviewer, which sends it back to **Needs Review**. **Merged** and **Closed** show your own most-recently-completed PRs; every card in an open column also gets **Approve**, **Request changes**, and **Close PR** actions (each with a confirmation first) — right from the board, no host website required. A **Ready to Merge** card also gets a **Merge PR** action — pick a strategy (Merge, Squash and merge, or Rebase and merge, filtered to what that PR's host actually supports) and optionally delete the source branch, then confirm. A **Closed** (not merged) card gets a **Reopen PR** action — Bitbucket Cloud is the one exception, since it has no way to reopen a declined PR at all, on its API or its own web UI. A row above the board lists every recognized repo with **Pull**/**Push** buttons — a purely local git operation, so it works even for a repo whose forge sign-in was skipped or failed.
+The only GitLore feature that reaches beyond your local `.git` — everything else above works fully offline. **GitLore: Open Launchpad** opens a 9-column board (Needs Review, Reviewed, Ready to Merge, Waiting, Blocked, Drafts, Snoozed, Merged, Closed) pooling PRs across every recognized remote in your workspace, so triaging what needs your attention — and seeing what you've recently shipped — doesn't mean tab-switching between repos and a browser. Once you've approved or requested changes on a PR you don't own, it moves to **Reviewed** and stays there regardless of what happens to it afterward (CI turns red, a conflict appears, another reviewer requests changes) — unless the host puts you back in as a requested reviewer, which sends it back to **Needs Review**. **Merged** and **Closed** show your own most-recently-completed PRs; every card in an open column also gets **Approve**, **Request changes**, and **Close PR** actions (each with a confirmation first) — right from the board, no host website required. A **Ready to Merge** card also gets a **Merge PR** action — pick a strategy (Merge, Squash and merge, or Rebase and merge, filtered to what that PR's host actually supports) and optionally delete the source branch, then confirm. A **Closed** (not merged) card gets a **Reopen PR** action — Bitbucket Cloud is the one exception, since it has no way to reopen a declined PR at all, on its API or its own web UI. A row above the board lists every recognized repo with **Fetch**/**Pull**/**Push** buttons — a purely local git operation, so it works even for a repo whose forge sign-in was skipped or failed.
 
-Every card's **View diff** button opens a docked **Pull Request Details** panel (next to Commit Details) with that PR's changed files and diff, its review conversations — each showing the `path:line` it's anchored to when it's a code comment, plus a **Resolve** button — a comment box to post a top-level comment, and a **Refresh** button to pick up changes made elsewhere — no browser round-trip just to review and weigh in.
+Every card's **View diff** button opens a docked **Pull Request Details** panel (next to Commit Details) with that PR's changed files and diff, status badges (draft, merged/closed, check status, review decision, merge conflicts, age), its review conversations — each showing the `path:line` it's anchored to when it's a code comment, plus a **Resolve** button — a comment box to post a top-level comment, and a **Refresh** button to pick up changes made elsewhere. **Approve**, **Request Changes**, **Merge**, **Close**, and **Reopen** are buttons right in the panel too, the same actions the card already had — no need to go back to the board just to act on the PR you're already reading. **Merge** only appears once the PR is actually ready (approved, checks not pending, no conflicts), so it never bounces off a rejection the board's own categorization would already have predicted.
 
 <img src="media/screenshots/pull-request-details.png" width="480" alt="The Pull Request Details panel showing changed files with a diff gutter, review conversations with a path:line label and a Resolve button, and a comment box" />
 

@@ -6,6 +6,8 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-08-20
+
 ### Added
 
 - **Commit Graph: newly-loaded rows fade/slide in** — "Load More" now animates only the newly-revealed rows (reusing the same entrance animation Launchpad and PR Details already use), instead of the whole list snapping in unchanged.
