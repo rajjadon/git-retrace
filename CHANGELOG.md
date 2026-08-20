@@ -21,6 +21,7 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **Recover Lost Commit or Branch** — a new command (`GitLore: Recover Lost Commit or Branch`) lists recent reflog entries and creates a branch at whichever one you pick, for recovering from a hard reset, force push, or accidental branch delete before git garbage-collects it.
 - **Inline blame respects `.git-blame-ignore-revs`** — if your repo has one (git's own standard convention for mass-reformat/lint commits you don't want blame attributing to), GitLore's blame now skips those commits automatically. No setting — same as plain `git blame`, GitLore just detects the file.
 - **Fetch button** — Commit Graph's toolbar and Launchpad's per-repo row now have a Fetch button next to Pull/Push, same shared Git Sync terminal.
+- **Pull Request Details: status badges** — Draft, Merged/Closed, check status, review decision, merge conflicts, and age now show at the top of the panel, the same PR state Launchpad's board already tracks but that used to disappear once you opened a PR's own details. The author line also gets the same author icon Launchpad's cards already use.
 
 ### Fixed
 

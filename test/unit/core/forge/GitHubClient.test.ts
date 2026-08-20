@@ -297,6 +297,32 @@ test('listOpenPullRequests: reviewedByMe is false when the authenticated user ha
   assert.equal(result[0]?.reviewedByMe, false);
 });
 
+test('getPullRequest: fetches one PR by number and enriches it the same way the list endpoint does', async () => {
+  const client = new GitHubClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      '/repos/acme/widgets/pulls/7': {
+        number: 7,
+        title: 'Single PR fetch',
+        html_url: 'https://github.com/acme/widgets/pull/7',
+        user: { login: 'raj' },
+        draft: false,
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+        head: { sha: 'abc123' },
+        requested_reviewers: [],
+        mergeable_state: 'clean',
+      },
+      '/pulls/7/reviews?per_page=100': [],
+      '/commits/abc123/check-runs?per_page=100': { check_runs: [] },
+    }),
+  );
+  const result = await client.getPullRequest(REPO, 7);
+  assert.equal(result.title, 'Single PR fetch');
+  assert.equal(result.number, 7);
+});
+
 test('listRecentlyClosedPullRequests: reviewedByMe is always false — nothing reads it on a closed/merged PR', async () => {
   const client = new GitHubClient(
     BASE,

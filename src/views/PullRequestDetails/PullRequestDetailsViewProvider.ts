@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { ForgeClient } from '../../core/forge/ForgeClient';
-import type { ConversationThread, PullRequestSummary } from '../../core/forge/types';
+import type { ConversationThread, MergeStrategy, PullRequestSummary, ReviewSubmission } from '../../core/forge/types';
 import { pullRequestKey } from '../../core/forge/types';
 import { renderPullRequestDetailsHtml } from './render';
 import { renderPlaceholderHtml } from '../placeholder';
@@ -10,6 +10,7 @@ import type { LanguageModelClient } from '../../ai/LanguageModelClient';
 import type { GitLogger } from '../../core/git/errors';
 import { runCommitSummaryFlow } from '../../core/ai/commitSummaryFlow';
 import { buildPrExplanationPrompt, buildPrReviewDraftPrompt } from '../../core/ai/prompts';
+import { pickMergeStrategy } from '../mergeStrategyPicker';
 import { CONFIG, MEDIA, VIEWS } from '../../constants';
 
 function createNonce(): string {
@@ -129,7 +130,7 @@ export class PullRequestDetailsViewProvider implements vscode.WebviewViewProvide
     if (typeof message !== 'object' || message === null) {
       return;
     }
-    const { type, body, threadId } = message as { type?: unknown; body?: unknown; threadId?: unknown };
+    const { type, body, threadId, decision } = message as { type?: unknown; body?: unknown; threadId?: unknown; decision?: unknown };
     if (type === 'openRemote' && this.currentUrl) {
       await vscode.env.openExternal(vscode.Uri.parse(this.currentUrl));
       return;
@@ -148,6 +149,22 @@ export class PullRequestDetailsViewProvider implements vscode.WebviewViewProvide
     }
     if (type === 'draftReview') {
       await this.draftReview();
+      return;
+    }
+    if (type === 'closePr' && this.currentPr && this.currentClient) {
+      await this.closePullRequest(this.currentPr, this.currentClient);
+      return;
+    }
+    if (type === 'reopenPr' && this.currentPr && this.currentClient) {
+      await this.reopenPullRequest(this.currentPr, this.currentClient);
+      return;
+    }
+    if (type === 'mergePr' && this.currentPr && this.currentClient) {
+      await this.mergePullRequest(this.currentPr, this.currentClient);
+      return;
+    }
+    if (type === 'submitReview' && (decision === 'approve' || decision === 'requestChanges') && this.currentPr && this.currentClient) {
+      await this.submitReview(this.currentPr, this.currentClient, decision);
       return;
     }
     if (type === 'refresh' && this.currentPr && this.currentClient) {
@@ -181,6 +198,135 @@ export class PullRequestDetailsViewProvider implements vscode.WebviewViewProvide
       return;
     }
     await this.resolveThread(this.currentPr, this.currentClient, threadId);
+  }
+
+  private async closePullRequest(pr: PullRequestSummary, client: ForgeClient): Promise<void> {
+    const confirmed = await vscode.window.showWarningMessage(
+      `Close "${pr.title}"? This closes it on ${pr.repo.label} without merging.`,
+      { modal: true },
+      'Close PR',
+    );
+    if (confirmed !== 'Close PR') {
+      return;
+    }
+    try {
+      await client.closePullRequest(pr.repo, pr.number);
+      const refreshed = await client.getPullRequest(pr.repo, pr.number);
+      await this.load(refreshed, client);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`PR Details failed to close PR #${pr.number}`, err);
+      void vscode.window.showErrorMessage(`GitLore: couldn't close the PR — ${message}`);
+      void this.view?.webview.postMessage({ type: 'actionFailed' });
+    }
+  }
+
+  /** Test-only introspection seam — a webview button click (and the real confirmation modal it triggers) can't be driven from an integration test, so this calls the close flow directly, skipping only the modal. */
+  async closePullRequestForTest(): Promise<void> {
+    if (!this.currentPr || !this.currentClient) {
+      return;
+    }
+    await this.currentClient.closePullRequest(this.currentPr.repo, this.currentPr.number);
+    const refreshed = await this.currentClient.getPullRequest(this.currentPr.repo, this.currentPr.number);
+    await this.load(refreshed, this.currentClient);
+  }
+
+  private async reopenPullRequest(pr: PullRequestSummary, client: ForgeClient): Promise<void> {
+    const confirmed = await vscode.window.showWarningMessage(`Reopen "${pr.title}" on ${pr.repo.label}?`, { modal: true }, 'Reopen PR');
+    if (confirmed !== 'Reopen PR') {
+      return;
+    }
+    try {
+      await client.reopenPullRequest(pr.repo, pr.number);
+      const refreshed = await client.getPullRequest(pr.repo, pr.number);
+      await this.load(refreshed, client);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`PR Details failed to reopen PR #${pr.number}`, err);
+      void vscode.window.showErrorMessage(`GitLore: couldn't reopen the PR — ${message}`);
+      void this.view?.webview.postMessage({ type: 'actionFailed' });
+    }
+  }
+
+  /** Test-only introspection seam — a webview button click (and the real confirmation modal it triggers) can't be driven from an integration test, so this calls the reopen flow directly, skipping only the modal. */
+  async reopenPullRequestForTest(): Promise<void> {
+    if (!this.currentPr || !this.currentClient) {
+      return;
+    }
+    await this.currentClient.reopenPullRequest(this.currentPr.repo, this.currentPr.number);
+    const refreshed = await this.currentClient.getPullRequest(this.currentPr.repo, this.currentPr.number);
+    await this.load(refreshed, this.currentClient);
+  }
+
+  /** A QuickPick for the strategy (filtered to what this PR's host actually supports), then one modal confirm with two buttons — "Merge" and "Merge & Delete Branch" — matching Launchpad's card Merge action exactly. */
+  private async mergePullRequest(pr: PullRequestSummary, client: ForgeClient): Promise<void> {
+    const strategy = await pickMergeStrategy(pr);
+    if (!strategy) {
+      return;
+    }
+    const confirmed = await vscode.window.showWarningMessage(
+      `Merge "${pr.title}" on ${pr.repo.label}? This can't be undone.`,
+      { modal: true },
+      'Merge',
+      'Merge & Delete Branch',
+    );
+    if (confirmed !== 'Merge' && confirmed !== 'Merge & Delete Branch') {
+      return;
+    }
+    try {
+      await client.mergePullRequest(pr.repo, pr.number, { strategy, deleteSourceBranch: confirmed === 'Merge & Delete Branch' });
+      const refreshed = await client.getPullRequest(pr.repo, pr.number);
+      await this.load(refreshed, client);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`PR Details failed to merge PR #${pr.number}`, err);
+      void vscode.window.showErrorMessage(`GitLore: couldn't merge the PR — ${message}`);
+      void this.view?.webview.postMessage({ type: 'actionFailed' });
+    }
+  }
+
+  /** Test-only introspection seam — the merge QuickPick and confirmation modal can't be driven from an integration test, so this calls the merge flow directly with a fixed strategy/delete choice, skipping both prompts. */
+  async mergePullRequestForTest(strategy: MergeStrategy, deleteSourceBranch: boolean): Promise<void> {
+    if (!this.currentPr || !this.currentClient) {
+      return;
+    }
+    await this.currentClient.mergePullRequest(this.currentPr.repo, this.currentPr.number, { strategy, deleteSourceBranch });
+    const refreshed = await this.currentClient.getPullRequest(this.currentPr.repo, this.currentPr.number);
+    await this.load(refreshed, this.currentClient);
+  }
+
+  /** Every host we support rejects a review from the PR's own author one way or another — checked live via `getAuthenticatedLogin` rather than a cached map, since this panel only ever shows one PR at a time (unlike Launchpad's board, which caches a login per repo across many cards to avoid re-checking on every render). */
+  private async submitReview(pr: PullRequestSummary, client: ForgeClient, decision: ReviewSubmission): Promise<void> {
+    const login = await client.getAuthenticatedLogin();
+    if (login && pr.authorLogin.toLowerCase() === login.toLowerCase()) {
+      void vscode.window.showWarningMessage("GitLore: you can't review your own pull request.");
+      return;
+    }
+    const verb = decision === 'approve' ? 'Approve' : 'Request changes on';
+    const confirmed = await vscode.window.showWarningMessage(`${verb} "${pr.title}" on ${pr.repo.label}?`, { modal: true }, verb);
+    if (confirmed !== verb) {
+      return;
+    }
+    try {
+      await client.submitReview(pr.repo, pr.number, decision);
+      const refreshed = await client.getPullRequest(pr.repo, pr.number);
+      await this.load(refreshed, client);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`PR Details failed to submit a review for PR #${pr.number}`, err);
+      void vscode.window.showErrorMessage(`GitLore: couldn't submit that review — ${message}`);
+      void this.view?.webview.postMessage({ type: 'actionFailed' });
+    }
+  }
+
+  /** Test-only introspection seam — a webview button click (and the real confirmation modal it triggers) can't be driven from an integration test, so this calls the review flow directly, skipping only the modal and the self-review check. */
+  async submitReviewForTest(decision: ReviewSubmission): Promise<void> {
+    if (!this.currentPr || !this.currentClient) {
+      return;
+    }
+    await this.currentClient.submitReview(this.currentPr.repo, this.currentPr.number, decision);
+    const refreshed = await this.currentClient.getPullRequest(this.currentPr.repo, this.currentPr.number);
+    await this.load(refreshed, this.currentClient);
   }
 
   private async addComment(pr: PullRequestSummary, client: ForgeClient, body: string): Promise<void> {

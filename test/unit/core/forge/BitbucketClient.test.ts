@@ -295,6 +295,27 @@ test('listOpenPullRequests: a failed list request throws with the real status, n
   await assert.rejects(() => client.listOpenPullRequests(REPO), /401 Unauthorized from api\.bitbucket\.org/);
 });
 
+test('getPullRequest: fetches one PR by id and enriches it the same way the list endpoint does', async () => {
+  const client = new BitbucketClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      'pullrequests/7': {
+        id: 7,
+        title: 'Single PR fetch',
+        links: { html: { href: 'https://bitbucket.org/acme/widgets/pull-requests/7' } },
+        author: { username: 'raj' },
+        created_on: '2024-01-01T00:00:00Z',
+        updated_on: '2024-01-01T00:00:00Z',
+        source: { commit: { hash: 'abc123' } },
+      },
+      '/statuses': { values: [] },
+    }),
+  );
+  const result = await client.getPullRequest(REPO, 7);
+  assert.equal(result.title, 'Single PR fetch');
+});
+
 test('listRecentlyClosedPullRequests: combines MERGED and DECLINED, tagging each with the right merged flag', async () => {
   const client = new BitbucketClient(BASE, 'tok', (async (url: string) => {
     if (url.includes('state=MERGED')) {

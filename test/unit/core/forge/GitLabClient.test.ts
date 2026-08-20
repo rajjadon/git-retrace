@@ -247,6 +247,26 @@ test('listOpenPullRequests: a failed list request throws with the real status, n
   await assert.rejects(() => client.listOpenPullRequests(REPO), /401 Unauthorized from gitlab\.com/);
 });
 
+test('getPullRequest: fetches one merge request by iid and enriches it the same way the list endpoint does', async () => {
+  const client = new GitLabClient(
+    BASE,
+    'tok',
+    fakeFetch({
+      'merge_requests/7': {
+        iid: 7,
+        title: 'Single MR fetch',
+        web_url: 'https://gitlab.com/acme/widgets/-/merge_requests/7',
+        author: { username: 'raj' },
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      },
+      '/approvals': { approved: false, approved_by: [] },
+    }),
+  );
+  const result = await client.getPullRequest(REPO, 7);
+  assert.equal(result.title, 'Single MR fetch');
+});
+
 test('listRecentlyClosedPullRequests: combines merged and closed lists, tagging each with the right merged flag', async () => {
   const client = new GitLabClient(BASE, 'tok', (async (url: string) => {
     if (url.includes('state=merged')) {

@@ -353,6 +353,22 @@ test('listOpenPullRequests: a failed list request throws with the real status, n
   await assert.rejects(() => client.listOpenPullRequests(REPO), /401 Unauthorized from dev\.azure\.com/);
 });
 
+test('getPullRequest: fetches one PR by id and enriches it the same way the list endpoint does', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
+    if (url.includes('/pullrequests/7?api-version')) {
+      return jsonResponse({
+        pullRequestId: 7,
+        title: 'Single PR fetch',
+        createdBy: { uniqueName: 'raj@acme.com' },
+        creationDate: '2024-01-01T00:00:00Z',
+      });
+    }
+    throw new Error(`unmocked: ${url}`);
+  }) as unknown as typeof fetch);
+  const result = await client.getPullRequest(REPO, 7);
+  assert.equal(result.title, 'Single PR fetch');
+});
+
 test('listRecentlyClosedPullRequests: combines completed and abandoned, tagging each with the right merged flag', async () => {
   const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
     if (url.includes('searchCriteria.status=completed')) {

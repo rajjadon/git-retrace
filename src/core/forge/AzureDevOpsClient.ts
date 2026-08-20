@@ -213,6 +213,18 @@ export class AzureDevOpsClient implements ForgeClient {
     return Promise.all(data.value.map((pr) => this.enrich(repo, id, base, pr)));
   }
 
+  /** Same shape as a `listOpenPullRequests` item — reuses `enrich` directly, no separate normalization path. */
+  async getPullRequest(repo: ForgeRepoRef, number: number): Promise<PullRequestSummary> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      throw new Error('could not resolve this repo\'s Azure DevOps organization/project/repository identity');
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    const res = await this.request(`${base}/pullrequests/${number}?api-version=7.1`);
+    const pr = (await res.json()) as AzureDevOpsPullRequest;
+    return this.enrich(repo, id, base, pr);
+  }
+
   async listRecentlyClosedPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
     const id = splitAzureDevOpsIdentity(repo.identity);
     if (!id) {

@@ -178,6 +178,13 @@ export class GitHubClient implements ForgeClient {
     return Promise.all(raw.map((pull) => this.enrich(repo, pull)));
   }
 
+  /** Same shape as a `listOpenPullRequests` item — reuses `enrich` directly, no separate normalization path. */
+  async getPullRequest(repo: ForgeRepoRef, number: number): Promise<PullRequestSummary> {
+    const res = await this.request(`/repos/${repo.identity}/pulls/${number}`);
+    const pull = (await res.json()) as GitHubPull;
+    return this.enrich(repo, pull);
+  }
+
   async listRecentlyClosedPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
     // GitHub's one "closed" state covers both merged and closed-without-merging — `merged_at`
     // (present only on merged ones) is what tells the two apart. No server-side "authored by me"
