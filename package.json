@@ -661,9 +661,11 @@
   },
   "dependencies": {
     "date-fns": "^4.1.0",
+    "diff": "^5.2.2",
     "simple-git": "^3.27.0"
   },
   "devDependencies": {
+    "@types/diff": "^7.0.2",
     "@types/mocha": "^10.0.9",
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.85.0",

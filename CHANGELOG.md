@@ -22,6 +22,10 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 - **Inline blame respects `.git-blame-ignore-revs`** — if your repo has one (git's own standard convention for mass-reformat/lint commits you don't want blame attributing to), GitLore's blame now skips those commits automatically. No setting — same as plain `git blame`, GitLore just detects the file.
 - **Fetch button** — Commit Graph's toolbar and Launchpad's per-repo row now have a Fetch button next to Pull/Push, same shared Git Sync terminal.
 
+### Fixed
+
+- **Pull Request Details: Azure DevOps PRs now show a real file diff** — previously every file showed "No textual diff for this file" with `0`/`0` stats, since Azure DevOps has no diff-text endpoint of its own. GitLore now fetches each changed file's content at the PR's merge-base and head commits and diffs them itself, matching the diff you already see for GitHub and GitLab PRs. A binary file, a file over an internal size cap, or a pure rename with no content change still falls back to the file list alone.
+
 ## [1.2.3] - 2026-08-18
 
 ### Fixed

@@ -17,6 +17,23 @@ function jsonResponse(body: unknown, ok = true): Response {
   } as unknown as Response;
 }
 
+/**
+ * Azure DevOps' Items API returns a file's raw content directly as the response body (not a JSON
+ * envelope) when `$format=json` isn't requested — this mirrors that real behavior, including
+ * `.json()` throwing a genuine `SyntaxError` on non-JSON text, the same way the real Fetch API's
+ * `Response.json()` does. `jsonResponse`'s `.json()` never actually parses anything, so a test built
+ * on it can't catch a caller that wrongly calls `.json()` here instead of `.text()`.
+ */
+function textResponse(body: string): Response {
+  return {
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    json: async () => JSON.parse(body),
+    text: async () => body,
+  } as unknown as Response;
+}
+
 function fakeFetch(routes: Record<string, unknown>): typeof fetch {
   return (async (url: string) => {
     for (const [suffix, body] of Object.entries(routes)) {
@@ -541,6 +558,147 @@ test('getPullRequestDiff: uses the latest iteration, not the first', async () =>
   }) as unknown as typeof fetch);
   await client.getPullRequestDiff(REPO, 51);
   assert.ok(requestedUrls.some((url) => url.includes('/iterations/3/changes')), requestedUrls.join('\n'));
+});
+
+/**
+ * Real content-diffing tests: the latest iteration now also carries `sourceRefCommit`/
+ * `commonRefCommit` (a real Azure DevOps API field this codebase wasn't reading before), which is
+ * what unlocks fetching old/new blob content per changed file and diffing them client-side.
+ */
+test('getPullRequestDiff: diffs an edited text file using the merge-base and PR-head commit content', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
+    if (url.includes('/iterations?api-version')) {
+      return jsonResponse({ value: [{ id: 1, sourceRefCommit: { commitId: 'head1' }, commonRefCommit: { commitId: 'base1' } }] });
+    }
+    if (url.includes('/iterations/1/changes')) {
+      return jsonResponse({ changeEntries: [{ item: { path: '/src/a.ts' }, changeType: 'edit' }] });
+    }
+    if (url.includes('path=%2Fsrc%2Fa.ts') && url.includes('version=base1')) {
+      return textResponse('line1\nline2\nline3\n');
+    }
+    if (url.includes('path=%2Fsrc%2Fa.ts') && url.includes('version=head1')) {
+      return textResponse('line1\nCHANGED\nline3\n');
+    }
+    throw new Error(`unmocked: ${url}`);
+  }) as unknown as typeof fetch);
+  const result = await client.getPullRequestDiff(REPO, 50);
+  assert.equal(result.files.length, 1);
+  assert.equal(result.files[0]?.path, 'src/a.ts');
+  assert.equal(result.files[0]?.insertions, 1);
+  assert.equal(result.files[0]?.deletions, 1);
+  assert.equal(result.files[0]?.binary, false);
+  assert.match(result.diff, /diff --git a\/src\/a\.ts b\/src\/a\.ts/);
+  assert.match(result.diff, /-line2/);
+  assert.match(result.diff, /\+CHANGED/);
+});
+
+test('getPullRequestDiff: an added file is diffed as entirely new content, without fetching non-existent old content', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
+    if (url.includes('/iterations?api-version')) {
+      return jsonResponse({ value: [{ id: 1, sourceRefCommit: { commitId: 'head1' }, commonRefCommit: { commitId: 'base1' } }] });
+    }
+    if (url.includes('/iterations/1/changes')) {
+      return jsonResponse({ changeEntries: [{ item: { path: '/src/new.ts' }, changeType: 'add' }] });
+    }
+    if (url.includes('version=base1')) {
+      throw new Error(`must not fetch old content for an added file: ${url}`);
+    }
+    if (url.includes('path=%2Fsrc%2Fnew.ts') && url.includes('version=head1')) {
+      return textResponse('export const x = 1;\n');
+    }
+    throw new Error(`unmocked: ${url}`);
+  }) as unknown as typeof fetch);
+  const result = await client.getPullRequestDiff(REPO, 52);
+  assert.equal(result.files[0]?.insertions, 1);
+  assert.equal(result.files[0]?.deletions, 0);
+  assert.match(result.diff, /\+export const x = 1;/);
+});
+
+test('getPullRequestDiff: a deleted file is diffed as entirely removed content, without fetching non-existent new content', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
+    if (url.includes('/iterations?api-version')) {
+      return jsonResponse({ value: [{ id: 1, sourceRefCommit: { commitId: 'head1' }, commonRefCommit: { commitId: 'base1' } }] });
+    }
+    if (url.includes('/iterations/1/changes')) {
+      return jsonResponse({ changeEntries: [{ item: { path: '/src/old.ts' }, changeType: 'delete' }] });
+    }
+    if (url.includes('version=head1')) {
+      throw new Error(`must not fetch new content for a deleted file: ${url}`);
+    }
+    if (url.includes('path=%2Fsrc%2Fold.ts') && url.includes('version=base1')) {
+      return textResponse('export const y = 2;\n');
+    }
+    throw new Error(`unmocked: ${url}`);
+  }) as unknown as typeof fetch);
+  const result = await client.getPullRequestDiff(REPO, 53);
+  assert.equal(result.files[0]?.insertions, 0);
+  assert.equal(result.files[0]?.deletions, 1);
+  assert.match(result.diff, /-export const y = 2;/);
+});
+
+test('getPullRequestDiff: binary content (a NUL byte) is reported as binary, not diffed', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
+    if (url.includes('/iterations?api-version')) {
+      return jsonResponse({ value: [{ id: 1, sourceRefCommit: { commitId: 'head1' }, commonRefCommit: { commitId: 'base1' } }] });
+    }
+    if (url.includes('/iterations/1/changes')) {
+      return jsonResponse({ changeEntries: [{ item: { path: '/assets/icon.png' }, changeType: 'edit' }] });
+    }
+    if (url.includes('version=base1')) {
+      return textResponse('PNG\0\0\0old');
+    }
+    if (url.includes('version=head1')) {
+      return textResponse('PNG\0\0\0new');
+    }
+    throw new Error(`unmocked: ${url}`);
+  }) as unknown as typeof fetch);
+  const result = await client.getPullRequestDiff(REPO, 54);
+  assert.equal(result.files[0]?.binary, true);
+  assert.equal(result.files[0]?.insertions, 0);
+  assert.equal(result.files[0]?.deletions, 0);
+  assert.doesNotMatch(result.diff, /assets\/icon\.png/);
+});
+
+test('getPullRequestDiff: content over the size cap is listed but not diffed, same graceful degrade as an unreadable file', async () => {
+  const hugeContent = 'x'.repeat(400_000);
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
+    if (url.includes('/iterations?api-version')) {
+      return jsonResponse({ value: [{ id: 1, sourceRefCommit: { commitId: 'head1' }, commonRefCommit: { commitId: 'base1' } }] });
+    }
+    if (url.includes('/iterations/1/changes')) {
+      return jsonResponse({ changeEntries: [{ item: { path: '/generated/bundle.js' }, changeType: 'edit' }] });
+    }
+    if (url.includes('version=base1')) {
+      return textResponse(hugeContent);
+    }
+    if (url.includes('version=head1')) {
+      return textResponse(`${hugeContent}y`);
+    }
+    throw new Error(`unmocked: ${url}`);
+  }) as unknown as typeof fetch);
+  const result = await client.getPullRequestDiff(REPO, 55);
+  assert.equal(result.files[0]?.insertions, 0);
+  assert.equal(result.files[0]?.deletions, 0);
+  assert.doesNotMatch(result.diff, /generated\/bundle\.js/);
+});
+
+test('getPullRequestDiff: identical content (e.g. a pure rename) produces no hunks — falls back to "no textual diff" for that file', async () => {
+  const client = new AzureDevOpsClient(IDENTITY, 'pat', 'pat', (async (url: string) => {
+    if (url.includes('/iterations?api-version')) {
+      return jsonResponse({ value: [{ id: 1, sourceRefCommit: { commitId: 'head1' }, commonRefCommit: { commitId: 'base1' } }] });
+    }
+    if (url.includes('/iterations/1/changes')) {
+      return jsonResponse({ changeEntries: [{ item: { path: '/src/renamed.ts' }, changeType: 'rename' }] });
+    }
+    if (url.includes('version=base1') || url.includes('version=head1')) {
+      return textResponse('unchanged content\n');
+    }
+    throw new Error(`unmocked: ${url}`);
+  }) as unknown as typeof fetch);
+  const result = await client.getPullRequestDiff(REPO, 56);
+  assert.equal(result.files[0]?.insertions, 0);
+  assert.equal(result.files[0]?.deletions, 0);
+  assert.doesNotMatch(result.diff, /@@/);
 });
 
 test('submitReview: PUTs vote=10 to the authenticated user\'s own reviewer entry for an approve decision', async () => {
