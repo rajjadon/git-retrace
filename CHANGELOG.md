@@ -6,6 +6,31 @@ The VS Code Marketplace shows this file on GitLore's extension page, so entries 
 
 ## [Unreleased]
 
+## [1.2.4] - 2026-08-20
+
+### Added
+
+- **Commit Graph: newly-loaded rows fade/slide in** — "Load More" now animates only the newly-revealed rows (reusing the same entrance animation Launchpad and PR Details already use), instead of the whole list snapping in unchanged.
+- **Visual File History: points fade/slide in** — each commit bubble now uses the same entrance animation already used elsewhere, instead of appearing instantly.
+- **Visual File History follows the active editor** — once opened, the panel now reloads automatically as you switch files, instead of only updating when you re-run **GitLore: Show Visual File History**.
+- **Interactive Rebase Editor: rows slide into place on reorder** — dragging a commit to a new position now animates the rows it displaced, instead of them snapping instantly. Respects `prefers-reduced-motion` (rows still reorder correctly, just without the animated slide).
+- **Launchpad: per-bucket column accent** — Needs Review, Ready to Merge, Blocked, and Waiting each get a small colored left edge (VS Code's own semantic theme colors, so it's correct in light/dark/high-contrast), so the board scans faster at a glance. Purely supplementary to the existing column title — never the only signal.
+- **Commit Graph and Launchpad now use GitLore's own design system** — dark-mode-first (with a designed light counterpart), IBM Plex Sans + JetBrains Mono, a teal-to-cyan signature accent, instead of deriving every color from your VS Code theme. Editor decorations, hover cards, tree views, and the status bar are unaffected — they still adapt to your theme exactly as before. The other five docked panels (Branch Comparison, Commit/PR Details, Rebase Editor, Visual File History, Chat) haven't been migrated yet — that's a separate follow-up.
+- **Sidebar Explorer: rename and delete a local branch** — right-click a branch for **Rename Branch** (also available on the current branch) and **Delete Branch** (confirms first; git itself blocks deleting the branch you have checked out).
+- **Sidebar Explorer: delete a tag** — right-click any tag for **Delete Tag** (confirms first).
+- **Sidebar Explorer: create and remove worktrees** — an inline **+** on the Worktrees section header prompts for a path and branch; right-click any linked worktree (not the main checkout) for **Remove Worktree** (confirms first).
+- **Sidebar Explorer: create a stash** — an inline **+** on the Stashes section header prompts for an optional message and stashes the working tree.
+- **Recover Lost Commit or Branch** — a new command (`GitLore: Recover Lost Commit or Branch`) lists recent reflog entries and creates a branch at whichever one you pick, for recovering from a hard reset, force push, or accidental branch delete before git garbage-collects it.
+- **Inline blame respects `.git-blame-ignore-revs`** — if your repo has one (git's own standard convention for mass-reformat/lint commits you don't want blame attributing to), GitLore's blame now skips those commits automatically. No setting — same as plain `git blame`, GitLore just detects the file.
+- **Fetch button** — Commit Graph's toolbar and Launchpad's per-repo row now have a Fetch button next to Pull/Push, same shared Git Sync terminal.
+- **Pull Request Details: status badges** — Draft, Merged/Closed, check status, review decision, merge conflicts, and age now show at the top of the panel, the same PR state Launchpad's board already tracks but that used to disappear once you opened a PR's own details. The author line also gets the same author icon Launchpad's cards already use.
+- **Pull Request Details: act without leaving the panel** — Approve, Request Changes, Merge, Close, and Reopen are now buttons in the PR Details panel itself, the same actions Launchpad's board already offered per card. Merge only appears once a PR is actually ready (approved, checks not pending, no conflicts) — the same rule the board's own "Ready to Merge" column already uses, so it never bounces off a host-side rejection. The panel's status badges refresh immediately after a successful action instead of waiting for a manual Refresh.
+- **Consistent hover tooltips on every icon-only button** — Launchpad already had its own reliable, JS-driven tooltip (native browser tooltips had proven unreliable on some icon-only buttons); every other panel now uses the same one, including Interactive Rebase Editor's row move-up/move-down buttons, which previously had no visible tooltip at all.
+
+### Fixed
+
+- **Pull Request Details: Azure DevOps PRs now show a real file diff** — previously every file showed "No textual diff for this file" with `0`/`0` stats, since Azure DevOps has no diff-text endpoint of its own. GitLore now fetches each changed file's content at the PR's merge-base and head commits and diffs them itself, matching the diff you already see for GitHub and GitLab PRs. A binary file, a file over an internal size cap, or a pure rename with no content change still falls back to the file list alone.
+
 ## [1.2.3] - 2026-08-18
 
 ### Fixed

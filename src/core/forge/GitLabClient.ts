@@ -125,6 +125,14 @@ export class GitLabClient implements ForgeClient {
     return Promise.all(raw.map((mr) => this.enrich(repo, projectPath, mr)));
   }
 
+  /** Same shape as a `listOpenPullRequests` item — reuses `enrich` directly, no separate normalization path. */
+  async getPullRequest(repo: ForgeRepoRef, number: number): Promise<PullRequestSummary> {
+    const projectPath = encodeURIComponent(repo.identity);
+    const res = await this.request(`/projects/${projectPath}/merge_requests/${number}`);
+    const mr = (await res.json()) as GitLabMergeRequest;
+    return this.enrich(repo, projectPath, mr);
+  }
+
   async listRecentlyClosedPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
     // Unlike GitHub, GitLab's `state` distinguishes "merged" from "closed" (without merging) as
     // two separate values — no single call covers both.

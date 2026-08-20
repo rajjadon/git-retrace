@@ -45,6 +45,13 @@ export interface ForgeClient {
   /** This PR's changed files and diff text, for the PR Details panel. See `PullRequestDiff` for what an empty `diff` means. */
   getPullRequestDiff(repo: ForgeRepoRef, number: number): Promise<PullRequestDiff>;
   /**
+   * Re-fetches this PR's current summary — used after a mutating action taken from within the PR
+   * Details panel (merge, close, reopen, submit a review) so its header badges reflect the real
+   * new state immediately, instead of the stale `PullRequestSummary` the panel loaded with. Throws
+   * with the real reason on failure, same contract as `closePullRequest`.
+   */
+  getPullRequest(repo: ForgeRepoRef, number: number): Promise<PullRequestSummary>;
+  /**
    * Submits an approve/request-changes review decision. Throws with the real reason (HTTP status,
    * network failure, a permissions rejection) on failure — same contract as `closePullRequest`.
    * GitLab has no formal "request changes" review state (see `GitLabClient.submitReview`), so

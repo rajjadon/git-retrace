@@ -116,8 +116,8 @@ suite('Commit graph webview', () => {
     await waitFor(() => (api.getCommitGraphHtml() ?? '').includes('ahead commit 1'));
 
     const html = api.getCommitGraphHtml() ?? '';
-    assert.match(html, new RegExp(`id="pull"[^>]*title="Pull ${fixture.behind} commits"`));
-    assert.match(html, new RegExp(`id="push"[^>]*title="Push ${fixture.ahead} commits"`));
+    assert.match(html, new RegExp(`id="pull"[^>]*data-tooltip="Pull ${fixture.behind} commits"`));
+    assert.match(html, new RegExp(`id="push"[^>]*data-tooltip="Push ${fixture.ahead} commits"`));
     assert.match(html, new RegExp(`id="pull"[\\s\\S]*?class="sync-badge">${fixture.behind}<`));
     assert.match(html, new RegExp(`id="push"[\\s\\S]*?class="sync-badge">${fixture.ahead}<`));
   });

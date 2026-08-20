@@ -55,4 +55,20 @@ suite('Visual File History webview', () => {
     assert.equal(vscode.window.activeTextEditor, undefined);
     await vscode.commands.executeCommand(COMMANDS.showVisualFileHistory);
   });
+
+  test('follows the active editor after the panel has been opened once, without re-running the command', async () => {
+    await openHistory();
+
+    // Switching to the untracked file should reload the panel on its own — no history for a file
+    // that was never committed, so the bubble chart empties out.
+    const untrackedDoc = await vscode.workspace.openTextDocument(manifest.untrackedFile);
+    await vscode.window.showTextDocument(untrackedDoc);
+    await waitFor(() => (api.getVisualFileHistoryHtml() ?? '').includes('No history yet.'));
+
+    // Switching back to the tracked file should reload it again, proving this isn't a one-shot
+    // listener that only fired once.
+    const trackedDoc = await vscode.workspace.openTextDocument(manifest.trackedFile);
+    await vscode.window.showTextDocument(trackedDoc);
+    await waitFor(() => (api.getVisualFileHistoryHtml() ?? '').includes('add line three'));
+  });
 });

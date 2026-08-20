@@ -56,6 +56,37 @@ h1 {
   margin: 0 0.35rem;
 }
 
+.head-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Draft/Merged/Closed/checks/review/conflict state — every field here was already fetched for
+   Launchpad's own board categorization, just never shown once you open a PR's own details. Reuses
+   shared.css's neutral `.badge` pill; `badge-success`/`badge-danger` layer on the same semantic
+   tokens git's own add/remove coloring already uses, so this never invents a new color language. */
+.head-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+}
+
+.badge-success {
+  color: var(--gl-success);
+}
+
+.badge-danger {
+  color: var(--gl-danger);
+}
+
+.head-age {
+  font-size: 0.9em;
+  color: var(--vscode-descriptionForeground);
+}
+
 /* ---------- Action bar ---------- */
 
 .actions {

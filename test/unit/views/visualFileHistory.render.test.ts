@@ -75,7 +75,7 @@ test('renderFileHistoryHtml: bubbles are flat author-colored circles, not avatar
   );
   const html = renderFileHistoryHtml({ points, now }, opts);
   assert.ok(!html.includes('<image'), 'expected no <image> elements — bubbles should be flat fills');
-  assert.match(html, /class="fh-bubble" cx="[0-9.]+" cy="[0-9.]+" r="[0-9.]+" fill="var\(--vscode-charts-blue\)"/);
+  assert.match(html, /class="fh-bubble" cx="[0-9.]+" cy="[0-9.]+" r="[0-9.]+" fill="var\(--gl-cat-1\)"/);
 });
 
 test('renderFileHistoryHtml: carries structured, escaped tooltip data for the client to build a real card (avatar row, message, meta, stat)', () => {
@@ -149,6 +149,15 @@ test("renderFileHistoryHtml: a jittered bubble's edge never crosses into the nei
       `bubble at cy=${bubble.cy} r=${bubble.r} reaches ${reach}px from its lane center (limit ${LANE_HEIGHT / 2}) — crosses into the neighboring lane`,
     );
   }
+});
+
+test('renderFileHistoryHtml: each history point gets the shared entrance animation', () => {
+  const points = layoutFileHistory(
+    [entry('A', 'Raj Jadon', 'raj@example.com', '2024-01-01T00:00:00Z', 3, 1)],
+    now,
+  );
+  const html = renderFileHistoryHtml({ points, now }, opts);
+  assert.match(html, /<g class="fh-point gitlore-enter" tabindex="0"/);
 });
 
 test('renderFileHistoryHtml: draws a baseline separating the author lanes from the change-bar band', () => {

@@ -87,6 +87,7 @@ export class RepoExplorerProvider implements vscode.TreeDataProvider<ExplorerNod
       item.id = element.id;
       item.description = String(element.children.length);
       item.iconPath = new vscode.ThemeIcon(SECTION_ICONS[element.id] ?? 'folder');
+      item.contextValue = `gitLore.section.${element.id}`;
       return item;
     }
     return this.leafTreeItem(element);

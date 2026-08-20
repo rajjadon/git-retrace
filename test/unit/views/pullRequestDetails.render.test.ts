@@ -4,6 +4,8 @@ import { renderPullRequestDetailsHtml } from '../../../src/views/PullRequestDeta
 import type { ConversationThread, PullRequestSummary } from '../../../src/core/forge/types';
 import type { FileChange } from '../../../src/core/git/types';
 
+process.env.TZ = 'UTC';
+
 function pr(overrides: Partial<PullRequestSummary> = {}): PullRequestSummary {
   return {
     repo: { host: 'github', identity: 'acme/widgets', label: 'acme/widgets' },
@@ -159,4 +161,168 @@ test('renderPullRequestDetailsHtml: a Refresh button posts refresh', () => {
   const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads: [] }, opts);
   assert.match(html, /id="refresh-pr"/);
   assert.match(html, /getElementById\('refresh-pr'\)\.addEventListener\('click', \(\) => \{\s*vscode\.postMessage\(\{ type: 'refresh' \}\);/);
+});
+
+const now = new Date('2024-02-10T10:00:00Z');
+
+test('renderPullRequestDetailsHtml: the author line carries the author icon, matching Launchpad\'s own card convention', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads: [], now }, opts);
+  assert.match(html, /class="head-author">.*svg.*raj/s);
+});
+
+test('renderPullRequestDetailsHtml: a draft PR shows a Draft badge', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr({ isDraft: true }), files, diff, threads: [], now }, opts);
+  assert.match(html, /class="badge[^"]*">Draft</);
+});
+
+test('renderPullRequestDetailsHtml: a merged PR shows a Merged badge instead of ever looking like an untouched open PR', () => {
+  const html = renderPullRequestDetailsHtml(
+    { pr: pr({ closedAt: '2024-02-05T00:00:00Z', merged: true }), files, diff, threads: [], now },
+    opts,
+  );
+  assert.match(html, /class="badge[^"]*">Merged</);
+});
+
+test('renderPullRequestDetailsHtml: a closed-without-merging PR shows a Closed badge, not Merged', () => {
+  const html = renderPullRequestDetailsHtml(
+    { pr: pr({ closedAt: '2024-02-05T00:00:00Z', merged: false }), files, diff, threads: [], now },
+    opts,
+  );
+  assert.match(html, /class="badge[^"]*">Closed</);
+  assert.ok(!html.includes('>Merged<'));
+});
+
+test('renderPullRequestDetailsHtml: an open PR (no closedAt) shows neither Merged nor Closed', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads: [], now }, opts);
+  assert.ok(!html.includes('>Merged<'));
+  assert.ok(!html.includes('>Closed<'));
+});
+
+test('renderPullRequestDetailsHtml: checkStatus "failing" shows a Checks failing badge', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr({ checkStatus: 'failing' }), files, diff, threads: [], now }, opts);
+  assert.match(html, /class="badge[^"]*">Checks failing</);
+});
+
+test('renderPullRequestDetailsHtml: checkStatus "pending" shows a Checks running badge', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr({ checkStatus: 'pending' }), files, diff, threads: [], now }, opts);
+  assert.match(html, /class="badge[^"]*">Checks running</);
+});
+
+test('renderPullRequestDetailsHtml: checkStatus "none" shows no checks badge at all — nothing to report', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr({ checkStatus: 'none' }), files, diff, threads: [], now }, opts);
+  assert.ok(!html.includes('Checks'));
+});
+
+test('renderPullRequestDetailsHtml: reviewDecision "changesRequested" shows a Changes requested badge', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr({ reviewDecision: 'changesRequested' }), files, diff, threads: [], now }, opts);
+  assert.match(html, /class="badge[^"]*">Changes requested</);
+});
+
+test('renderPullRequestDetailsHtml: reviewDecision "reviewRequired" shows how many reviewers are still owed one', () => {
+  const html = renderPullRequestDetailsHtml(
+    { pr: pr({ reviewDecision: 'reviewRequired', requestedReviewers: ['amy', 'sam'] }), files, diff, threads: [], now },
+    opts,
+  );
+  assert.match(html, /class="badge[^"]*">2 reviews requested</);
+});
+
+test('renderPullRequestDetailsHtml: reviewDecision "none" shows no review badge at all', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr({ reviewDecision: 'none' }), files, diff, threads: [], now }, opts);
+  assert.ok(!html.includes('review requested') && !html.includes('reviews requested') && !html.includes('>Approved<') && !html.includes('Changes requested'));
+});
+
+test('renderPullRequestDetailsHtml: hasConflicts shows a Has conflicts badge; a clean PR shows none', () => {
+  const withConflicts = renderPullRequestDetailsHtml({ pr: pr({ hasConflicts: true }), files, diff, threads: [], now }, opts);
+  assert.match(withConflicts, /class="badge[^"]*">Has conflicts</);
+  const clean = renderPullRequestDetailsHtml({ pr: pr({ hasConflicts: false }), files, diff, threads: [], now }, opts);
+  assert.ok(!clean.includes('Has conflicts'));
+});
+
+test('renderPullRequestDetailsHtml: always shows the PR\'s age, using closedAt when terminal and createdAt otherwise', () => {
+  const open = renderPullRequestDetailsHtml({ pr: pr({ createdAt: '2024-02-08T10:00:00Z' }), files, diff, threads: [], now }, opts);
+  assert.match(open, /class="head-age"[^>]*title="2024-02-08 10:00"/);
+  const merged = renderPullRequestDetailsHtml(
+    { pr: pr({ createdAt: '2024-01-01T00:00:00Z', closedAt: '2024-02-09T10:00:00Z', merged: true }), files, diff, threads: [], now },
+    opts,
+  );
+  assert.match(merged, /class="head-age"[^>]*title="2024-02-09 10:00"/);
+});
+
+test('renderPullRequestDetailsHtml: an open PR shows Approve, Request Changes, and Close buttons', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads: [], now }, opts);
+  assert.match(html, /id="approve-pr"/);
+  assert.match(html, /id="request-changes-pr"/);
+  assert.match(html, /id="close-pr"/);
+});
+
+test('renderPullRequestDetailsHtml: a merged or closed PR shows none of Approve/Request Changes/Close', () => {
+  const html = renderPullRequestDetailsHtml(
+    { pr: pr({ closedAt: '2024-02-05T00:00:00Z', merged: true }), files, diff, threads: [], now },
+    opts,
+  );
+  assert.ok(!html.includes('id="approve-pr"'));
+  assert.ok(!html.includes('id="request-changes-pr"'));
+  assert.ok(!html.includes('id="close-pr"'));
+});
+
+test('renderPullRequestDetailsHtml: a closed-without-merging PR shows a Reopen button; a merged one does not', () => {
+  const closed = renderPullRequestDetailsHtml(
+    { pr: pr({ closedAt: '2024-02-05T00:00:00Z', merged: false }), files, diff, threads: [], now },
+    opts,
+  );
+  assert.match(closed, /id="reopen-pr"/);
+  const merged = renderPullRequestDetailsHtml(
+    { pr: pr({ closedAt: '2024-02-05T00:00:00Z', merged: true }), files, diff, threads: [], now },
+    opts,
+  );
+  assert.ok(!merged.includes('id="reopen-pr"'));
+});
+
+test('renderPullRequestDetailsHtml: an open PR shows no Reopen button', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads: [], now }, opts);
+  assert.ok(!html.includes('id="reopen-pr"'));
+});
+
+test('renderPullRequestDetailsHtml: shows Merge only when approved, checks aren\'t pending, and there are no conflicts — matching Launchpad\'s own "ready to merge" rule', () => {
+  const ready = renderPullRequestDetailsHtml(
+    { pr: pr({ reviewDecision: 'approved', checkStatus: 'passing', hasConflicts: false }), files, diff, threads: [], now },
+    opts,
+  );
+  assert.match(ready, /id="merge-pr"/);
+
+  const notApproved = renderPullRequestDetailsHtml(
+    { pr: pr({ reviewDecision: 'reviewRequired', checkStatus: 'passing', hasConflicts: false }), files, diff, threads: [], now },
+    opts,
+  );
+  assert.ok(!notApproved.includes('id="merge-pr"'));
+
+  const pendingChecks = renderPullRequestDetailsHtml(
+    { pr: pr({ reviewDecision: 'approved', checkStatus: 'pending', hasConflicts: false }), files, diff, threads: [], now },
+    opts,
+  );
+  assert.ok(!pendingChecks.includes('id="merge-pr"'));
+
+  const conflicted = renderPullRequestDetailsHtml(
+    { pr: pr({ reviewDecision: 'approved', checkStatus: 'passing', hasConflicts: true }), files, diff, threads: [], now },
+    opts,
+  );
+  assert.ok(!conflicted.includes('id="merge-pr"'));
+});
+
+test('renderPullRequestDetailsHtml: Approve posts submitReview with decision "approve"; Request Changes posts "requestChanges"', () => {
+  const html = renderPullRequestDetailsHtml({ pr: pr(), files, diff, threads: [], now }, opts);
+  assert.match(html, /getElementById\('approve-pr'\)\?\.addEventListener\('click', \(\) => \{\s*vscode\.postMessage\(\{ type: 'submitReview', decision: 'approve' \}\);/);
+  assert.match(html, /getElementById\('request-changes-pr'\)\?\.addEventListener\('click', \(\) => \{\s*vscode\.postMessage\(\{ type: 'submitReview', decision: 'requestChanges' \}\);/);
+});
+
+test('renderPullRequestDetailsHtml: Close/Reopen/Merge buttons post closePr/reopenPr/mergePr', () => {
+  const open = renderPullRequestDetailsHtml({ pr: pr({ reviewDecision: 'approved', checkStatus: 'passing' }), files, diff, threads: [], now }, opts);
+  assert.match(open, /getElementById\('close-pr'\)\?\.addEventListener\('click', \(\) => \{\s*vscode\.postMessage\(\{ type: 'closePr' \}\);/);
+  assert.match(open, /getElementById\('merge-pr'\)\?\.addEventListener\('click', \(\) => \{\s*vscode\.postMessage\(\{ type: 'mergePr' \}\);/);
+
+  const closed = renderPullRequestDetailsHtml(
+    { pr: pr({ closedAt: '2024-02-05T00:00:00Z', merged: false }), files, diff, threads: [], now },
+    opts,
+  );
+  assert.match(closed, /getElementById\('reopen-pr'\)\?\.addEventListener\('click', \(\) => \{\s*vscode\.postMessage\(\{ type: 'reopenPr' \}\);/);
 });

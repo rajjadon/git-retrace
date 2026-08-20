@@ -2,7 +2,7 @@
   "name": "gitlore",
   "displayName": "GitLore — git blame, history & commit graph",
   "description": "The story behind every line. Free, local-first git blame, history, commit graph and branch comparison — no account, no telemetry.",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "publisher": "RajpratapsinghJadon",
   "license": "MIT",
   "engines": {
@@ -138,6 +138,40 @@
         "command": "gitLore.dropStash",
         "title": "GitLore: Drop Stash",
         "icon": "$(trash)"
+      },
+      {
+        "command": "gitLore.renameBranchFromExplorer",
+        "title": "GitLore: Rename Branch",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "gitLore.deleteBranchFromExplorer",
+        "title": "GitLore: Delete Branch",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "gitLore.deleteTagFromExplorer",
+        "title": "GitLore: Delete Tag",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "gitLore.addWorktreeFromExplorer",
+        "title": "GitLore: Add Worktree",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitLore.removeWorktreeFromExplorer",
+        "title": "GitLore: Remove Worktree",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "gitLore.createStashFromExplorer",
+        "title": "GitLore: New Stash",
+        "icon": "$(add)"
+      },
+      {
+        "command": "gitLore.recoverFromReflog",
+        "title": "GitLore: Recover Lost Commit or Branch"
       },
       {
         "command": "gitLore.stepLineHistory",
@@ -294,6 +328,14 @@
           "when": "view == gitLore.explorer && (viewItem == gitLore.branch || viewItem == gitLore.branch.remote)"
         },
         {
+          "command": "gitLore.renameBranchFromExplorer",
+          "when": "view == gitLore.explorer && (viewItem == gitLore.branch || viewItem == gitLore.branch.current)"
+        },
+        {
+          "command": "gitLore.deleteBranchFromExplorer",
+          "when": "view == gitLore.explorer && viewItem == gitLore.branch"
+        },
+        {
           "command": "gitLore.openRemote",
           "when": "view == gitLore.explorer && viewItem == gitLore.remote",
           "group": "inline"
@@ -306,6 +348,24 @@
         {
           "command": "gitLore.dropStash",
           "when": "view == gitLore.explorer && viewItem == gitLore.stash"
+        },
+        {
+          "command": "gitLore.deleteTagFromExplorer",
+          "when": "view == gitLore.explorer && viewItem == gitLore.tag"
+        },
+        {
+          "command": "gitLore.addWorktreeFromExplorer",
+          "when": "view == gitLore.explorer && viewItem == gitLore.section.worktrees",
+          "group": "inline"
+        },
+        {
+          "command": "gitLore.removeWorktreeFromExplorer",
+          "when": "view == gitLore.explorer && viewItem == gitLore.worktree"
+        },
+        {
+          "command": "gitLore.createStashFromExplorer",
+          "when": "view == gitLore.explorer && viewItem == gitLore.section.stashes",
+          "group": "inline"
         }
       ],
       "scm/title": [
@@ -601,9 +661,11 @@
   },
   "dependencies": {
     "date-fns": "^4.1.0",
+    "diff": "^5.2.2",
     "simple-git": "^3.27.0"
   },
   "devDependencies": {
+    "@types/diff": "^7.0.2",
     "@types/mocha": "^10.0.9",
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.85.0",

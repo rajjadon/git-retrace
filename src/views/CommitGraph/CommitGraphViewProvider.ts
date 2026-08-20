@@ -63,6 +63,10 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
   // Guards against a superseded `load()` (e.g. a fast ref-picker change, or an auto-refresh
   // landing mid-flight) overwriting a newer one's rendered HTML with stale data once it resolves.
   private loadGeneration = 0;
+  // Set by `loadMore()` right before re-asking, so `load()` knows how many rows were already on
+  // screen and can animate in only the newly-revealed ones. Every other caller (initial open, ref
+  // switch, refresh, HEAD-watcher auto-refresh) leaves this undefined for a full "first paint".
+  private previousRowCount: number | undefined;
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
@@ -177,6 +181,7 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
           currentRef: this.currentRef,
           selectedSha: this.selectedSha,
           hasMore,
+          newRowsFrom: this.previousRowCount,
         },
         {
           nonce: createNonce(),
@@ -184,6 +189,7 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
           styleUris,
         },
       );
+      this.previousRowCount = undefined;
     } catch (err) {
       if (generation !== this.loadGeneration || !this.view) {
         return;
@@ -203,6 +209,7 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
     if (!this.currentFilePath) {
       return;
     }
+    this.previousRowCount = this.currentCommits.length;
     await this.load(this.currentFilePath, this.currentMaxCount + readMaxGraphItems());
   }
 
@@ -425,13 +432,14 @@ export class CommitGraphViewProvider implements vscode.WebviewViewProvider, vsco
       await this.loadMore();
       return;
     }
-    if ((type === 'pull' || type === 'push') && this.currentRepoRoot) {
+    if ((type === 'pull' || type === 'push' || type === 'fetch') && this.currentRepoRoot) {
       // Runs in a real terminal, not via simple-git — pull/push can need interactive auth (an SSH
       // passphrase, a credential-manager prompt) or land a merge conflict on pull, and a terminal
       // is where the user can actually see and handle either. The graph doesn't need its own
       // "did it finish" tracking either: the HEAD/refs watcher wired in the constructor picks up
       // the result the moment the command actually changes something.
-      runInGitSyncTerminal(this.currentRepoRoot, type === 'pull' ? 'git pull' : 'git push');
+      const command = type === 'pull' ? 'git pull' : type === 'push' ? 'git push' : 'git fetch';
+      runInGitSyncTerminal(this.currentRepoRoot, command);
     }
   }
 }

@@ -38,6 +38,13 @@ export const SEARCH_ICON = icon('<circle cx="6.6" cy="6.6" r="4.3" /><path d="M9
 
 export const REFRESH_ICON = icon('<path d="M13.4 8a5.4 5.4 0 1 1-1.86-4.08" /><path d="M13.6 2.2v3.2h-3.2" />', 'toolbar-icon', 13);
 
+/** Fetch — a cloud with a download arrow, distinct from REFRESH_ICON (reload the local view) and ARROW_DOWN_ICON (Pull, which also merges). */
+export const FETCH_ICON = icon(
+  '<path d="M4.6 9.8h6.9a2.4 2.4 0 0 0 .3-4.78 3.3 3.3 0 0 0-6.1-1A2.7 2.7 0 0 0 4.6 9.8Z" /><path d="M8 9.8v4.7" /><path d="M6 12.5 8 14.5l2-2" />',
+  'toolbar-icon',
+  13,
+);
+
 export const COPY_ICON = icon(
   '<rect x="5.6" y="5.6" width="8" height="8.8" rx="1" /><path d="M10.4 3.4H3.4a1 1 0 0 0-1 1v7" />',
   'toolbar-icon',

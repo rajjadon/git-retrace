@@ -37,15 +37,15 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  font-family: var(--vscode-font-family);
+  font-family: var(--gl-font-ui);
   /* One notch below the editor's size: this is dense tabular chrome, not prose. */
-  font-size: calc(var(--vscode-font-size, 13px) - 1px);
-  color: var(--vscode-foreground);
-  background-color: var(--vscode-panel-background, var(--vscode-editor-background));
+  font-size: calc(var(--gl-text-base) - 1px);
+  color: var(--gl-text);
+  background-color: var(--gl-bg);
   /* Every GitLore webview draws its own left edge — docked sibling views in the same panel
      container share one flat background with no native seam between them, so without this, two
      panels open side by side visually merge into one. */
-  border-left: 1px solid var(--vscode-panel-border);
+  border-left: 1px solid var(--gl-border);
   line-height: 1.4;
 }
 
@@ -78,9 +78,9 @@ body {
   font-size: inherit;
   max-width: 180px;
   padding: 0.15rem 0.25rem;
-  color: var(--vscode-dropdown-foreground);
-  background-color: var(--vscode-dropdown-background);
-  border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
+  color: var(--gl-text);
+  background-color: var(--gl-surface-2);
+  border: 1px solid var(--gl-border);
   border-radius: var(--gitlore-radius-sm);
 }
 
@@ -103,12 +103,12 @@ body {
 }
 
 #search::placeholder {
-  color: var(--vscode-input-placeholderForeground);
+  color: var(--gl-text-muted);
 }
 
 .count {
   flex: 0 0 auto;
-  color: var(--vscode-descriptionForeground);
+  color: var(--gl-text-muted);
   white-space: nowrap;
 }
 
@@ -122,12 +122,12 @@ body {
   line-height: 1.4;
   padding: 0 0.35em;
   border-radius: 8px;
-  background-color: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
+  background-color: var(--gl-surface-2);
+  color: var(--gl-text-muted);
 }
 
 #ref-filter:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: 1px solid var(--gl-accent-solid);
   outline-offset: 1px;
 }
 
@@ -157,9 +157,9 @@ body {
   font-size: 0.9em;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--vscode-descriptionForeground);
-  background-color: var(--vscode-panel-background, var(--vscode-editor-background));
-  border-bottom: 1px solid var(--vscode-panel-border);
+  color: var(--gl-text-muted);
+  background-color: var(--gl-bg);
+  border-bottom: 1px solid var(--gl-border);
 }
 
 .row.commit,
@@ -171,21 +171,21 @@ body {
 
 .row.commit:hover,
 .row.wip:hover {
-  background-color: var(--vscode-list-hoverBackground);
+  background-color: var(--gl-hover-bg);
   transform: translateY(-1px);
 }
 
 .row.selected {
-  background-color: var(--vscode-list-inactiveSelectionBackground);
+  background-color: var(--gl-surface-2);
 }
 
 .row.selected:focus-within {
-  background-color: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
+  background-color: var(--gl-accent-dim);
+  color: var(--gl-text);
 }
 
 .row:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: 1px solid var(--gl-accent-solid);
   outline-offset: -1px;
 }
 
@@ -224,7 +224,7 @@ body {
   align-items: center;
   gap: 0.25rem;
   justify-content: flex-end;
-  color: var(--vscode-descriptionForeground);
+  color: var(--gl-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -235,18 +235,18 @@ body {
 
 .cell-date,
 .cell-sha {
-  color: var(--vscode-descriptionForeground);
+  color: var(--gl-text-muted);
   font-variant-numeric: tabular-nums;
 }
 
 .cell-sha code {
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--gl-font-mono);
   font-size: 0.95em;
 }
 
 .empty {
   margin: 1rem 0.75rem;
-  color: var(--vscode-descriptionForeground);
+  color: var(--gl-text-muted);
 }
 
 /* ---------- Ref labels ---------- */
@@ -278,54 +278,54 @@ body {
 
 /* Local branch — solid, the repo's own refs read as "here". */
 .ref-branch {
-  background-color: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
+  background-color: var(--gl-surface-2);
+  color: var(--gl-text-muted);
 }
 
 /* Checked-out branch — the one label a reader scans for, so it gets GitLore's signature accent. */
 .ref-head {
   background: var(--gitlore-accent-gradient-diag);
-  color: var(--vscode-button-foreground);
+  color: var(--gl-on-accent);
   font-weight: 600;
 }
 
 /* Remote-tracking — outlined, not filled: on a synced repo it only restates the local branch. */
 .ref-remoteBranch {
-  border-color: var(--vscode-panel-border);
+  border-color: var(--gl-border);
   opacity: 0.8;
 }
 
 .ref-tag {
-  border-color: var(--vscode-charts-yellow);
-  color: var(--vscode-charts-yellow);
+  border-color: var(--gl-cat-2);
+  color: var(--gl-cat-2);
 }
 
 .ref-detached {
-  border-color: var(--vscode-charts-orange);
-  color: var(--vscode-charts-orange);
+  border-color: var(--gl-cat-4);
+  color: var(--gl-cat-4);
 }
 
 .ref-pending {
   border-style: dashed;
-  border-color: var(--vscode-panel-border);
+  border-color: var(--gl-border);
   opacity: 0.85;
 }
 
 .ref-more {
-  background-color: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
+  background-color: var(--gl-surface-2);
+  color: var(--gl-text-muted);
 }
 
 /* Stash chip — the only `.ref` that's actually clickable, so it gets its own cursor and a hover state. */
 .ref-stash {
-  border-color: var(--vscode-charts-purple, var(--vscode-panel-border));
-  color: var(--vscode-charts-purple, var(--vscode-foreground));
+  border-color: var(--gl-cat-3);
+  color: var(--gl-cat-3);
   cursor: pointer;
 }
 
 .ref-stash:hover,
 .ref-stash:focus-visible {
-  background-color: var(--vscode-toolbar-hoverBackground);
+  background-color: var(--gl-hover-bg);
 }
 
 /* ---------- Working-changes stats ---------- */
@@ -337,15 +337,15 @@ body {
 }
 
 .stat-add {
-  color: var(--vscode-gitDecoration-addedResourceForeground);
+  color: var(--gl-success);
 }
 
 .stat-mod {
-  color: var(--vscode-gitDecoration-modifiedResourceForeground);
+  color: var(--gl-warning);
 }
 
 .stat-del {
-  color: var(--vscode-gitDecoration-deletedResourceForeground);
+  color: var(--gl-danger);
 }
 
 /* ---------- Row tooltip ---------- */
@@ -363,10 +363,10 @@ body {
    * ring between them for it to show through.
    */
   background:
-    linear-gradient(var(--vscode-editorHoverWidget-background), var(--vscode-editorHoverWidget-background)) padding-box,
+    linear-gradient(var(--gl-surface), var(--gl-surface)) padding-box,
     var(--gitlore-accent-gradient-diag) border-box;
   border: 1px solid transparent;
-  color: var(--vscode-editorHoverWidget-foreground);
+  color: var(--gl-text);
   box-shadow: var(--gitlore-shadow-hover);
   font-size: 0.95em;
   line-height: 1.5;
@@ -384,9 +384,9 @@ body {
   flex-direction: column;
   min-width: 220px;
   padding: 4px;
-  background: var(--vscode-menu-background, var(--vscode-editorHoverWidget-background));
-  color: var(--vscode-menu-foreground, var(--vscode-editorHoverWidget-foreground));
-  border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
+  background: var(--gl-surface);
+  color: var(--gl-text);
+  border: 1px solid var(--gl-border);
   border-radius: var(--gitlore-radius-lg);
   box-shadow: var(--gitlore-shadow-hover);
 }
@@ -405,14 +405,14 @@ body {
 
 .ctx-menu button:hover,
 .ctx-menu button:focus-visible {
-  background: var(--vscode-menu-selectionBackground);
-  color: var(--vscode-menu-selectionForeground);
+  background: var(--gl-accent-dim);
+  color: var(--gl-text);
 }
 
 .ctx-menu hr {
   width: 100%;
   border: none;
-  border-top: 1px solid var(--vscode-menu-separatorBackground, var(--vscode-panel-border));
+  border-top: 1px solid var(--gl-border);
   margin: 4px 0;
 }
 
@@ -437,7 +437,7 @@ body {
 
 .row-tooltip-meta,
 .row-tooltip-stat {
-  color: var(--vscode-descriptionForeground);
+  color: var(--gl-text-muted);
   font-size: 0.92em;
 }
 
@@ -446,7 +446,7 @@ body {
   display: flex;
   justify-content: center;
   padding: 0.4rem;
-  border-top: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--gl-border);
 }
 
 @media (prefers-reduced-motion: reduce) {

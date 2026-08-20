@@ -43,6 +43,13 @@ export const COMMANDS = {
   mergeBranchFromExplorer: 'gitLore.mergeBranchFromExplorer',
   rebaseOntoBranchFromExplorer: 'gitLore.rebaseOntoBranchFromExplorer',
   showCoChangedFiles: 'gitLore.showCoChangedFiles',
+  deleteBranchFromExplorer: 'gitLore.deleteBranchFromExplorer',
+  renameBranchFromExplorer: 'gitLore.renameBranchFromExplorer',
+  deleteTagFromExplorer: 'gitLore.deleteTagFromExplorer',
+  addWorktreeFromExplorer: 'gitLore.addWorktreeFromExplorer',
+  removeWorktreeFromExplorer: 'gitLore.removeWorktreeFromExplorer',
+  createStashFromExplorer: 'gitLore.createStashFromExplorer',
+  recoverFromReflog: 'gitLore.recoverFromReflog',
 } as const;
 
 export const CONFIG = {

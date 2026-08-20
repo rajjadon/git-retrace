@@ -147,6 +147,13 @@ export class BitbucketClient implements ForgeClient {
     return Promise.all(page.values.map((pr) => this.enrich(repo, pr)));
   }
 
+  /** Same shape as a `listOpenPullRequests` item — reuses `enrich` directly, no separate normalization path. */
+  async getPullRequest(repo: ForgeRepoRef, number: number): Promise<PullRequestSummary> {
+    const res = await this.request(`/repositories/${repo.identity}/pullrequests/${number}`);
+    const pr = (await res.json()) as BitbucketPullRequest;
+    return this.enrich(repo, pr);
+  }
+
   async listRecentlyClosedPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
     // Bitbucket calls a closed-without-merging PR "declined" — MERGED and DECLINED are separate
     // state values, same as GitLab's merged/closed split.

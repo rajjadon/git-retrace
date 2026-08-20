@@ -1,5 +1,5 @@
-import { dirname } from 'node:path';
-import { realpathSync, statSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { realpathSync, statSync, existsSync } from 'node:fs';
 import { simpleGit, type SimpleGit } from 'simple-git';
 import {
   parseBlamePorcelain,
@@ -14,6 +14,7 @@ import {
   parseTags,
   parseStashes,
   parseWorktrees,
+  parseReflog,
   parseContributors,
   parseRemoteUrl,
   parseStatusPorcelain,
@@ -37,6 +38,7 @@ import type {
   FileHistoryEntry,
   GitRemote,
   GraphCommit,
+  ReflogEntry,
   RemoteInfo,
   StashInfo,
   TagInfo,
@@ -122,6 +124,12 @@ export class GitService {
     const args = ['blame', '--line-porcelain'];
     if (opts.ignoreWhitespace) {
       args.push('-w');
+    }
+    // git's own convention (supported since 2.23) for skipping mass-reformat/lint commits in
+    // blame — auto-detected by filename, no setting needed, opt-in by simply having the file.
+    const ignoreRevsFile = join(repoRoot, '.git-blame-ignore-revs');
+    if (existsSync(ignoreRevsFile)) {
+      args.push('--ignore-revs-file', ignoreRevsFile);
     }
     args.push('--', rel);
 
@@ -488,6 +496,54 @@ export class GitService {
     }
   }
 
+  /** Creates a new linked worktree at `worktreePath`, checking out `branch` there. */
+  async addWorktree(filePath: string, worktreePath: string, branch: string): Promise<void> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    const args = ['worktree', 'add', worktreePath, branch];
+    try {
+      await this.gitFor(repoRoot).raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git worktree add ${worktreePath} ${branch} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Removes a linked worktree. Never the main checkout — the caller filters that out before calling this. */
+  async removeWorktree(filePath: string, worktreePath: string): Promise<void> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    const args = ['worktree', 'remove', worktreePath];
+    try {
+      await this.gitFor(repoRoot).raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git worktree remove ${worktreePath} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** The last `maxCount` reflog entries for HEAD — the raw material for recovering a lost commit or branch. */
+  async getReflog(filePath: string, maxCount: number): Promise<ReflogEntry[]> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return [];
+    }
+    const args = ['reflog', 'show', '-n', String(maxCount), '--date=iso-strict', `--format=%H${'\x1f'}%gd${'\x1f'}%gs${'\x1f'}%cd`];
+    try {
+      const raw = await this.gitFor(repoRoot).raw(args);
+      return parseReflog(raw);
+    } catch {
+      // An empty repo (no commits yet, so no reflog) — no entries, not an error.
+      return [];
+    }
+  }
+
   /**
    * Every contributor across every branch, ranked by commit count, for the Sidebar Explorer.
    * Scoped to `--all` rather than `HEAD` — a repo-wide roster is what "Contributors" promises,
@@ -662,6 +718,59 @@ export class GitService {
     }
   }
 
+  /**
+   * Deletes a local branch. `force: false` uses `-d` (git refuses if the branch has unmerged
+   * commits); `force: true` uses `-D`. Never targets a remote-tracking ref — deleting one of
+   * those is a push operation (`git push origin --delete`), out of scope here. Caller confirms
+   * first; git itself refuses to delete the currently checked-out branch.
+   */
+  async deleteBranch(filePath: string, name: string, force: boolean): Promise<void> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    const args = ['branch', force ? '-D' : '-d', name];
+    try {
+      await this.gitFor(repoRoot).raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git branch ${force ? '-D' : '-d'} ${name} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Renames a local branch, including the currently checked-out one — `git branch -m` supports both. */
+  async renameBranch(filePath: string, oldName: string, newName: string): Promise<void> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    const args = ['branch', '-m', oldName, newName];
+    try {
+      await this.gitFor(repoRoot).raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git branch -m ${oldName} ${newName} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Deletes a local tag. Never touches a remote — deleting there is a separate push operation. */
+  async deleteTag(filePath: string, name: string): Promise<void> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    const args = ['tag', '-d', name];
+    try {
+      await this.gitFor(repoRoot).raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git tag -d ${name} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
   /** Creates a lightweight tag named `name` pointing at `sha`, for the commit graph's "Tag This Commit" action. */
   async createTag(filePath: string, name: string, sha: string): Promise<void> {
     const repoRoot = await this.getRepoRoot(filePath);
@@ -706,6 +815,22 @@ export class GitService {
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err);
       this.logger?.error(`git stash drop stash@{${index}} failed`, err);
+      throw new GitCommandError(args.join(' '), stderr);
+    }
+  }
+
+  /** Stashes the working tree (and index) with an optional message, for the Sidebar Explorer's "New Stash" action. Throws if there's nothing to stash. */
+  async createStash(filePath: string, message?: string): Promise<void> {
+    const repoRoot = await this.getRepoRoot(filePath);
+    if (!repoRoot) {
+      return;
+    }
+    const args = message ? ['stash', 'push', '-m', message] : ['stash', 'push'];
+    try {
+      await this.gitFor(repoRoot).raw(args);
+    } catch (err) {
+      const stderr = err instanceof Error ? err.message : String(err);
+      this.logger?.error(`git stash push failed`, err);
       throw new GitCommandError(args.join(' '), stderr);
     }
   }

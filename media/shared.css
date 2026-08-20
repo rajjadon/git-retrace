@@ -11,31 +11,122 @@
  * borders) instead of the same default button-blue every other extension uses. Defined once here
  * since every webview links shared.css first; never hardcode a hex in its place.
  */
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('./fonts/ibm-plex-sans-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('./fonts/ibm-plex-sans-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('./fonts/ibm-plex-sans-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('./fonts/jetbrains-mono-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('./fonts/jetbrains-mono-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --gitlore-accent: var(--vscode-charts-purple);
+  /* ---- GitLore's own fixed design tokens (dark, default) ---- */
+  --gl-bg: #0F172A;
+  --gl-surface: #1B2336;
+  --gl-surface-2: #1E293B;
+  --gl-border: #2C3B57;
+  --gl-text: #F8FAFC;
+  --gl-text-muted: #94A3B8;
+  --gl-accent-start: #2DD4BF;
+  --gl-accent-end: #0891B2;
+  --gl-accent-solid: #2DD4BF;
+  --gl-accent-dim: #123B3B;
+  --gl-on-accent: #062024;
+  --gl-hover-bg: rgba(255, 255, 255, 0.04);
+  --gl-success: #22C55E;
+  --gl-danger: #EF4444;
+  --gl-warning: #EAB308;
+  --gl-cat-1: #3B82F6;
+  --gl-cat-2: #F97316;
+  --gl-cat-3: #A78BFA;
+  --gl-cat-4: #F472B6;
+  --gl-cat-5: #6366F1;
+  --gl-cat-6: var(--gl-text-muted);
+  --gl-font-ui: 'IBM Plex Sans', sans-serif;
+  --gl-font-mono: 'JetBrains Mono', monospace;
+  --gl-text-xs: 11px;
+  --gl-text-sm: 12.5px;
+  --gl-text-base: 13px;
+  --gl-text-md: 14px;
+  --gl-text-lg: 16px;
+
   /*
-   * Same signature, as a gradient — both stops are theme tokens (never a hardcoded hex), so it
-   * stays theme-correct the same way the solid accent does. Three orientations for the three
-   * shapes it fills: horizontal bars (toolbar underlines), vertical bars (section-head's left
-   * edge), and diagonal for filled surfaces (buttons, pills, tooltip borders).
+   * GitLore's signature accent — repointed from a theme-derived lookup (var(--vscode-charts-purple))
+   * to the fixed tokens above. Every existing call site (section-head's left bar, panel header
+   * underlines, the AI action, hover-card borders) keeps working unchanged — only this definition
+   * moved.
    */
-  --gitlore-accent-gradient: linear-gradient(90deg, var(--vscode-charts-purple), var(--vscode-charts-blue));
-  --gitlore-accent-gradient-v: linear-gradient(180deg, var(--vscode-charts-purple), var(--vscode-charts-blue));
-  --gitlore-accent-gradient-diag: linear-gradient(135deg, var(--vscode-charts-purple), var(--vscode-charts-blue));
-  /* Shared radius for every hover card (Commit Graph's row tooltip, Visual File History's) — they
-     previously drifted (3px vs 6px) despite being the same kind of element. */
+  --gitlore-accent: var(--gl-accent-solid);
+  --gitlore-accent-gradient: linear-gradient(90deg, var(--gl-accent-start), var(--gl-accent-end));
+  --gitlore-accent-gradient-v: linear-gradient(180deg, var(--gl-accent-start), var(--gl-accent-end));
+  --gitlore-accent-gradient-diag: linear-gradient(135deg, var(--gl-accent-start), var(--gl-accent-end));
   --gitlore-radius-lg: 6px;
-  /* Smaller two rungs of the same scale — replaces hardcoded 2px/3px (and one 4px outlier) that had
-     drifted per view with no shared value at all. */
   --gitlore-radius-sm: 2px;
   --gitlore-radius-md: 3px;
-  /* One shared hover/transition pace, so every view's row/card hover feels like the same product
-     instead of each file picking its own timing. */
   --gitlore-motion: 140ms ease-out;
-  /* Theme-derived elevation for the one true "card" surface (Launchpad) and existing hover cards —
-     `--vscode-widget-shadow` is a long-stable VS Code color token. The fallback keeps this valid in
-     contexts that don't define it (e.g. the screenshot script's mocked theme). */
-  --gitlore-shadow-hover: 0 2px 6px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36));
+  /* Fixed elevation, one level only — no longer theme-derived. */
+  --gitlore-shadow-hover: 0 2px 6px rgba(0, 0, 0, 0.36);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --gl-bg: #F8FAFC;
+    --gl-surface: #FFFFFF;
+    --gl-surface-2: #F1F5F9;
+    --gl-border: #E2E8F0;
+    --gl-text: #0F172A;
+    /*
+     * Darkened from the spec's #64748B (contrast audit, 2026-08-20): #64748B measured 4.34:1 against
+     * --gl-surface-2, under the 4.5:1 body-text minimum. #606F85 clears 4.5:1 against every surface
+     * this token is used on (4.66:1 worst case) while staying visually indistinguishable as "muted
+     * slate" at this size.
+     */
+    --gl-text-muted: #606F85;
+    --gl-accent-start: #0D9488;
+    --gl-accent-end: #0E7490;
+    --gl-accent-solid: #0D9488;
+    --gl-accent-dim: #CCFBF1;
+    --gl-on-accent: #062024;
+    --gl-hover-bg: rgba(0, 0, 0, 0.03);
+    /*
+     * Success/warning darkened from the spec's #22C55E/#EAB308 (contrast audit, 2026-08-20): both
+     * measured under the 3:1 UI-component minimum on a white/near-white surface (2.28:1 and 1.92:1
+     * respectively) — spec §3.2 assumed these needed no per-palette override, which the audit
+     * disproved. Danger (#EF4444) already cleared 3:1 unchanged, so it's the same hex in both
+     * palettes as the spec intended.
+     */
+    --gl-success: #16A34A;
+    --gl-warning: #B45309;
+    --gitlore-shadow-hover: 0 2px 6px rgba(0, 0, 0, 0.06);
+  }
 }
 
 /* ---------- Section header ---------- */
@@ -47,8 +138,8 @@
   align-items: center;
   gap: 0.4rem;
   padding: 0.3rem 0.5rem 0.3rem 0.65rem;
-  border-top: 1px solid var(--vscode-panel-border);
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--gl-border);
+  border-bottom: 1px solid var(--gl-border);
   font-size: 0.92em;
 }
 
@@ -83,8 +174,8 @@
   border-radius: 8px;
   font-size: 0.9em;
   font-variant-numeric: tabular-nums;
-  background-color: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
+  background-color: var(--gl-surface-2);
+  color: var(--gl-text-muted);
 }
 
 .totals {
@@ -99,14 +190,14 @@
   flex: 1 1 auto;
   min-width: 80px;
   padding: 0.05rem 0.35rem;
-  color: var(--vscode-input-foreground);
-  background-color: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  color: var(--gl-text);
+  background-color: var(--gl-surface-2);
+  border: 1px solid var(--gl-border);
   border-radius: var(--gitlore-radius-sm);
 }
 
 .search:focus-within {
-  border-color: var(--vscode-focusBorder);
+  border-color: var(--gl-accent-solid);
 }
 
 .toolbar-icon {
@@ -127,7 +218,7 @@
 }
 
 #file-filter::placeholder {
-  color: var(--vscode-input-placeholderForeground);
+  color: var(--gl-text-muted);
 }
 
 /* ---------- Icon-only controls ---------- */
@@ -146,25 +237,25 @@
 }
 
 .icon-btn:hover {
-  background-color: var(--vscode-toolbar-hoverBackground);
+  background-color: var(--gl-hover-bg);
   transform: translateY(-1px);
 }
 
 .icon-btn:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: 1px solid var(--gl-accent-solid);
   outline-offset: 1px;
 }
 
 /* A toggle that looks identical on and off is a broken toggle. */
 .icon-btn[aria-pressed='true'] {
-  background-color: var(--vscode-inputOption-activeBackground);
-  color: var(--vscode-inputOption-activeForeground);
-  box-shadow: inset 0 0 0 1px var(--vscode-inputOption-activeBorder, transparent);
+  background-color: var(--gl-accent-dim);
+  color: var(--gl-text);
+  box-shadow: inset 0 0 0 1px var(--gl-accent-dim);
 }
 
 .empty {
   margin: 0.75rem;
-  color: var(--vscode-descriptionForeground);
+  color: var(--gl-text-muted);
   text-align: center;
 }
 
@@ -192,9 +283,9 @@
   border-radius: var(--gitlore-radius-sm);
   background: linear-gradient(
     90deg,
-    var(--vscode-input-background) 25%,
-    var(--vscode-list-hoverBackground) 37%,
-    var(--vscode-input-background) 63%
+    var(--gl-surface-2) 25%,
+    var(--gl-hover-bg) 37%,
+    var(--gl-surface-2) 63%
   );
   background-size: 400% 100%;
   animation: gitlore-shimmer 1.4s ease infinite;
@@ -223,9 +314,9 @@
   padding: 0.2rem 0.5rem;
   font-family: inherit;
   font-size: 0.92em;
-  color: var(--vscode-button-secondaryForeground);
-  background-color: var(--vscode-button-secondaryBackground);
-  border: 1px solid var(--vscode-panel-border);
+  color: var(--gl-text);
+  background-color: var(--gl-surface-2);
+  border: 1px solid var(--gl-border);
   border-radius: var(--gitlore-radius-md);
   cursor: pointer;
   white-space: nowrap;
@@ -233,12 +324,12 @@
 }
 
 .btn:hover {
-  background-color: var(--vscode-button-secondaryHoverBackground);
+  background-color: var(--gl-surface);
   transform: translateY(-1px);
 }
 
 .btn:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: 1px solid var(--gl-accent-solid);
   outline-offset: 1px;
 }
 
@@ -254,7 +345,7 @@
    uses. `filter: brightness` (not a second hardcoded hover color) keeps the hover state correct
    against whatever the accent resolves to under any theme. */
 .btn-accent {
-  color: var(--vscode-button-foreground);
+  color: var(--gl-on-accent);
   background: var(--gitlore-accent-gradient-diag);
 }
 
@@ -306,11 +397,11 @@
 }
 
 .file > summary:hover {
-  background-color: var(--vscode-list-hoverBackground);
+  background-color: var(--gl-hover-bg);
 }
 
 .file > summary:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: 1px solid var(--gl-accent-solid);
   outline-offset: -1px;
 }
 
@@ -330,7 +421,7 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--vscode-descriptionForeground);
+  color: var(--gl-text-muted);
 }
 
 .file-name {
@@ -353,17 +444,17 @@
   margin-left: 0.5rem;
   border-radius: var(--gitlore-radius-sm);
   overflow: hidden;
-  background-color: var(--vscode-widget-border, transparent);
+  background-color: var(--gl-border);
 }
 
 .stat-bar-add {
   height: 100%;
-  background-color: var(--vscode-gitDecoration-addedResourceForeground);
+  background-color: var(--gl-success);
 }
 
 .stat-bar-del {
   height: 100%;
-  background-color: var(--vscode-gitDecoration-deletedResourceForeground);
+  background-color: var(--gl-danger);
 }
 
 /* Row-level action, revealed on hover/focus so a list of 40 files isn't a wall of buttons. */
@@ -386,11 +477,11 @@
 }
 
 .row-btn:hover {
-  background-color: var(--vscode-toolbar-hoverBackground);
+  background-color: var(--gl-hover-bg);
 }
 
 .row-btn:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: 1px solid var(--gl-accent-solid);
   outline-offset: -1px;
 }
 
@@ -404,15 +495,15 @@
 }
 
 .stat-add {
-  color: var(--vscode-gitDecoration-addedResourceForeground);
+  color: var(--gl-success);
 }
 
 .stat-del {
-  color: var(--vscode-gitDecoration-deletedResourceForeground);
+  color: var(--gl-danger);
 }
 
 .muted {
-  color: var(--vscode-descriptionForeground);
+  color: var(--gl-text-muted);
 }
 
 .no-diff {
@@ -427,7 +518,7 @@ pre.diff {
   overflow-x: auto;
   margin: 0 0.75rem 0.5rem 1.4rem;
   padding: 0.4rem 0;
-  background-color: var(--vscode-textCodeBlock-background);
+  background-color: var(--gl-surface-2);
   border-radius: var(--gitlore-radius-md);
   font-family: var(--vscode-editor-font-family);
   /* One notch below the editor's own size, same rule the Commit Graph already follows: a docked
@@ -446,7 +537,7 @@ pre.diff {
 }
 
 .dl:hover {
-  background-color: var(--vscode-list-hoverBackground);
+  background-color: var(--gl-hover-bg);
 }
 
 /* Deliberately fainter than the theme's own secondary-text color (descriptionForeground, used
@@ -460,7 +551,7 @@ pre.diff {
 }
 
 .dn-new {
-  border-right: 1px solid var(--vscode-panel-border);
+  border-right: 1px solid var(--gl-border);
   padding-right: 0.4rem;
 }
 
@@ -483,28 +574,28 @@ body.wrap .dc {
 /* Full-row tint, not just colored glyphs: a changed line should be findable by shape when
    scrolling past, before you've read a single character of it. */
 .dl:has(.diff-add) {
-  background-color: var(--vscode-diffEditor-insertedTextBackground, transparent);
+  background-color: rgba(34, 197, 94, 0.12);
 }
 
 .dl:has(.diff-del) {
-  background-color: var(--vscode-diffEditor-removedTextBackground, transparent);
+  background-color: rgba(239, 68, 68, 0.12);
 }
 
 .diff-add {
-  color: var(--vscode-gitDecoration-addedResourceForeground);
+  color: var(--gl-success);
 }
 
 .diff-del {
-  color: var(--vscode-gitDecoration-deletedResourceForeground);
+  color: var(--gl-danger);
 }
 
 .diff-hunk {
-  color: var(--vscode-textLink-foreground);
+  color: var(--gl-accent-solid);
   opacity: 0.9;
 }
 
 .diff-meta {
-  color: var(--vscode-descriptionForeground);
+  color: var(--gl-text-muted);
 }
 
 .diff-ctx {
@@ -529,6 +620,31 @@ body.wrap .dc {
   animation: gitlore-enter 180ms ease-out;
 }
 
+/* ---------- Shared tooltip ---------- */
+
+/* A single shared, JS-positioned tooltip for every icon-only button across every webview (see
+   tooltipScript.ts) — native title="" bubbling turned out unreliable for some buttons in a row,
+   so this is unconditionally under our control instead. Pair with `data-tooltip="..."` on the
+   element, not `title`. */
+.gitlore-tooltip {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  max-width: 240px;
+  padding: 0.3rem 0.5rem;
+  border-radius: var(--gitlore-radius-md);
+  font-size: 0.85em;
+  line-height: 1.3;
+  color: var(--gl-text);
+  background-color: var(--gl-surface);
+  border: 1px solid var(--gl-border);
+  pointer-events: none;
+}
+
+.gitlore-tooltip.visible {
+  display: block;
+}
+
 /* ---------- AI summary ---------- */
 
 .ai-summary {
@@ -544,7 +660,7 @@ body.wrap .dc {
 }
 
 .ai-summary-hint {
-  color: var(--vscode-descriptionForeground);
+  color: var(--gl-text-muted);
   margin: 0.5rem 0 0;
   font-size: 0.92em;
 }
@@ -564,6 +680,6 @@ body.wrap .dc {
   /* Without this, the animation rule above still freezes the gradient at whatever frame it was on
      — a static two-tone smear instead of a clean, flat placeholder. */
   .skeleton-row {
-    background: var(--vscode-input-background);
+    background: var(--gl-surface-2);
   }
 }

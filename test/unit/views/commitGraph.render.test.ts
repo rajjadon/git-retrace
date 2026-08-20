@@ -175,7 +175,7 @@ test('renderGraphHtml: draws an avatar node per commit, with curves for lane-cha
 test('renderGraphHtml: rings each avatar node in its lane color', () => {
   const nodes = layoutGraph([commit('A', [])]);
   const html = renderGraphHtml({ nodes, now }, opts);
-  assert.match(html, /<circle cx="\d+" cy="\d+" r="6" fill="none" stroke="var\(--vscode-charts-blue\)"/);
+  assert.match(html, /<circle cx="\d+" cy="\d+" r="6" fill="none" stroke="var\(--gl-cat-1\)"/);
 });
 
 test('renderGraphHtml: pins a Working Changes row with per-status file counts when the tree is dirty', () => {
@@ -212,8 +212,8 @@ test('renderGraphHtml: the ref picker lists local and remote branches, marking t
 test('renderGraphHtml: marks the given sha as the selected row and makes it the tab stop', () => {
   const commits = [commit('aaa', []), commit('bbb', [])];
   const html = renderGraphHtml({ nodes: layoutGraph(commits), selectedSha: 'bbb', now }, opts);
-  assert.match(html, /class="row commit selected" role="row" tabindex="0" aria-selected="true" data-sha="bbb"/);
-  assert.match(html, /class="row commit" role="row" tabindex="-1" aria-selected="false" data-sha="aaa"/);
+  assert.match(html, /class="row commit selected gitlore-enter" role="row" tabindex="0" aria-selected="true" data-sha="bbb"/);
+  assert.match(html, /class="row commit gitlore-enter" role="row" tabindex="-1" aria-selected="false" data-sha="aaa"/);
 });
 
 test('renderGraphHtml: exactly one row is tab-reachable, so 200 commits do not become 200 tab stops', () => {
@@ -290,8 +290,8 @@ test('renderGraphHtml: escapes a branch name injected through the ref picker', (
 test('renderGraphHtml: pull/push buttons show ahead/behind badges for the current branch', () => {
   const branches: BranchInfo[] = [{ name: 'main', isRemote: false, isCurrent: true, ahead: 6, behind: 5 }];
   const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), branches, now }, opts);
-  assert.match(html, /id="pull"[^>]*title="Pull 5 commits"/);
-  assert.match(html, /id="push"[^>]*title="Push 6 commits"/);
+  assert.match(html, /id="pull"[^>]*data-tooltip="Pull 5 commits"/);
+  assert.match(html, /id="push"[^>]*data-tooltip="Push 6 commits"/);
   assert.match(html, /id="pull"[\s\S]*?class="sync-badge">5</);
   assert.match(html, /id="push"[\s\S]*?class="sync-badge">6</);
 });
@@ -302,8 +302,8 @@ test('renderGraphHtml: no badge (but the button stays) when ahead/behind is 0', 
   assert.match(html, /id="pull"/);
   assert.match(html, /id="push"/);
   assert.ok(!html.includes('sync-badge'));
-  assert.match(html, /id="pull"[^>]*title="Pull — up to date"/);
-  assert.match(html, /id="push"[^>]*title="Push — nothing to push"/);
+  assert.match(html, /id="pull"[^>]*data-tooltip="Pull — up to date"/);
+  assert.match(html, /id="push"[^>]*data-tooltip="Push — nothing to push"/);
 });
 
 test('renderGraphHtml: no pull/push buttons at all when the current branch has no upstream', () => {
@@ -311,6 +311,16 @@ test('renderGraphHtml: no pull/push buttons at all when the current branch has n
   const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), branches, now }, opts);
   assert.ok(!html.includes('id="pull"'));
   assert.ok(!html.includes('id="push"'));
+});
+
+test('renderGraphHtml: a Fetch button renders alongside Pull/Push, and is hidden with them when there is no upstream', () => {
+  const withUpstream: BranchInfo[] = [{ name: 'main', isRemote: false, isCurrent: true, ahead: 6, behind: 5 }];
+  const htmlWithUpstream = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), branches: withUpstream, now }, opts);
+  assert.match(htmlWithUpstream, /id="fetch"[^>]*data-tooltip="Fetch"/);
+
+  const withoutUpstream: BranchInfo[] = [{ name: 'main', isRemote: false, isCurrent: true }];
+  const htmlWithoutUpstream = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), branches: withoutUpstream, now }, opts);
+  assert.doesNotMatch(htmlWithoutUpstream, /id="fetch"/);
 });
 
 test('renderGraphHtml: no pull/push buttons when there are no branches at all (e.g. detached HEAD)', () => {
@@ -344,7 +354,7 @@ test('renderGraphHtml: the toolbar posts setRef and refresh', () => {
 test('renderGraphHtml: rows are a keyboard-navigable grid, not a stack of buttons', () => {
   const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
   assert.match(html, /role="grid"/);
-  assert.match(html, /class="row commit"[^>]*role="row"/);
+  assert.match(html, /class="row commit gitlore-enter"[^>]*role="row"/);
   assert.match(html, /role="gridcell"/);
   assert.match(html, /'ArrowDown'/);
   assert.match(html, /'ArrowUp'/);
@@ -404,6 +414,21 @@ test('renderGraphHtml: includes a hidden right-click context menu with every com
 test('renderGraphHtml: wires a contextmenu listener on commit rows, not the working-changes row', () => {
   const html = renderGraphHtml({ nodes: layoutGraph([commit('A', [])]), now }, opts);
   assert.match(html, /row\.addEventListener\('contextmenu'/);
+});
+
+test('renderGraphHtml: rows from index newRowsFrom onward get gitlore-enter; earlier rows do not', () => {
+  const commits = [commit('aaa1111', []), commit('bbb2222', []), commit('ccc3333', [])];
+  const html = renderGraphHtml({ nodes: layoutGraph(commits), newRowsFrom: 1, now }, opts);
+  const rowAaa = /<div class="row commit[^"]*" role="row"[^>]*data-sha="aaa1111"[\s\S]*?<\/div>/.exec(html)?.[0] ?? '';
+  const rowBbb = /<div class="row commit[^"]*" role="row"[^>]*data-sha="bbb2222"[\s\S]*?<\/div>/.exec(html)?.[0] ?? '';
+  assert.doesNotMatch(rowAaa, /gitlore-enter/);
+  assert.match(rowBbb, /gitlore-enter/);
+});
+
+test('renderGraphHtml: every row gets gitlore-enter when newRowsFrom is omitted (first paint)', () => {
+  const commits = [commit('aaa1111', []), commit('bbb2222', [])];
+  const html = renderGraphHtml({ nodes: layoutGraph(commits), now }, opts);
+  assert.match(html, /<div class="row commit gitlore-enter" role="row"[^>]*data-sha="aaa1111"/);
 });
 
 test('renderGraphHtml: places a stash chip on the row of its base commit', () => {

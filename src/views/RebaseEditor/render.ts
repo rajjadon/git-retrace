@@ -1,6 +1,7 @@
 import type { RebaseEntry } from '../../core/git/rebaseTodo';
 import { escapeHtml } from '../escapeHtml';
 import { CHECK_ICON, CHEVRON_DOWN_ICON, CHEVRON_UP_ICON, DRAG_HANDLE_ICON } from '../icons';
+import { renderTooltipScript } from '../tooltipScript';
 
 export interface RenderRebaseEditorOptions {
   nonce: string;
@@ -26,11 +27,11 @@ function renderRow(entry: RebaseEntry, index: number, lastIndex: number): string
     (action) => `<option value="${action}"${action === entry.command ? ' selected' : ''}>${action}</option>`,
   ).join('');
 
-  return `<div class="rb-row rb-row-${escapeHtml(entry.command)}" role="listitem" draggable="true" data-index="${index}">
+  return `<div class="rb-row rb-row-${escapeHtml(entry.command)}" role="listitem" draggable="true" data-index="${index}" data-sha="${escapeHtml(entry.sha)}">
 <span class="rb-drag-handle" aria-hidden="true">${DRAG_HANDLE_ICON}</span>
 <span class="rb-move">
-<button class="icon-btn rb-move-up" type="button" data-index="${index}"${index === 0 ? ' disabled' : ''} aria-label="Move up">${CHEVRON_UP_ICON}</button>
-<button class="icon-btn rb-move-down" type="button" data-index="${index}"${index === lastIndex ? ' disabled' : ''} aria-label="Move down">${CHEVRON_DOWN_ICON}</button>
+<button class="icon-btn rb-move-up" type="button" data-index="${index}"${index === 0 ? ' disabled' : ''} data-tooltip="Move up" aria-label="Move up">${CHEVRON_UP_ICON}</button>
+<button class="icon-btn rb-move-down" type="button" data-index="${index}"${index === lastIndex ? ' disabled' : ''} data-tooltip="Move down" aria-label="Move down">${CHEVRON_DOWN_ICON}</button>
 </span>
 <select class="rb-action" data-index="${index}" aria-label="Action for ${escapeHtml(entry.sha)}">${options}</select>
 <code class="rb-sha">${escapeHtml(entry.sha)}</code>
@@ -68,6 +69,33 @@ ${rows}
 const vscode = acquireVsCodeApi();
 const rowsEl = document.getElementById('rows');
 
+// Every drag-drop reorder sends a document edit, which re-renders this whole webview.html from
+// scratch — tearing down all in-memory JS state. vscode.setState()/getState() is the only channel
+// that survives that, so the pre-move row positions captured in the 'drop' handler below are
+// bridged through it to this fresh script instance, which applies the FLIP transform on load.
+const previousState = vscode.getState();
+if (previousState?.flipPositions) {
+  for (const row of rowsEl.querySelectorAll('.rb-row[data-sha]')) {
+    const before = previousState.flipPositions[row.dataset.sha];
+    if (before === undefined) {
+      continue;
+    }
+    const after = row.getBoundingClientRect().top;
+    const delta = before - after;
+    if (delta === 0) {
+      continue;
+    }
+    row.style.transition = 'none';
+    row.style.transform = \`translateY(\${delta}px)\`;
+    // Force a layout flush so the browser registers the starting transform before the
+    // transition below is applied — otherwise it would just jump straight to the end state.
+    row.getBoundingClientRect();
+    row.style.transition = 'transform var(--gitlore-motion)';
+    row.style.transform = '';
+  }
+  vscode.setState({});
+}
+
 function reorder(from, to) {
   vscode.postMessage({ type: 'reorder', from, to });
 }
@@ -101,6 +129,13 @@ for (const row of rowsEl.querySelectorAll('.rb-row[draggable="true"]')) {
     e.preventDefault();
     const to = Number(row.dataset.index);
     if (draggedIndex !== null && draggedIndex !== to) {
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        const positions = {};
+        for (const r of rowsEl.querySelectorAll('.rb-row[data-sha]')) {
+          positions[r.dataset.sha] = r.getBoundingClientRect().top;
+        }
+        vscode.setState({ flipPositions: positions });
+      }
       reorder(draggedIndex, to);
     }
     draggedIndex = null;
@@ -113,6 +148,7 @@ document.getElementById('start-rebase').addEventListener('click', () => {
 document.getElementById('abort-rebase').addEventListener('click', () => {
   vscode.postMessage({ type: 'abortRebase' });
 });
+${renderTooltipScript()}
 </script>
 </body>
 </html>`;

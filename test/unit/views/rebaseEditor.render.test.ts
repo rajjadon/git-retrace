@@ -40,6 +40,12 @@ test('renderRebaseEditorHtml: the first row\'s move-up and the last row\'s move-
   assert.match(rows[2] ?? '', /rb-move-down"[^>]*disabled/);
 });
 
+test('renderRebaseEditorHtml: move-up and move-down carry a visible tooltip, not just an aria-label', () => {
+  const html = renderRebaseEditorHtml({ entries: [entry()] }, opts);
+  assert.match(html, /rb-move-up"[^>]*data-tooltip="Move up"/);
+  assert.match(html, /rb-move-down"[^>]*data-tooltip="Move down"/);
+});
+
 test('renderRebaseEditorHtml: offers Start Rebase and Abort actions', () => {
   const html = renderRebaseEditorHtml({ entries: [entry()] }, opts);
   assert.match(html, /id="start-rebase"/);
@@ -69,6 +75,11 @@ test('renderRebaseEditorHtml: sets a strict CSP with no unsafe-inline', () => {
   const html = renderRebaseEditorHtml({ entries: [] }, opts);
   assert.ok(!html.includes('unsafe-inline'));
   assert.match(html, /Content-Security-Policy/);
+});
+
+test('renderRebaseEditorHtml: each editable row carries a stable data-sha for FLIP tracking across reorders', () => {
+  const html = renderRebaseEditorHtml({ entries: [entry({ sha: 'abc1234', message: 'fix bug' })] }, opts);
+  assert.match(html, /<div class="rb-row rb-row-pick" role="listitem" draggable="true" data-index="0" data-sha="abc1234">/);
 });
 
 test('renderRebaseEditorHtml: an empty entry list still renders a usable shell (Abort works on nothing to rebase)', () => {

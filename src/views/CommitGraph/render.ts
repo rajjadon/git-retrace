@@ -4,12 +4,14 @@ import { formatAge, formatAbsolute } from '../../utils/date';
 import { escapeHtml } from '../escapeHtml';
 import { buildGravatarUrl } from '../../utils/gravatar';
 import { chartCssVarForIndex } from '../../utils/colors';
+import { renderTooltipScript } from '../tooltipScript';
 import {
   ARROW_DOWN_ICON,
   ARROW_UP_ICON,
   AUTHOR_ICON,
   BRANCH_ICON,
   CLOCK_ICON,
+  FETCH_ICON,
   FILE_COUNT_ICON,
   HASH_ICON,
   PENDING_ICON,
@@ -41,6 +43,11 @@ export interface GraphData {
   selectedSha?: string;
   /** True when the last load returned exactly `maxGraphItems` commits — there may be more past the cap. */
   hasMore?: boolean;
+  /** Index (into `nodes`) of the first row that's new since the last paint — only rows from here
+   * onward get the entrance animation. Omit on first paint, where every row is new. Commit Graph
+   * fully replaces `webview.html` on every "Load More" (re-fetching the whole list, not just the
+   * delta), so without this threshold every already-visible row would replay the animation too. */
+  newRowsFrom?: number;
   now?: Date;
 }
 
@@ -196,8 +203,9 @@ function renderSyncButtons(branches: BranchInfo[]): string {
   const pushBadge = ahead > 0 ? `<span class="sync-badge">${ahead}</span>` : '';
   const pullLabel = behind > 0 ? `Pull ${behind} ${behind === 1 ? 'commit' : 'commits'}` : 'Pull — up to date';
   const pushLabel = ahead > 0 ? `Push ${ahead} ${ahead === 1 ? 'commit' : 'commits'}` : 'Push — nothing to push';
-  return `<button id="pull" class="icon-btn" type="button" title="${escapeHtml(pullLabel)}" aria-label="${escapeHtml(pullLabel)}">${ARROW_DOWN_ICON}${pullBadge}</button>
-<button id="push" class="icon-btn" type="button" title="${escapeHtml(pushLabel)}" aria-label="${escapeHtml(pushLabel)}">${ARROW_UP_ICON}${pushBadge}</button>`;
+  return `<button id="fetch" class="icon-btn" type="button" data-tooltip="Fetch" aria-label="Fetch">${FETCH_ICON}</button>
+<button id="pull" class="icon-btn" type="button" data-tooltip="${escapeHtml(pullLabel)}" aria-label="${escapeHtml(pullLabel)}">${ARROW_DOWN_ICON}${pullBadge}</button>
+<button id="push" class="icon-btn" type="button" data-tooltip="${escapeHtml(pushLabel)}" aria-label="${escapeHtml(pushLabel)}">${ARROW_UP_ICON}${pushBadge}</button>`;
 }
 
 /** The `+added ~modified -deleted` badge — counted by file, so the three numbers sum to the file count. */
@@ -252,7 +260,7 @@ export function renderGraphHtml(data: GraphData, opts: RenderGraphOptions): stri
   const tabStopSha = selectedNode?.commit.sha ?? (wipTabbable ? undefined : nodes[0]?.commit.sha);
 
   const rows = nodes
-    .map((node) => {
+    .map((node, index) => {
       const { commit } = node;
       const date = new Date(commit.date);
       const age = formatAge(date, now);
@@ -268,7 +276,8 @@ export function renderGraphHtml(data: GraphData, opts: RenderGraphOptions): stri
       // Lowercased haystack for the toolbar filter — cheaper than re-reading each row's text.
       const filter = `${commit.message} ${commit.author} ${commit.sha}`.toLowerCase();
       const stashChips = (stashesByBase.get(commit.sha) ?? []).map(renderStashChip).join('');
-      return `<div class="row commit${isSelected ? ' selected' : ''}" role="row" tabindex="${commit.sha === tabStopSha ? '0' : '-1'}" aria-selected="${isSelected}" data-sha="${escapeHtml(commit.sha)}" data-filter="${escapeHtml(filter)}">
+      const isNew = data.newRowsFrom === undefined || index >= data.newRowsFrom;
+      return `<div class="row commit${isSelected ? ' selected' : ''}${isNew ? ' gitlore-enter' : ''}" role="row" tabindex="${commit.sha === tabStopSha ? '0' : '-1'}" aria-selected="${isSelected}" data-sha="${escapeHtml(commit.sha)}" data-filter="${escapeHtml(filter)}">
 <span class="cell cell-refs" role="gridcell">${renderRefs(commit.refs)}${stashChips}</span>
 <span class="cell cell-graph" role="gridcell">${renderRowGraphics(node, svgWidth, avatarUrl)}</span>
 <span class="cell cell-message" role="gridcell" data-full-message="${escapeHtml(commit.message)}">${escapeHtml(commit.message)}</span>
@@ -286,7 +295,7 @@ export function renderGraphHtml(data: GraphData, opts: RenderGraphOptions): stri
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource} 'nonce-${opts.nonce}'; img-src https: ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${opts.cspSource} 'nonce-${opts.nonce}'; img-src https: ${opts.cspSource}; font-src ${opts.cspSource}; script-src 'nonce-${opts.nonce}';" />
 ${styles}
 <style nonce="${opts.nonce}">:root { --graph-svg-width: ${svgWidth}px; --graph-row-height: ${ROW_HEIGHT}px; }</style>
 <title>Commit Graph</title>
@@ -297,7 +306,7 @@ ${renderRefPicker(branches, currentRef)}
 <span class="search">${SEARCH_ICON}<input id="search" type="search" placeholder="Filter by message, author, or SHA" aria-label="Filter commits by message, author, or SHA" autocomplete="off" spellcheck="false" /></span>
 <span class="count" id="count" aria-live="polite">${nodes.length} ${nodes.length === 1 ? 'commit' : 'commits'}</span>
 ${renderSyncButtons(branches)}
-<button id="refresh" class="icon-btn" type="button" title="Refresh" aria-label="Refresh the commit graph">${REFRESH_ICON}</button>
+<button id="refresh" class="icon-btn" type="button" data-tooltip="Refresh" aria-label="Refresh the commit graph">${REFRESH_ICON}</button>
 </div>
 <div class="grid" role="grid" aria-label="Commit graph" aria-rowcount="${nodes.length + (hasWip ? 1 : 0)}">
 <div class="row header" role="row">
@@ -549,6 +558,9 @@ document.getElementById('refresh').addEventListener('click', () => {
   vscode.postMessage({ type: 'refresh' });
 });
 
+document.getElementById('fetch')?.addEventListener('click', () => {
+  vscode.postMessage({ type: 'fetch' });
+});
 document.getElementById('pull')?.addEventListener('click', () => {
   vscode.postMessage({ type: 'pull' });
 });
@@ -558,6 +570,7 @@ document.getElementById('push')?.addEventListener('click', () => {
 document.getElementById('load-more')?.addEventListener('click', () => {
   vscode.postMessage({ type: 'loadMore' });
 });
+${renderTooltipScript()}
 </script>
 </body>
 </html>`;

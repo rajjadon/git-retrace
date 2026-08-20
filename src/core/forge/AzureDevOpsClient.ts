@@ -1,3 +1,4 @@
+import { createTwoFilesPatch } from 'diff';
 import type { FileChange } from '../git/types';
 import type { ForgeClient } from './ForgeClient';
 import { splitAzureDevOpsIdentity } from './azureDevOpsIdentity';
@@ -53,11 +54,17 @@ interface AzureDevOpsProfile {
 
 interface AzureDevOpsIteration {
   id: number;
+  /** The PR-head commit as of this iteration. Absent on older self-hosted Azure DevOps Server versions — content-diffing falls back to the pre-existing file-list-only behavior when either commit id is missing. */
+  sourceRefCommit?: { commitId: string };
+  /** The merge-base commit — matches the `base...compare` convention `GitService.getDiffBetweenRefs` already uses for GitHub/GitLab, so a PR's diff only shows what the PR itself introduces. */
+  commonRefCommit?: { commitId: string };
 }
 
 interface AzureDevOpsChangeEntry {
   /** Absent for some entries (folder-level changes, certain property-only changes) — not every entry represents an actual file. */
   item?: { path?: string };
+  /** e.g. "add", "edit", "delete", or a comma-separated combination like "edit, rename" — checked by substring, not equality, since Azure DevOps has historically returned combined flag strings. */
+  changeType?: string;
 }
 
 interface AzureDevOpsIterationChanges {
@@ -83,6 +90,14 @@ interface AzureDevOpsThread {
 }
 
 const UNRESOLVED_STATUSES = new Set<AzureDevOpsThreadStatus | undefined>(['active', 'pending', 'unknown', undefined]);
+
+/**
+ * Internal safety valve, not a user-facing setting — there's no scenario where a different value
+ * would be correct, only a size past which diffing two full files' content client-side in a
+ * webview stops being worth the cost. A generated bundle or lockfile past this size still shows up
+ * in the file list with 0/0 stats, same graceful degrade as a file Azure DevOps can't diff at all.
+ */
+const MAX_DIFFABLE_FILE_CHARS = 300_000;
 
 /** Azure DevOps' own completion-option strategy names, one per `MergeStrategy` — `'merge'` maps to `noFastForward` (a real merge commit, its closest match to GitHub's plain "Merge"), and `'rebase'` maps to `rebase` (not `rebaseMerge`, which still leaves a merge commit — GitHub's "Rebase and merge" has none). */
 const AZURE_MERGE_STRATEGY: Record<MergeStrategy, string> = {
@@ -198,6 +213,18 @@ export class AzureDevOpsClient implements ForgeClient {
     return Promise.all(data.value.map((pr) => this.enrich(repo, id, base, pr)));
   }
 
+  /** Same shape as a `listOpenPullRequests` item — reuses `enrich` directly, no separate normalization path. */
+  async getPullRequest(repo: ForgeRepoRef, number: number): Promise<PullRequestSummary> {
+    const id = splitAzureDevOpsIdentity(repo.identity);
+    if (!id) {
+      throw new Error('could not resolve this repo\'s Azure DevOps organization/project/repository identity');
+    }
+    const base = `https://dev.azure.com/${id.organization}/${id.project}/_apis/git/repositories/${id.repository}`;
+    const res = await this.request(`${base}/pullrequests/${number}?api-version=7.1`);
+    const pr = (await res.json()) as AzureDevOpsPullRequest;
+    return this.enrich(repo, id, base, pr);
+  }
+
   async listRecentlyClosedPullRequests(repo: ForgeRepoRef): Promise<PullRequestSummary[]> {
     const id = splitAzureDevOpsIdentity(repo.identity);
     if (!id) {
@@ -272,13 +299,17 @@ export class AzureDevOpsClient implements ForgeClient {
   }
 
   /**
-   * Azure DevOps has no endpoint that returns diff text — only structured changed-item lists
-   * (`iterations/{n}/changes`), which would need diffing raw file content client-side to produce
-   * hunks, and this codebase doesn't bundle a diff library for that (nor should it, for one host's
-   * gap). Returns the changed file paths with `insertions`/`deletions` at `0` (unknown, not "no
-   * changes" — see `PullRequestDiff`) and no diff text; `renderFileSections` already shows "No
-   * textual diff for this file" per file when hunks are empty, so this degrades honestly rather
-   * than fabricating numbers.
+   * Azure DevOps has no endpoint that returns diff text directly — only structured changed-item
+   * lists (`iterations/{n}/changes`). When the latest iteration also carries `sourceRefCommit`/
+   * `commonRefCommit` (present on dev.azure.com and modern Azure DevOps Server; absent on some
+   * older self-hosted versions), this fetches each changed file's content at both commits via the
+   * Items API and diffs them client-side with the `diff` package — the same "PR-introduced changes
+   * only" `base...compare` convention `GitService.getDiffBetweenRefs` already uses for GitHub/
+   * GitLab. When those commit ids are missing, or a file is binary/too large to reasonably diff in
+   * a webview, this falls back to the file list alone with `insertions`/`deletions` at `0`
+   * (unknown, not "no changes" — see `PullRequestDiff`) and no diff text for that file;
+   * `renderFileSections` already shows "No textual diff for this file" when hunks are empty, so
+   * every fallback path degrades honestly rather than fabricating numbers.
    */
   async getPullRequestDiff(repo: ForgeRepoRef, number: number): Promise<PullRequestDiff> {
     const id = splitAzureDevOpsIdentity(repo.identity);
@@ -294,20 +325,80 @@ export class AzureDevOpsClient implements ForgeClient {
     }
     const changesRes = await this.request(`${base}/pullrequests/${number}/iterations/${latest.id}/changes?api-version=7.1`);
     const changes = (await changesRes.json()) as AzureDevOpsIterationChanges;
-    const files: FileChange[] = changes.changeEntries
-      .map((entry) => entry.item?.path)
-      // Some change entries (folder-level entries, certain property-only changes) carry no `item.path`
-      // at all — real API responses, not a shape the docs guarantee never happens. Skip rather than crash.
-      .filter((path): path is string => !!path)
-      .map((path) => ({
-        // Azure DevOps paths are repo-root-absolute ("/src/foo.ts") — every other host's paths have
-        // no leading slash, so this strips it for a consistent look in the shared file-list renderer.
-        path: path.replace(/^\//, ''),
+    const entries = changes.changeEntries.filter((entry): entry is AzureDevOpsChangeEntry & { item: { path: string } } => !!entry.item?.path);
+
+    const targetCommit = latest.sourceRefCommit?.commitId;
+    const baseCommit = latest.commonRefCommit?.commitId;
+    if (!targetCommit || !baseCommit) {
+      // Older Azure DevOps Server without these fields — same file-list-only behavior as before.
+      const files: FileChange[] = entries.map((entry) => ({
+        path: entry.item.path.replace(/^\//, ''),
         insertions: 0,
         deletions: 0,
         binary: false,
       }));
-    return { files, diff: '' };
+      return { files, diff: '' };
+    }
+
+    const diffed = await Promise.all(entries.map((entry) => this.diffOneFile(base, entry, baseCommit, targetCommit)));
+    return {
+      files: diffed.map(({ file }) => file),
+      diff: diffed
+        .map(({ file, patch }) => (patch ? `diff --git a/${file.path} b/${file.path}\n${patch}` : ''))
+        .filter((part) => part !== '')
+        .join('\n'),
+    };
+  }
+
+  /** A single changed file's content is fetched at both commits (skipping the side that provably doesn't exist for an add/delete) and diffed client-side. Never throws — any failure to fetch or diff degrades to the same "no textual diff" fallback the file-list-only path already uses. */
+  private async diffOneFile(
+    base: string,
+    entry: AzureDevOpsChangeEntry & { item: { path: string } },
+    baseCommit: string,
+    targetCommit: string,
+  ): Promise<{ file: FileChange; patch: string | null }> {
+    const path = entry.item.path.replace(/^\//, '');
+    const changeType = entry.changeType ?? '';
+    const isAdd = changeType.includes('add');
+    const isDelete = changeType.includes('delete');
+    const [oldContent, newContent] = await Promise.all([
+      isAdd ? Promise.resolve(null) : this.fetchItemContent(base, entry.item.path, baseCommit),
+      isDelete ? Promise.resolve(null) : this.fetchItemContent(base, entry.item.path, targetCommit),
+    ]);
+
+    const oldText = oldContent ?? '';
+    const newText = newContent ?? '';
+    // Git's own heuristic: a NUL byte anywhere in the content means binary, not text — no
+    // Azure-specific "is this binary" field is reliable enough to depend on instead.
+    const binary = oldText.includes('\0') || newText.includes('\0');
+    if (binary || oldText.length > MAX_DIFFABLE_FILE_CHARS || newText.length > MAX_DIFFABLE_FILE_CHARS) {
+      return { file: { path, insertions: 0, deletions: 0, binary }, patch: null };
+    }
+
+    const patch = createTwoFilesPatch(path, path, oldText, newText, undefined, undefined, { context: 3 });
+    // Same counting convention GitLabClient already uses for its own reconstructed diffs — the
+    // negative lookaheads exclude the patch's own "+++"/"---" header lines from the count.
+    const insertions = (patch.match(/^\+(?!\+\+)/gm) ?? []).length;
+    const deletions = (patch.match(/^-(?!--)/gm) ?? []).length;
+    const hasHunks = /^@@/m.test(patch);
+    return { file: { path, insertions, deletions, binary: false }, patch: hasHunks ? patch : null };
+  }
+
+  /**
+   * Fetches a file's raw content at a specific commit via the Items API. Null on any failure (file
+   * doesn't exist at this version — the normal case for an added/deleted file — or any other fetch
+   * error), never thrown — a single file's content being unreachable shouldn't fail the whole PR
+   * diff.
+   *
+   * Reads the response as plain text, not JSON: without an explicit `$format=json`, this endpoint
+   * returns the file's raw content directly as the response body (its primary, documented purpose
+   * is "download this file's content") — not a `{ content: "..." }` JSON envelope. Calling
+   * `res.json()` here throws on any real file whose content isn't itself valid JSON.
+   */
+  private async fetchItemContent(base: string, path: string, commitId: string): Promise<string | null> {
+    const url = `${base}/items?path=${encodeURIComponent(path)}&versionDescriptor.version=${commitId}&versionDescriptor.versionType=commit&includeContent=true&api-version=7.1`;
+    const res = await this.requestOrNull(url);
+    return res ? await res.text() : null;
   }
 
   /** The reviewer being voted on is the authenticated user themselves — reuses the same `authenticatedUserId` `getAuthenticatedLogin` already caches for `searchCriteria.creatorId` (`AzureDevOpsClient.ts` constructor field), rather than a second profile lookup. */

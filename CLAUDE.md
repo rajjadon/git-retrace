@@ -106,12 +106,15 @@ Never let a `vscode` import leak into `core/`. If you're tempted, the logic belo
 |---|---|---|
 | `simple-git` | Git CLI wrapper | The ONLY way to touch git |
 | `date-fns` | Date formatting | Tree-shakeable; import per-function |
+| `diff` | Client-side unified diffs | Only for Azure DevOps PR diffs (`AzureDevOpsClient.getPullRequestDiff`) — the one host with no diff-text endpoint of its own |
 | `esbuild` | Bundler | dev dep |
 | `@vscode/test-electron` | Integration tests | dev dep |
 | `@types/vscode`, `@types/node` | Types | dev dep |
 | `eslint`, `@typescript-eslint/*` | Linting | dev dep |
 
 **Ask Raj before adding any runtime dependency.** No React/Vue/Svelte in the extension host. Webviews are vanilla TS + CSS unless a view grows complex enough to justify a framework, and then it stays isolated inside its own `views/` subfolder with its own build step.
+
+`media/fonts/` bundles IBM Plex Sans and JetBrains Mono (both SIL Open Font License) as static assets — not an npm dependency, but worth noting as a new bundled-asset category.
 
 ---
 
@@ -156,7 +159,7 @@ The only feature that reaches beyond the local repo — needs PR/CI status, not 
 - [x] **Reopen PR** — a per-card action on a Closed (not merged) card only — no host lets a merge be undone this way. Bitbucket Cloud has no reopen capability at all, on its API or its own web UI, so that call throws a clear platform-gap error instead of pretending it's possible
 - [x] **Merge PR** — a per-card action on a Ready to Merge card only, so it never bounces off a host-side rejection the board's own categorization already ruled out. Prompts for a merge strategy via QuickPick (filtered per host through `MERGE_STRATEGIES_BY_HOST`, since GitLab's merge endpoint only exposes a `squash` boolean and Bitbucket's third strategy, fast-forward, isn't equivalent to a true rebase), then one confirm dialog with a "Merge & Delete Branch" option instead of a third prompt
 - [x] **Per-repo push/pull** — a row per workspace repo with Pull/Push buttons, independent of forge auth (it's a local git operation). Reuses Commit Graph's terminal-based pattern (`git pull`/`git push` sent to a shared `GitLore: Git Sync` terminal, not simple-git) rather than a new `GitService` method, since push/pull can need interactive auth or land a merge conflict a terminal is where the user handles either
-- [x] **PR Details: view diff/commits** — a docked panel (next to Commit Details) showing a PR's changed files and diff, reusing `diffRender.ts`'s file-section renderer as-is. Azure DevOps has no diff-text endpoint at all — it shows the changed file list with `0`/`0` stats (documented gap, not a fabricated guess) rather than diffing raw content client-side
+- [x] **PR Details: view diff/commits** — a docked panel (next to Commit Details) showing a PR's changed files and diff, reusing `diffRender.ts`'s file-section renderer as-is. Azure DevOps has no diff-text endpoint at all — `AzureDevOpsClient.getPullRequestDiff` fetches each changed file's content at the PR's merge-base and head commits (from the latest iteration's `commonRefCommit`/`sourceRefCommit`) and diffs them client-side with the `diff` package, the one exception to "no runtime dependency without asking Raj first." Falls back to the changed file list with `0`/`0` stats — no diff text, not a fabricated guess — for a binary file, a file over the internal size cap, a pure rename with no content change, or on an older self-hosted Azure DevOps Server that doesn't expose those commit ids yet
 - [x] **PR review actions: Approve / Request changes** — two card actions on every open Launchpad PR (confirm dialog, then `ForgeClient.submitReview`). GitLab has no formal "request changes" review state — that decision throws a clear platform-gap error there instead of faking one
 - [x] **PR review actions: add a comment** — a comment box in the Pull Request Details panel posts a top-level PR comment via `ForgeClient.addComment`, all four hosts REST
 - [x] **PR review actions: resolve conversation threads** — the Pull Request Details panel lists review conversations with a Resolve button per unresolved one. GitHub has no REST endpoint for this at all — `GitHubClient` gained a second request path (`graphql()`, alongside its normal REST `request()`) purely for the `reviewThreads` query and `resolveReviewThread` mutation; the other three hosts are plain REST
@@ -413,9 +416,11 @@ Press **F5** to launch the Extension Development Host with the extension loaded.
 ## 18. Accessibility & UX
 
 - Blame decorations must meet contrast in both light and dark themes — derive colors from `ThemeColor`, never hardcode hex.
+- This rule governs editor decorations, hover cards, tree items, and the status bar (native VS Code UI GitLore doesn't control the rendering of). It does **not** govern the eight webview panels (Commit Graph, Commit Details, Branch Comparison, PR Details, Rebase Editor, Visual File History, Launchpad, Chat) — those use GitLore's own fixed design-token palette (`media/shared.css`'s `:root`), not `ThemeColor`, as of the 2026-08-20 design system change. See `docs/superpowers/specs/2026-08-20-gitlore-webview-design-system.md`.
 - All Webviews: proper heading structure, `aria-label` on icon-only buttons, keyboard-navigable, respect `prefers-reduced-motion`.
 - Never rely on color alone to convey meaning (staleness, ownership) — pair with text or icon.
 - Honor the user's `editor.fontFamily` inside webviews where it reads as editor content.
+- "Reads as editor content" is the operative scope: a diff hunk, a file path, a commit's full patch — literal file/diff content — still honors `editor.fontFamily`/`editor.fontSize`. UI chrome and code-*shaped identifiers* (a SHA, a branch/tag/repo name) use GitLore's own `--gl-font-ui`/`--gl-font-mono` instead, regardless of the user's editor font.
 - Enforce a strict Content Security Policy on every Webview; use a nonce for scripts, no inline event handlers, no remote script loads.
 
 ---

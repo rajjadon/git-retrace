@@ -183,7 +183,7 @@ export function renderFileSections(files: FileChange[], diff: string): string {
         ? `<pre class="diff">${renderDiff(hunks)}</pre>`
         : '<p class="muted no-diff">No textual diff for this file.</p>';
       return `<details class="file"${expandAll ? ' open' : ''} data-filter="${escapeHtml(file.path.toLowerCase())}">
-<summary><span class="file-path" title="${escapedPath}"><span class="file-dir">${escapeHtml(dir)}</span><span class="file-name">${escapeHtml(name)}</span></span>${renderStatBar(file, maxTotal)}<span class="file-stat">${renderFileStat(file)}</span><button class="row-btn" type="button" data-path="${escapedPath}" title="Open changes" aria-label="Open changes in ${escapedPath}">${OPEN_CHANGES_ICON}</button></summary>
+<summary><span class="file-path" title="${escapedPath}"><span class="file-dir">${escapeHtml(dir)}</span><span class="file-name">${escapeHtml(name)}</span></span>${renderStatBar(file, maxTotal)}<span class="file-stat">${renderFileStat(file)}</span><button class="row-btn" type="button" data-path="${escapedPath}" data-tooltip="Open changes" aria-label="Open changes in ${escapedPath}">${OPEN_CHANGES_ICON}</button></summary>
 ${body}
 </details>`;
     })

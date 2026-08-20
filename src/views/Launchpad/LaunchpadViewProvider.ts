@@ -8,7 +8,6 @@ import { detectForgeHost, type DetectedForgeHost, type ForgeHostConfig } from '.
 import type { ForgeClient } from '../../core/forge/ForgeClient';
 import { resolveForgeRepoRef } from '../../core/forge/resolveRepoRef';
 import {
-  MERGE_STRATEGIES_BY_HOST,
   pullRequestKey,
   type CategorizedPullRequest,
   type ForgeRepoRef,
@@ -21,15 +20,9 @@ import { renderLaunchpadHtml, type LaunchpadRepoError, type LaunchpadRepoRow } f
 import { renderPlaceholderHtml } from '../placeholder';
 import { COMMANDS, CONFIG, MEDIA, VIEWS } from '../../constants';
 import { runInGitSyncTerminal } from '../gitSyncTerminal';
+import { pickMergeStrategy } from '../mergeStrategyPicker';
 
 const SNOOZE_STATE_KEY = 'gitLore.launchpad.snoozed';
-
-/** Labels/descriptions for the merge-strategy QuickPick, one per `MergeStrategy` — filtered per host via `MERGE_STRATEGIES_BY_HOST` before it's ever shown, so a host never offers a strategy it can't actually perform. */
-const STRATEGY_QUICK_PICK_LABELS: Record<MergeStrategy, { label: string; description: string }> = {
-  merge: { label: 'Merge', description: 'Create a merge commit' },
-  squash: { label: 'Squash and merge', description: 'Combine all commits into one' },
-  rebase: { label: 'Rebase and merge', description: 'Replay commits onto the base — no merge commit' },
-};
 
 function createNonce(): string {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -326,7 +319,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
       await vscode.commands.executeCommand(COMMANDS.showPullRequest, key);
       return;
     }
-    if ((type === 'pull' || type === 'push') && typeof key === 'string') {
+    if ((type === 'pull' || type === 'push' || type === 'fetch') && typeof key === 'string') {
       this.syncRepo(key, type);
       return;
     }
@@ -388,16 +381,17 @@ export class LaunchpadViewProvider implements vscode.Disposable {
    * Graph's sync buttons (`CommitGraphViewProvider.ts`) — Launchpad doesn't track "did it finish"
    * either; the user sees the result in the terminal and can refresh the board themselves.
    */
-  private syncRepo(repoKey: string, direction: 'pull' | 'push'): void {
+  private syncRepo(repoKey: string, direction: 'pull' | 'push' | 'fetch'): void {
     const repoRoot = this.repoRootByKey.get(repoKey);
     if (!repoRoot) {
       return;
     }
-    runInGitSyncTerminal(repoRoot, direction === 'pull' ? 'git pull' : 'git push');
+    const command = direction === 'pull' ? 'git pull' : direction === 'push' ? 'git push' : 'git fetch';
+    runInGitSyncTerminal(repoRoot, command);
   }
 
-  /** Test-only introspection seam — a webview button click can't be simulated in an integration test, so this drives the same lookup-then-terminal flow the push/pull message handler does. */
-  syncRepoForTest(repoKey: string, direction: 'pull' | 'push'): void {
+  /** Test-only introspection seam — a webview button click can't be simulated in an integration test, so this drives the same lookup-then-terminal flow the push/pull/fetch message handler does. */
+  syncRepoForTest(repoKey: string, direction: 'pull' | 'push' | 'fetch'): void {
     this.syncRepo(repoKey, direction);
   }
 
@@ -499,7 +493,7 @@ export class LaunchpadViewProvider implements vscode.Disposable {
     if (!pr) {
       return;
     }
-    const strategy = await this.pickMergeStrategy(pr);
+    const strategy = await pickMergeStrategy(pr);
     if (!strategy) {
       return;
     }
@@ -524,12 +518,6 @@ export class LaunchpadViewProvider implements vscode.Disposable {
       this.logger?.error(`Launchpad failed to merge PR ${key}`, err);
       void vscode.window.showErrorMessage(`GitLore: couldn't merge the PR — ${message}`);
     }
-  }
-
-  private async pickMergeStrategy(pr: PullRequestSummary): Promise<MergeStrategy | undefined> {
-    const items = MERGE_STRATEGIES_BY_HOST[pr.repo.host].map((strategy) => ({ ...STRATEGY_QUICK_PICK_LABELS[strategy], strategy }));
-    const picked = await vscode.window.showQuickPick(items, { placeHolder: 'How should this pull request be merged?' });
-    return picked?.strategy;
   }
 
   /** Test-only introspection seam — the merge QuickPick and confirmation modal can't be driven from an integration test, so this calls the merge flow directly with a fixed strategy/delete choice, skipping both prompts. */
