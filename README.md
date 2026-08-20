@@ -10,6 +10,8 @@ Free, local-first git insight inside VS Code — blame, history, an interactive 
 branch comparison, a rebase editor, and a cross-repo PR triage board. No account, no paywall,
 no telemetry, no backend.
 
+[![Buy Me A Coffee](https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png)](https://buymeacoffee.com/rajpratapsinghjadon)
+
 </div>
 
 ---
